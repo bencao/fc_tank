@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <title>Tank canvas animation testing - jsFiddle demo</title>
+
+  <script type='text/javascript' src='lib/jquery-2.0.0b1.js'></script>
+  <script type='text/javascript' src='lib/lodash.min.js'></script>
+  <script type='text/javascript' src="lib/ocanvas-2.3.1.min.js"></script>
+  <style type='text/css'>
+  #tanks {
+    display: none;
+  }
+  </style>
+<script type='text/javascript'>//<![CDATA[
+$(function(){
+var resource_image = document.getElementById("tanks");
+
+var canvas = oCanvas.create({
+  canvas: "#canvas",
+  background: "#000"
+});
+
+var image = canvas.display.image({
+  width: 400,
+  height: 360,
+  image: resource_image
+});
+
+var sprite_params = {
+  image: resource_image,
+  origin: { x: "center", y: "center" },
+  width: 40,
+  height: 40
+};
+
+var user_tank_1 = canvas.display.sprite(_.merge({
+  x: 20,
+  y: 400,
+  frames: [{x: 0, y: 0, d: 100}, {x:40, y: 0, d: 100}]
+}, sprite_params));
+var user_tank_2 = canvas.display.sprite(_.merge({
+  x: 70,
+  y: 400,
+  frames: [{x: 80, y: 0, d: 100}, {x: 120, y: 0, d: 100}]
+}, sprite_params));
+var user_tank_3 = canvas.display.sprite(_.merge({
+  x: 120,
+  y: 400,
+  frames: [{x: 160, y: 0}, {x: 200, y: 0}]
+}, sprite_params));
+
+var enemy_tank_red = canvas.display.sprite(_.merge({
+  x: 20,
+  y: 450,
+  frames: [{x: 0, y: 120, d: 100}, {x: 40, y: 120, d: 100}, {x: 320, y: 120, d: 100}, {x: 360, y: 120, d: 100}]
+}, sprite_params));
+
+var enemy_tank_green = canvas.display.sprite(_.merge({
+  x: 70,
+  y: 450,
+  frames: [{x: 240, y: 200, d: 100}, {x: 280, y: 200, d: 100}, {x: 320, y: 200, d: 100}, {x: 360, y: 200, d: 100}]
+}, sprite_params));
+
+var gift_gun = canvas.display.sprite(_.merge({
+  x: 120,
+  y: 450,
+  frames: [{x: 80, y: 280, d: 200}, {x: 360, y: 280, d: 200}]
+}, sprite_params));
+
+var tank_born = canvas.display.sprite(_.merge({
+  x: 170,
+  y: 450,
+  frames: [{x: 360, y: 320, d: 200}, {x: 0, y: 320, d: 200}, {x: 40, y: 320, d: 200}, {x: 0, y: 320, d: 200}, {x: 80, y: 320, d: 200}]
+}, sprite_params));
+
+var bang = canvas.display.sprite(_.merge({
+  x: 220,
+  y: 450,
+  frames: [{x: 360, y: 320, d: 200}, {x: 120, y: 320, d: 200}, {x: 160, y: 320, d: 200}, {x: 200, y: 320, d: 200}]
+}, sprite_params));
+
+var missile = canvas.display.sprite(_.merge({
+  x: 20,
+  y: 500,
+  frames: [{x: 240, y: 320}]
+}, sprite_params));
+
+var broken_brick = canvas.display.sprite(_.merge({
+  x: 20,
+  y: 500,
+  frames: [{x: 0, y: 240}]
+}, sprite_params, { width: 40, height: 30}))
+
+canvas.addChild(image);
+canvas.addChild(user_tank_1.startAnimation());
+canvas.addChild(user_tank_2.startAnimation());
+canvas.addChild(user_tank_3.startAnimation());
+
+canvas.addChild(enemy_tank_red.startAnimation());
+canvas.addChild(enemy_tank_green.startAnimation());
+canvas.addChild(gift_gun.startAnimation());
+canvas.addChild(tank_born.startAnimation());
+canvas.addChild(bang.startAnimation());
+
+canvas.addChild(missile);
+missile.zIndex = 2;
+
+canvas.addChild(broken_brick);
+
+broken_brick.zIndex = 3;
+
+user_tank_1.rotate(90);
+
+user_tank_1.animate({
+  rotation: 270
+}, {
+  duration: "long",
+  easing: "linear"
+});
+
+user_tank_1.animate({
+  rotation: 180
+}, {
+  duration: "long",
+  easing: "linear"
+});
+
+var missileFlyTo = function(x_target) {
+  missile.animate({
+    x: x_target
+  }, {
+    duration: "long",
+    easing: "linear",
+    callback: function() {
+      missileTurnAndFlyBack(x_target);
+    }
+  });
+};
+
+var missileTurnAndFlyBack = function(x_reached) {
+  missile.animate({
+    rotation: (x_reached == 300 ? 270 : 90)
+  }, {
+    duration: "short",
+    easing: "linear"
+  });
+  missileFlyTo(x_reached == 300 ? 20 : 300);
+};
+
+missileTurnAndFlyBack(0);
+
+
+// gift_gun.frames = [{x: 120, y: 280, d: 200}, {x: 360, y: 280, d: 200}]
+
+
+
+});//]]>
+
+</script>
+
+
+</head>
+<body>
+  <img id="tanks" alt="tanks" width="400" height="360" src="tanks.png" />
+  <canvas id="canvas" width="800" height="800"></canvas>
+</body>
+</html>
