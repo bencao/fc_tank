@@ -1,21 +1,32 @@
-class World
+class BattleField
   max_x: 520
   max_y: 520
-  unit_height: 40
-  unit_width: 40
+  default_width: 40
+  default_height: 40
   step: 2
   tanks: []
   terrains: []
   item_counts: 0
-  all_units: -> @tanks.concat(@terrains)
-  observers: []
-  add_tank: (tank_cls, start_x, start_y, width = @unit_width, height = @unit_height) ->
+  all_battle_field_objects: -> @tanks.concat(@terrains)
+  remove_battle_field_object: (object) ->
+    if object instanceof Tank
+      @tanks = _.without(@tanks, object)
+    else
+      @terrains = _.without(@terrains, object)
+  order_generators: {}
+  add_order_generator: (type, generator_function) ->
+    @order_generators[type] = generator_function
+
+  add_tank: (tank_cls, start_x, start_y, width = @default_height, height = @default_width) ->
     tank = new tank_cls(this, start_x, start_y, width, height)
-    tank.set_observers(@observers)
+    switch tank.type()
+      when "user_p1", "user_p2"
+        tank.set_order_generator(@order_generators[tank.type()](this))
+      else
+        tank.set_order_generator(@order_generators['enemy'](this))
     @tanks.push(tank.set_id(++ @item_counts))
-  add_terrain: (terrain_cls, start_x, start_y, width = @unit_width, height = @unit_height) ->
+  add_terrain: (terrain_cls, start_x, start_y, width = @default_height, height = @default_width) ->
     terrain = new terrain_cls(this, start_x, start_y, width, height)
-    terrain.set_observers(@observers)
     @terrains.push(terrain.set_id(++ @item_counts))
   batch_add_terrain_by_range: (terrain_cls, array_of_xys) ->
     for xys in array_of_xys
@@ -25,24 +36,16 @@ class World
     while xs < x2
       ys = y1
       while ys < y2
-        this.add_terrain(terrain_cls, xs, ys, _.min([x2 - xs, @unit_width]), _.min([y2 - ys, @unit_height]))
-        ys += @unit_height
-      xs += @unit_width
-  p1_tank: ->
-    _.find(@tanks, (tank) -> tank.type() is "user_p1")
-  p2_tank: ->
-    _.find(@tanks, (tank) -> tank.type() is "user_p2")
-  register_observer: (o) ->
-    @observers.push o
-    unit.set_observers(@observers) for unit in this.all_units
+        this.add_terrain(terrain_cls, xs, ys, _.min([x2 - xs, @default_height]), _.min([y2 - ys, @default_width]))
+        ys += @default_width
+      xs += @default_height
+  p1_tank: () ->
+    _.first(_.select(@tanks, (tank) -> tank.type() == "user_p1"))
+  p2_tank: () ->
+    _.first(_.select(@tanks, (tank) -> tank.type() == "user_p2"))
 
-class Observable
-  set_observers: (@observers) ->
-  notify_changed: (args...) ->
-    o.on_changed(this, args) for o in @observers
-
-class WorldUnit extends Observable
-  constructor: (@world, @start_x, @start_y, @width, @height) ->
+class BattleFieldObject
+  constructor: (@battle_field, @start_x, @start_y, @width, @height) ->
   space: () ->
     [@start_x, @start_y, @start_x + @width, @start_y + @height]
   x: () ->
@@ -54,12 +57,12 @@ class WorldUnit extends Observable
   layer: 1
   type: ->
   set_id: (@id) -> this
-  enterable: (other_unit) -> true
+  enterable: (other_battle_field_object) -> true
   space_available: (x1, y1, x2, y2) ->
     self = this
-    _.all(@world.all_units(), (unit) ->
-      (unit is self) or unit.enterable(self) or
-        not unit.overlap_with(x1, y1, x2, y2)
+    _.all(@battle_field.all_battle_field_objects(), (battle_field_object) ->
+      (battle_field_object is self) or battle_field_object.enterable(self) or
+        not battle_field_object.space_collide(x1, y1, x2, y2)
     )
   _insect: (x1, y1, x2, y2, x3, y3, x4, y4) ->
     a = (y4 - y3) / (x4 - x3)
@@ -73,12 +76,17 @@ class WorldUnit extends Observable
     (y3 < (a * x2 + b) < y4) or
     (y3 < (c - a * x1) < y4) or
     (y3 < (c - a * x2) < y4)
-  overlap_with: (x1, y1, x2, y2) ->
+  space_collide: (x1, y1, x2, y2) ->
     [x3, y3, x4, y4] = this.space()
     return false if (x4 <= x1 or y4 <= y1 or x3 >= x2 or y3 >= y2)
     return this._insect(x1, y1, x2, y2, x3, y3, x4, y4)
+  set_display_object: (@display_object) ->
+  update: () ->
+  integration: (delta_time) ->
+  handle_destroy: () ->
+    @battle_field.remove_battle_field_object(this)
 
-class MovableWorldUnit extends WorldUnit
+class MovableBattleFieldObject extends BattleFieldObject
   x: () ->
     @start_x + @width / 2
   y: () ->
@@ -87,30 +95,67 @@ class MovableWorldUnit extends WorldUnit
   origin_y: 'center'
   space: () ->
     [@start_x, @start_y, @start_x + @width, @start_y + @height]
-  move: (offset_x, offset_y) ->
+
+  orders: []
+  set_order_generator: (@order_generator) ->
+
+  moving: false
+  step_offset: () ->
+    _.min([@width / 8, @height / 8])
+  speed: () -> 0.08
+  move: (offset) ->
+    [offset_x, offset_y] = this.offset_by_direction(offset)
     target_x = @start_x + offset_x
     target_y = @start_y + offset_y
     if this.space_available(target_x, target_y, target_x + @width, target_y + @height)
       [@start_x, @start_y] = [target_x, target_y]
-    this.notify_changed("position")
+  offset_by_direction: (offset) ->
+    offset = parseInt(offset)
+    switch (@direction)
+      when 0
+        [offset_x, offset_y] = [0, - _.min([offset, @start_y])]
+      when 90
+        [offset_x, offset_y] = [_.min([offset, @battle_field.max_x - @width - @start_x]), 0]
+      when 180
+        [offset_x, offset_y] = [0, _.min([offset, @battle_field.max_y - @height - @start_y])]
+      when 270
+        [offset_x, offset_y] = [- _.min([offset, @start_x]), 0]
+    [offset_x, offset_y]
 
   direction: 0
   turn: (direction) ->
-    return false if direction is @direction
-    # this.sync_position()
     @direction = direction
     if (direction % 180 is 0) then this._adjust_x() else this._adjust_y()
-    this.notify_changed("direction")
-    true
   _adjust_x: () ->
-    offset = (@world.unit_width / 4) - (@start_x + @world.unit_width / 4) % (@world.unit_width / 2)
+    offset = (@battle_field.default_height / 4) - (@start_x + @battle_field.default_height / 4) % (@battle_field.default_height / 2)
     @start_x += offset
   _adjust_y: () ->
-    offset = (@world.unit_height / 4) - (@start_y + @world.unit_height / 4) % (@world.unit_height / 2)
+    offset = (@battle_field.default_width / 4) - (@start_y + @battle_field.default_width / 4) % (@battle_field.default_width / 2)
     @start_y += offset
 
+  integration: (delta_time) ->
+    super(delta_time)
+    this.handle_turn(order) for order in @orders
+    this.handle_move(order, delta_time) for order in @orders
+  update: () ->
+    # next round orders
+    @orders = @order_generator.next_orders()
+  handle_turn: (order) ->
+    switch(order.type)
+      when "direction"
+        this.turn(order.params.direction)
+  handle_move: (order, delta_time) ->
+    switch(order.type)
+      when "start_move"
+        # move max distance
+        @moving = true
+        this.move(this.speed() * delta_time)
+      when "stop_move"
+        # do not move by default
+        @moving = false
+
 class UI
-  constructor: (@world) ->
+  constructor: (@battle_field) ->
     @image = document.getElementById('resources')
     @frame_map = {
       user_p1: new UserP1Frames,
@@ -127,81 +172,58 @@ class UI
       home: new HomeFrames
     }
 
-    @canvas = oCanvas.create({canvas: "#canvas", background: "#000", fps: 40})
+    @canvas = oCanvas.create({canvas: "#canvas", background: "#000", fps: 30})
 
-    @canvas.setLoop () ->
-    #   # console.log "l"
-    #   # handle tank/missile movements
-    #   self.handle_movement(tank) for tank in world.tanks
-    #   # handle explosure
-    #   # handle reborn
-    @canvas.timeline.start()
+    battle_field = @battle_field
+    @canvas.bind "keyup", (event) ->
+      battle_field.p1_tank().order_generator.on_keyboard_input("keyup", event.which)
+    @canvas.bind "keydown", (event) ->
+      battle_field.p1_tank().order_generator.on_keyboard_input("keydown", event.which)
 
-    this.bind_key_press()
-  do_unit_map: {}
-  key_map: {}
-  bind_key_press: ->
-    key_map = @key_map
-    world = @world
-    @canvas.bind "keypress", (event) ->
-      return if _.isUndefined(key_map[event.which])
-      [user, action] = (key_map[event.which]).split("-")
-      user_tank = (if user == "p1" then world.p1_tank() else world.p2_tank())
-      switch action
-        when "up" then user_tank.on_up()
-        when "down" then user_tank.on_down()
-        when "left" then user_tank.on_left()
-        when "right" then user_tank.on_right()
-        when "fire" then user_tank.on_fire()
-        when "select" then console.log("select")
-        when "start" then console.log("start")
-  register_p1_controller: (setting) ->
-    for action, key of setting
-      @key_map[key] = "p1-" + action
-  register_p2_controller: (setting) ->
-    for action, key of setting
-      @key_map[key] = "p2-" + action
-  on_changed: (unit, args) ->
-    display_object = @do_unit_map[unit.id]
-    display_object.startAnimation()
+    delta_time = 30
     self = this
-    type = args[0]
-    switch(type)
-      when "position"
-        display_object.animate({
-          x: unit.x()
-          y: unit.y()
-        }, {
-          duration: 20,
-          easing: "linear",
-          callback: () ->
-            display_object.stopAnimation()
-        })
-      when "direction"
-        display_object.rotateTo(unit.direction)
-        display_object.moveTo(unit.x(), unit.y())
-      else
-        display_object.frames = self.frames_for(unit)
-  on_destroyed: (unit) ->
-    @do_unit_map[unit.id].remove()
-    @do_unit_map[unit.id] = null
+    @canvas.setLoop () ->
+      _.each(battle_field.all_battle_field_objects(), (object) -> object.integration(delta_time))
+      _.each(battle_field.all_battle_field_objects(), (object) -> self.on_update(object))
+      _.each(battle_field.all_battle_field_objects(), (object) -> object.update())
+    @canvas.timeline.start()
+  do_battle_field_object_map: {}
+  on_update: (battle_field_object) ->
+    display_object = @do_battle_field_object_map[battle_field_object.id]
+    # display_object.startAnimation()
+    # display_object.animate({
+    #   x: battle_field_object.x()
+    #   y: battle_field_object.y()
+    # }, {
+    #   duration: 20,
+    #   easing: "linear",
+    #   callback: () ->
+    #     # display_object.stopAnimation()
+    # })
+    display_object.rotateTo(battle_field_object.direction)
+    display_object.moveTo(battle_field_object.x(), battle_field_object.y())
+    frame_render = @frame_map[battle_field_object.type()]
+    display_object.frames = frame_render.frames_for(battle_field_object)
+  on_destroyed: (battle_field_object) ->
+    @do_battle_field_object_map[battle_field_object.id].remove()
+    @do_battle_field_object_map[battle_field_object.id] = null
   on_initialized: ->
-    for unit in @world.all_units()
-      display_object = this.create_do(unit)
-      @do_unit_map[unit.id] = display_object
+    for battle_field_object in @battle_field.all_battle_field_objects()
+      display_object = this.create_do(battle_field_object)
+      @do_battle_field_object_map[battle_field_object.id] = display_object
       @canvas.addChild(display_object)
-    for unit in @world.all_units()
-      display_object.zIndex = unit.layer
-  create_do: (unit) ->
-    frame = @frame_map[unit.type()]
+    for battle_field_object in @battle_field.all_battle_field_objects()
+      display_object.zIndex = battle_field_object.layer
+  create_do: (battle_field_object) ->
+    frame = @frame_map[battle_field_object.type()]
     @canvas.display.sprite({
-      frames: frame.frames_for(unit),
+      frames: frame.frames_for(battle_field_object),
       image: @image,
-      width: unit.width,
-      height: unit.height,
-      x: unit.x(),
-      y: unit.y(),
-      origin: { x: unit.origin_x, y: unit.origin_y }
+      width: battle_field_object.width,
+      height: battle_field_object.height,
+      x: battle_field_object.x(),
+      y: battle_field_object.y(),
+      origin: { x: battle_field_object.origin_x, y: battle_field_object.origin_y }
     })
 
 class BrickFrames
@@ -260,8 +282,8 @@ class StrongFrames
 class FishFrames
   frames_for: (tank) ->
 
-class Terrain extends WorldUnit
-  enterable: (unit) -> false
+class Terrain extends BattleFieldObject
+  enterable: (battle_field_object) -> false
   destroyable: (missile) -> false
 
 class BrickTerrain extends Terrain
@@ -273,21 +295,21 @@ class IronTerrain extends Terrain
   type: -> "iron"
 
 class WaterTerrain extends Terrain
-  enterable: (unit) ->
-    if unit instanceof Tank
-      unit.on_ship
+  enterable: (battle_field_object) ->
+    if battle_field_object instanceof Tank
+      battle_field_object.on_ship
     else
-      unit instanceof Missile
+      battle_field_object instanceof Missile
   type: -> "water"
   layer: 0
 
 class IceTerrain extends Terrain
-  enterable: (unit) -> true
+  enterable: (battle_field_object) -> true
   type: -> "ice"
   layer: 0
 
 class GrassTerrain extends Terrain
-  enterable: (unit) -> true
+  enterable: (battle_field_object) -> true
   destroyable: (missile) -> missile.power >= 3
   type: -> "grass"
   layer: 2
@@ -296,8 +318,9 @@ class HomeTerrain extends Terrain
   is_defeated: false
   type: -> "home"
 
-class Tank extends MovableWorldUnit
-  enterable: (unit) -> false
+class Tank extends MovableBattleFieldObject
+  enterable: (battle_field_object) ->
+    battle_field_object instanceof Missile
   life: 1
   set_life: (@life) ->
   die: ->
@@ -311,28 +334,44 @@ class Tank extends MovableWorldUnit
   power: 1
   set_power: (@power) ->
 
-  step: -> (@world.step * @speed)
+  step: -> (@battle_field.step * @speed)
 
-  speed: 1
   ship: false
   set_on_ship: (@ship) ->
 
   guard: false
   set_on_guard: (@guard) ->
 
-  on_up: ->
-    this.move(0, - this.step()) if (! this.turn(0) && @start_y >= this.step())
-  on_down: ->
-    this.move(0, this.step()) if (! this.turn(180) && @start_y <= @world.max_y - @height - this.step())
-  on_left: ->
-    this.move(- this.step(), 0) if (! this.turn(270) && @start_x >= this.step())
-  on_right: ->
-    this.move(this.step(), 0) if (! this.turn(90) && @start_x <= @world.max_x - @width - this.step())
-  on_fire: ->
-    console.log("fire")
+  missiles: []
+  missile_limit: 1
+  missile_offset: () -> {
+    0: [0, - @height / 4],
+    90: [@width / 4, 0],
+    180: [0, @height / 4],
+    360: [- @width / 4, 0]
+  }
+
+  fire: () ->
+    # gen missile in front of tank
+    [offset_x, offset_y] = this.missile_offset()[@direction]
+    missile = new Missile(this.x() + offset_x, this.y() + offset_y, @width / 2, @height / 2)
+    missile.set_power(@power)
+    missile.set_direction(@direction)
+    @missiles.push(missile)
+    @battle_field.add_new_missle(missile, this)
+  handle_fire: (order) ->
+    switch(order.type)
+      when "fire"
+        # gen a new missile if available
+        this.fire() if _.size(@missiles) < @missile_limit
+
+  integration: (delta_time) ->
+    super(delta_time)
+    this.handle_fire(order) for order in @orders
 
 class UserTank extends Tank
-  speed: 2
+  speed: () ->
+    super() * 2
 
 class UserP1Tank extends UserTank
   type: -> 'user_p1'
@@ -358,27 +397,136 @@ class FishTank extends EnemyTank
 class StrongTank extends EnemyTank
   type: -> 'strong'
 
-class Missile extends MovableWorldUnit
+class Missile extends MovableBattleFieldObject
   power: 1
   set_power: (@power) ->
+  set_direction: (@direction)
 
-class Gift extends WorldUnit
-  test: () ->
+class Gift extends BattleFieldObject
+  test: ->
+
+class OrderGenerator
+  constructor: (@battle_field, @direction) ->
+  direction: 0
+  direction_map: {
+    up: 0,
+    down: 180,
+    left: 270,
+    right: 90
+  }
+  next_orders: -> []
+  direction_order: (direction) ->
+    {
+      type: "direction",
+      params: { direction: direction }
+    }
+  start_move_order: -> { type: "start_move" }
+  stop_move_order: -> { type: "stop_move" }
+  fire_order: -> { type: "fire" }
+
+class UserOrderGenerator extends OrderGenerator
+  constructor: (@battle_field, @direction, key_setting) ->
+    for action, key of key_setting
+      @key_map[key] = action
+    this.clear_inputs()
+  key_map: {}
+  inputs: null
+  inputs_key_pressed: {
+    up: false,
+    down: false,
+    left: false,
+    right: false
+  }
+  clear_inputs: () ->
+    @inputs = {
+      up: [],
+      down: [],
+      left: [],
+      right: [],
+      fire: []
+    }
+  is_pressed: (action) ->
+    @inputs_key_pressed[action]
+  on_keyboard_input: (type, key_code) ->
+    switch type
+      when "keyup"
+        return true if _.isUndefined(@key_map[key_code])
+        action = @key_map[key_code]
+        @inputs_key_pressed[action] = false
+        @inputs[action].push("keyup")
+      when "keydown"
+        return true if _.isUndefined(@key_map[key_code])
+        action = @key_map[key_code]
+        @inputs_key_pressed[action] = true
+        @inputs[action].push("keydown")
+  orders: []
+  next_orders: ->
+    @orders = []
+    for action, key_actions of @inputs
+      continue if _.size(key_actions) == 0
+      switch (action)
+        when "up", "down", "left", "right"
+          break if this.change_direction(action)
+          this.do_move(action)
+        when "fire"
+          @orders.push(this.fire_order())
+    for action in ["up", "down", "left", "right"]
+      if this.is_pressed(action)
+        this.change_direction(action)
+        @orders.push(this.start_move_order())
+    this.clear_inputs()
+    @orders
+  change_direction: (action) ->
+    new_direction = this.direction_map[action]
+    if @direction != new_direction
+      @direction = new_direction
+      @orders.push(this.direction_order(new_direction))
+      true
+    else
+      false
+  do_move: (action) ->
+    keyup = _.contains(@inputs[action], "keyup")
+    keydown = _.contains(@inputs[action], "keydown")
+    if keydown
+      @orders.push(this.start_move_order())
+    else
+      @orders.push(this.stop_move_order()) if keyup
+
+class EnemyAIOrderGenerator extends OrderGenerator
+  next_orders: -> []
+
+class GeneratorFactory
+  create_user_p1_generator: (battle_field) ->
+    new UserOrderGenerator(battle_field, 0, {
+      up: 38, down: 40, left: 37, right: 39, fire: 70
+    })
+  create_user_p2_generator: (battle_field) ->
+    new UserOrderGenerator(battle_field, 0, {
+      up: 71, down: 72, left: 73, right: 74, fire: 75
+    })
+  create_enemy_generator: (battle_field) ->
+    new EnemyAIOrderGenerator(battle_field, 180)
 
 init = ->
   console.log "init start"
-  world = new World
-  world.add_tank(UserP1Tank, 160, 480)
-  world.add_tank(UserP2Tank, 320, 480)
 
-  world.batch_add_terrain_by_range(IceTerrain, [
+  generator_factory = new GeneratorFactory
+  battle_field = new BattleField
+  battle_field.add_order_generator("user_p1", generator_factory.create_user_p1_generator)
+  battle_field.add_order_generator("user_p2", generator_factory.create_user_p2_generator)
+  battle_field.add_order_generator("enemy", generator_factory.create_enemy_generator)
+
+  battle_field.add_tank(UserP1Tank, 160, 480)
+  battle_field.add_tank(UserP2Tank, 320, 480)
+
+  battle_field.batch_add_terrain_by_range(IceTerrain, [
     [40, 0, 240, 40],
     [280, 0, 480, 40],
     [0, 40, 80, 280],
     [440, 40, 520, 280],
     [80, 240, 440, 280]
   ])
-  world.batch_add_terrain_by_range(BrickTerrain, [
+  battle_field.batch_add_terrain_by_range(BrickTerrain, [
     [120, 40, 240, 80],
     [120, 80, 160, 160],
     [160, 120, 200, 160],
@@ -399,7 +547,7 @@ init = ->
     [220, 480, 240, 520],
     [280, 480, 300, 520]
   ])
-  world.batch_add_terrain_by_range(IronTerrain, [
+  battle_field.batch_add_terrain_by_range(IronTerrain, [
     [0, 280, 40, 320],
     [240, 280, 280, 320],
     [480, 280, 520, 320],
@@ -408,27 +556,16 @@ init = ->
     [320, 360, 360, 400],
     [400, 360, 440, 400]
   ])
-  world.batch_add_terrain_by_range(GrassTerrain, [
+  battle_field.batch_add_terrain_by_range(GrassTerrain, [
     [0, 320, 40, 520],
     [40, 480, 120, 520],
     [400, 480, 480, 520],
     [480, 320, 520, 480]
   ])
-  world.add_terrain(HomeTerrain, 240, 480)
+  battle_field.add_terrain(HomeTerrain, 240, 480)
 
-  ui = new UI(world)
-  ui.register_p1_controller({
-    up: 38,
-    down: 40,
-    left: 37,
-    right: 39,
-    fire: 70,
-    select: 32,
-    start: 13
-  })
+  ui = new UI(battle_field)
   ui.on_initialized()
-
-  world.register_observer(ui)
 
   console.log "init done"
   document.getElementById('canvas').focus()
