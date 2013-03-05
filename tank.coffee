@@ -6,17 +6,29 @@ class BattleField
   step: 2
   tanks: []
   terrains: []
+  missiles: []
   item_counts: 0
-  all_battle_field_objects: -> @tanks.concat(@terrains)
+  all_battle_field_objects: -> @tanks.concat(@terrains).concat(@missiles)
   remove_battle_field_object: (object) ->
     if object instanceof Tank
       @tanks = _.without(@tanks, object)
-    else
+    if object instanceof Terrain
       @terrains = _.without(@terrains, object)
+    if object instanceof Missile
+      @missiles = _.without(@missiles, object)
   order_generators: {}
   add_order_generator: (type, generator_function) ->
     @order_generators[type] = generator_function
-
+  missiles_of: (tank) ->
+    _.select(@missiles, (missile) -> missile.belongs_to is tank )
+  add_missile: (parent, direction, power) ->
+    [start_x, start_y] = [parent.x() - @default_width / 4, parent.y() - @default_height / 4]
+    missile = new Missile(this, start_x, start_y, @default_width / 2, @default_height / 2)
+    missile.set_power(power)
+    missile.set_direction(direction)
+    missile.set_belongs_to(parent)
+    missile.set_order_generator(@order_generators['missile'](this, direction))
+    @missiles.push(missile.set_id(++ @item_counts))
   add_tank: (tank_cls, start_x, start_y, width = @default_height, height = @default_width) ->
     tank = new tank_cls(this, start_x, start_y, width, height)
     switch tank.type()
@@ -30,19 +42,23 @@ class BattleField
     @terrains.push(terrain.set_id(++ @item_counts))
   batch_add_terrain_by_range: (terrain_cls, array_of_xys) ->
     for xys in array_of_xys
-      this.add_terrain_by_range(terrain_cls, xys[0], xys[1], xys[2], xys[3])
+      @add_terrain_by_range(terrain_cls, xys[0], xys[1], xys[2], xys[3])
   add_terrain_by_range: (terrain_cls, x1, y1, x2, y2) ->
     xs = x1
     while xs < x2
       ys = y1
       while ys < y2
-        this.add_terrain(terrain_cls, xs, ys, _.min([x2 - xs, @default_height]), _.min([y2 - ys, @default_width]))
+        @add_terrain(terrain_cls, xs, ys, _.min([x2 - xs, @default_height]), _.min([y2 - ys, @default_width]))
         ys += @default_width
       xs += @default_height
-  p1_tank: () ->
-    _.first(_.select(@tanks, (tank) -> tank.type() == "user_p1"))
-  p2_tank: () ->
-    _.first(_.select(@tanks, (tank) -> tank.type() == "user_p2"))
+  p1_tank: -> _.first(_.select(@tanks, (tank) -> tank.type() == "user_p1"))
+  p2_tank: -> _.first(_.select(@tanks, (tank) -> tank.type() == "user_p2"))
+  find_objects_at: (xys) ->
+    [x1, y1, x2, y2] = xys
+    objects = []
+    for object in @all_battle_field_objects()
+      objects.push(object) if object.space_collide(x1, y1)
+    objects
 
 class BattleFieldObject
   constructor: (@battle_field, @start_x, @start_y, @width, @height) ->
@@ -59,9 +75,8 @@ class BattleFieldObject
   set_id: (@id) -> this
   enterable: (other_battle_field_object) -> true
   space_available: (x1, y1, x2, y2) ->
-    self = this
-    _.all(@battle_field.all_battle_field_objects(), (battle_field_object) ->
-      (battle_field_object is self) or battle_field_object.enterable(self) or
+    _.all(@battle_field.all_battle_field_objects(), (battle_field_object) =>
+      (battle_field_object is this) or battle_field_object.enterable(this) or
         not battle_field_object.space_collide(x1, y1, x2, y2)
     )
   _insect: (x1, y1, x2, y2, x3, y3, x4, y4) ->
@@ -77,9 +92,9 @@ class BattleFieldObject
     (y3 < (c - a * x1) < y4) or
     (y3 < (c - a * x2) < y4)
   space_collide: (x1, y1, x2, y2) ->
-    [x3, y3, x4, y4] = this.space()
+    [x3, y3, x4, y4] = @space()
     return false if (x4 <= x1 or y4 <= y1 or x3 >= x2 or y3 >= y2)
-    return this._insect(x1, y1, x2, y2, x3, y3, x4, y4)
+    return @_insect(x1, y1, x2, y2, x3, y3, x4, y4)
   set_display_object: (@display_object) ->
   update: () ->
   integration: (delta_time) ->
@@ -104,11 +119,16 @@ class MovableBattleFieldObject extends BattleFieldObject
     _.min([@width / 8, @height / 8])
   speed: () -> 0.08
   move: (offset) ->
-    [offset_x, offset_y] = this.offset_by_direction(offset)
+    _.detect(_.range(1, offset).reverse(), (os) => @try_move(os))
+  try_move: (offset) ->
+    [offset_x, offset_y] = @offset_by_direction(offset)
     target_x = @start_x + offset_x
     target_y = @start_y + offset_y
-    if this.space_available(target_x, target_y, target_x + @width, target_y + @height)
+    if @space_available(target_x, target_y, target_x + @width, target_y + @height)
       [@start_x, @start_y] = [target_x, target_y]
+      true
+    else
+      false
   offset_by_direction: (offset) ->
     offset = parseInt(offset)
     switch (@direction)
@@ -125,7 +145,7 @@ class MovableBattleFieldObject extends BattleFieldObject
   direction: 0
   turn: (direction) ->
     @direction = direction
-    if (direction % 180 is 0) then this._adjust_x() else this._adjust_y()
+    if (direction % 180 is 0) then @_adjust_x() else @_adjust_y()
   _adjust_x: () ->
     offset = (@battle_field.default_height / 4) - (@start_x + @battle_field.default_height / 4) % (@battle_field.default_height / 2)
     @start_x += offset
@@ -135,21 +155,21 @@ class MovableBattleFieldObject extends BattleFieldObject
 
   integration: (delta_time) ->
     super(delta_time)
-    this.handle_turn(order) for order in @orders
-    this.handle_move(order, delta_time) for order in @orders
+    @handle_turn(order) for order in @orders
+    @handle_move(order, delta_time) for order in @orders
   update: () ->
     # next round orders
     @orders = @order_generator.next_orders()
   handle_turn: (order) ->
     switch(order.type)
       when "direction"
-        this.turn(order.params.direction)
+        @turn(order.params.direction)
   handle_move: (order, delta_time) ->
     switch(order.type)
       when "start_move"
-        # move max distance
+        # try move max distance
         @moving = true
-        this.move(this.speed() * delta_time)
+        @move(@speed() * delta_time)
       when "stop_move"
         # do not move by default
         @moving = false
@@ -169,7 +189,8 @@ class UI
       grass: new GrassFrames,
       ice: new IceFrames,
       water: new WaterFrames,
-      home: new HomeFrames
+      home: new HomeFrames,
+      missile: new MissileFrames
     }
 
     @canvas = oCanvas.create({canvas: "#canvas", background: "#000", fps: 30})
@@ -180,26 +201,17 @@ class UI
     @canvas.bind "keydown", (event) ->
       battle_field.p1_tank().order_generator.on_keyboard_input("keydown", event.which)
 
-    delta_time = 30
-    self = this
-    @canvas.setLoop () ->
+    @canvas.setLoop () =>
+      delta_time = 30
       _.each(battle_field.all_battle_field_objects(), (object) -> object.integration(delta_time))
-      _.each(battle_field.all_battle_field_objects(), (object) -> self.on_update(object))
+      _.each(battle_field.all_battle_field_objects(), (object) => @render(object))
       _.each(battle_field.all_battle_field_objects(), (object) -> object.update())
     @canvas.timeline.start()
   do_battle_field_object_map: {}
-  on_update: (battle_field_object) ->
+  render: (battle_field_object) ->
     display_object = @do_battle_field_object_map[battle_field_object.id]
-    # display_object.startAnimation()
-    # display_object.animate({
-    #   x: battle_field_object.x()
-    #   y: battle_field_object.y()
-    # }, {
-    #   duration: 20,
-    #   easing: "linear",
-    #   callback: () ->
-    #     # display_object.stopAnimation()
-    # })
+    if _.isUndefined(display_object)
+      display_object = @create_do_and_add(battle_field_object)
     display_object.rotateTo(battle_field_object.direction)
     display_object.moveTo(battle_field_object.x(), battle_field_object.y())
     frame_render = @frame_map[battle_field_object.type()]
@@ -207,12 +219,15 @@ class UI
   on_destroyed: (battle_field_object) ->
     @do_battle_field_object_map[battle_field_object.id].remove()
     @do_battle_field_object_map[battle_field_object.id] = null
-  on_initialized: ->
+  create_do_and_add: (battle_field_object) ->
+    display_object = @create_do(battle_field_object)
+    @do_battle_field_object_map[battle_field_object.id] = display_object
+    @canvas.addChild(display_object)
+    # @reset_zindex()
+    display_object
+  reset_zindex: ->
     for battle_field_object in @battle_field.all_battle_field_objects()
-      display_object = this.create_do(battle_field_object)
-      @do_battle_field_object_map[battle_field_object.id] = display_object
-      @canvas.addChild(display_object)
-    for battle_field_object in @battle_field.all_battle_field_objects()
+      display_object = @do_battle_field_object_map[battle_field_object.id]
       display_object.zIndex = battle_field_object.layer
   create_do: (battle_field_object) ->
     frame = @frame_map[battle_field_object.type()]
@@ -227,28 +242,26 @@ class UI
     })
 
 class BrickFrames
-  frames_for: (brick) ->
-    [{x: 0, y: 240}]
+  frames_for: (brick) -> [{x: 0, y: 240}]
 
 class IceFrames
-  frames_for: (ice) ->
-    [{x: 40, y: 240}]
+  frames_for: (ice) -> [{x: 40, y: 240}]
 
 class IronFrames
-  frames_for: (iron) ->
-    [{x: 80, y: 240}]
+  frames_for: (iron) -> [{x: 80, y: 240}]
 
 class GrassFrames
-  frames_for: (grass) ->
-    [{x: 120, y: 240}]
+  frames_for: (grass) -> [{x: 120, y: 240}]
 
 class WaterFrames
-  frames_for: (water) ->
-    [{x: 160, y: 240}]
+  frames_for: (water) -> [{x: 160, y: 240}]
 
 class HomeFrames
   frames_for: (home) ->
     if home.is_defeated then [{x: 240, y: 240}] else [{x: 200, y: 240}]
+
+class MissileFrames
+  frames_for: (missile) -> [{x: 250, y: 330}]
 
 class UserP1Frames
   frames_for: (tank) ->
@@ -320,11 +333,11 @@ class HomeTerrain extends Terrain
 
 class Tank extends MovableBattleFieldObject
   enterable: (battle_field_object) ->
-    battle_field_object instanceof Missile
+    (battle_field_object instanceof Missile) and battle_field_object.belongs_to is this
   life: 1
   set_life: (@life) ->
   die: ->
-    this.set_life(0)
+    @set_life(0)
   is_dead: ->
     @life <= 0
 
@@ -342,36 +355,20 @@ class Tank extends MovableBattleFieldObject
   guard: false
   set_on_guard: (@guard) ->
 
-  missiles: []
-  missile_limit: 1
-  missile_offset: () -> {
-    0: [0, - @height / 4],
-    90: [@width / 4, 0],
-    180: [0, @height / 4],
-    360: [- @width / 4, 0]
-  }
-
+  max_missile: 5
   fire: () ->
-    # gen missile in front of tank
-    [offset_x, offset_y] = this.missile_offset()[@direction]
-    missile = new Missile(this.x() + offset_x, this.y() + offset_y, @width / 2, @height / 2)
-    missile.set_power(@power)
-    missile.set_direction(@direction)
-    @missiles.push(missile)
-    @battle_field.add_new_missle(missile, this)
+    @battle_field.add_missile(this, @direction, @power)
   handle_fire: (order) ->
     switch(order.type)
       when "fire"
-        # gen a new missile if available
-        this.fire() if _.size(@missiles) < @missile_limit
+        @fire() if _.size(@battle_field.missiles_of(this)) < @max_missile
 
   integration: (delta_time) ->
     super(delta_time)
-    this.handle_fire(order) for order in @orders
+    @handle_fire(order) for order in @orders
 
 class UserTank extends Tank
-  speed: () ->
-    super() * 2
+  speed: () -> super() * 2
 
 class UserP1Tank extends UserTank
   type: -> 'user_p1'
@@ -391,7 +388,7 @@ class FoolTank extends EnemyTank
   type: -> 'fool'
 
 class FishTank extends EnemyTank
-  speed: 3
+  speed: () -> super() * 3
   type: -> 'fish'
 
 class StrongTank extends EnemyTank
@@ -399,8 +396,58 @@ class StrongTank extends EnemyTank
 
 class Missile extends MovableBattleFieldObject
   power: 1
+  speed: -> super() * 4
   set_power: (@power) ->
-  set_direction: (@direction)
+  set_direction: (@direction) ->
+  set_belongs_to: (@belongs_to) ->
+  type: -> 'missile'
+  update: ->
+    super()
+    # if collide with other object, then explode
+    destory_area = @destory_area()
+    # START HERE
+    # @explode() unless _.every(destory_area, () -> )
+
+    # objects = @battle_field.find_objects_at(@destroy_area())
+
+  exploded: false
+  explode: ->
+    # bom!
+    @exploded = true
+
+  # handle_move: (order, delta_time) ->
+  #   super(order, delta_time)
+  destroy_area: ->
+    [x, y] = [@x(), @y()]
+    switch @direction
+      when 0
+        [
+          x - @battle_field.default_width / 4,
+          y - (@battle_field.default_height / 4) - 1,
+          x + @battle_field.default_width / 4,
+          y - @battle_field.default_height / 4
+        ]
+      when 90
+        [
+          x + @battle_field.default_width / 4,
+          y - @battle_field.default_height / 4,
+          x + (@battle_field.default_width / 4) + 1,
+          y + @battle_field.default_height / 4
+        ]
+      when 180
+        [
+          x - @battle_field.default_width / 4,
+          y + @battle_field.default_height / 4,
+          x + @battle_field.default_width / 4,
+          y + (@battle_field.default_height / 4) + 1
+        ]
+      when 270
+        [
+          x - (@battle_field.default_width / 4) - 1,
+          y - @battle_field.default_height / 4,
+          x - @battle_field.default_width / 4,
+          y + @battle_field.default_height / 4
+        ]
 
 class Gift extends BattleFieldObject
   test: ->
@@ -428,7 +475,7 @@ class UserOrderGenerator extends OrderGenerator
   constructor: (@battle_field, @direction, key_setting) ->
     for action, key of key_setting
       @key_map[key] = action
-    this.clear_inputs()
+    @clear_inputs()
   key_map: {}
   inputs: null
   inputs_key_pressed: {
@@ -466,21 +513,21 @@ class UserOrderGenerator extends OrderGenerator
       continue if _.size(key_actions) == 0
       switch (action)
         when "up", "down", "left", "right"
-          break if this.change_direction(action)
-          this.do_move(action)
+          break if @change_direction(action)
+          @do_move(action)
         when "fire"
-          @orders.push(this.fire_order())
+          @orders.push(@fire_order())
     for action in ["up", "down", "left", "right"]
-      if this.is_pressed(action)
-        this.change_direction(action)
-        @orders.push(this.start_move_order())
-    this.clear_inputs()
+      if @is_pressed(action)
+        @change_direction(action)
+        @orders.push(@start_move_order())
+    @clear_inputs()
     @orders
   change_direction: (action) ->
-    new_direction = this.direction_map[action]
+    new_direction = @direction_map[action]
     if @direction != new_direction
       @direction = new_direction
-      @orders.push(this.direction_order(new_direction))
+      @orders.push(@direction_order(new_direction))
       true
     else
       false
@@ -488,12 +535,15 @@ class UserOrderGenerator extends OrderGenerator
     keyup = _.contains(@inputs[action], "keyup")
     keydown = _.contains(@inputs[action], "keydown")
     if keydown
-      @orders.push(this.start_move_order())
+      @orders.push(@start_move_order())
     else
-      @orders.push(this.stop_move_order()) if keyup
+      @orders.push(@stop_move_order()) if keyup
 
 class EnemyAIOrderGenerator extends OrderGenerator
   next_orders: -> []
+
+class MissileOrderGenerator extends OrderGenerator
+  next_orders: -> [@start_move_order()]
 
 class GeneratorFactory
   create_user_p1_generator: (battle_field) ->
@@ -506,6 +556,8 @@ class GeneratorFactory
     })
   create_enemy_generator: (battle_field) ->
     new EnemyAIOrderGenerator(battle_field, 180)
+  create_missile_generator: (battle_field, direction) ->
+    new MissileOrderGenerator(battle_field, direction)
 
 init = ->
   console.log "init start"
@@ -515,6 +567,7 @@ init = ->
   battle_field.add_order_generator("user_p1", generator_factory.create_user_p1_generator)
   battle_field.add_order_generator("user_p2", generator_factory.create_user_p2_generator)
   battle_field.add_order_generator("enemy", generator_factory.create_enemy_generator)
+  battle_field.add_order_generator("missile", generator_factory.create_missile_generator)
 
   battle_field.add_tank(UserP1Tank, 160, 480)
   battle_field.add_tank(UserP2Tank, 320, 480)
@@ -565,7 +618,7 @@ init = ->
   battle_field.add_terrain(HomeTerrain, 240, 480)
 
   ui = new UI(battle_field)
-  ui.on_initialized()
+  # ui.reset_zindex()
 
   console.log "init done"
   document.getElementById('canvas').focus()
