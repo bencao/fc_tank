@@ -1,6 +1,7 @@
 class BattleField
   max_x: 520
   max_y: 520
+  max_enegy: 100
   default_width: 40
   default_height: 40
   step: 2
@@ -59,6 +60,9 @@ class BattleField
     for object in @all_battle_field_objects()
       objects.push(object) if object.space_collide(x1, y1)
     objects
+  is_out_of_bound: (xys) ->
+    [x1, y1, x2, y2] = xys
+    x1 < 0 or x2 > @max_x or y1 < 0 or y2 > @max_y
 
 class BattleFieldObject
   constructor: (@battle_field, @start_x, @start_y, @width, @height) ->
@@ -94,12 +98,29 @@ class BattleFieldObject
   space_collide: (x1, y1, x2, y2) ->
     [x3, y3, x4, y4] = @space()
     return false if (x4 <= x1 or y4 <= y1 or x3 >= x2 or y3 >= y2)
-    return @_insect(x1, y1, x2, y2, x3, y3, x4, y4)
+    @_insect(x1, y1, x2, y2, x3, y3, x4, y4)
+  joint: (x1, y1, x2, y2) ->
+    [x3, y3, x4, y4] = @space()
+    [_.max(x1, x3), _.max(y1, y3), _.min(x2, x4), _.min(y2, y4)]
+  space_sub: (x1, y1, x2, y2) ->
+    [x3, y3, x4, y4] = @space()
+    [x5, y5, x6, y6] = @joint(x1, y1, x2, y2)
+    candidates = [
+      [x3, y3, x4, y5],
+      [x3, y6, x4, y4],
+      [x3, y5, x5, y6],
+      [x6, y5, x4, y6]
+    ]
+    _.reject(candidates, (sub_space) ->
+      [x1, y1, x2, y2] = sub_space
+      x1 == x2 or y1 == y2
+    )
   set_display_object: (@display_object) ->
   update: () ->
   integration: (delta_time) ->
   handle_destroy: () ->
     @battle_field.remove_battle_field_object(this)
+  on_hit_missile: (missile, destroy_area) -> 0
 
 class MovableBattleFieldObject extends BattleFieldObject
   x: () ->
@@ -297,14 +318,24 @@ class FishFrames
 
 class Terrain extends BattleFieldObject
   enterable: (battle_field_object) -> false
-  destroyable: (missile) -> false
 
 class BrickTerrain extends Terrain
-  destroyable: (missile) -> missile.power >= 1
   type: -> "brick"
+  on_hit_missile: (missile, destroy_area) ->
+    console.log "on hit missile"
+    # cut self into pieces
+    [dx1, dy1, dx2, dy2] = destroy_area
+    console.log "on hit missile, da=" + dx1 + "," + dy1 + "/" + dx2 + "," + dy2
+    pieces = @space_sub(dx1, dy1, dx2, dy2)
+    _.each(pieces, (piece) =>
+      [px1, py1, px2, py2] = piece
+      @battle_field.add_terrain(BrickTerrain, px1, py1, px2 - px1, py2 - py1)
+    )
+    @battle_field.remove_battle_field_object(this)
+    # return cost of destroy
+    10
 
 class IronTerrain extends Terrain
-  destroyable: (missile) -> missile.power >= 2
   type: -> "iron"
 
 class WaterTerrain extends Terrain
@@ -323,7 +354,6 @@ class IceTerrain extends Terrain
 
 class GrassTerrain extends Terrain
   enterable: (battle_field_object) -> true
-  destroyable: (missile) -> missile.power >= 3
   type: -> "grass"
   layer: 2
 
@@ -396,57 +426,60 @@ class StrongTank extends EnemyTank
 
 class Missile extends MovableBattleFieldObject
   power: 1
+  energy: 10
   speed: -> super() * 4
   set_power: (@power) ->
+    @energy = 10 * @power
   set_direction: (@direction) ->
   set_belongs_to: (@belongs_to) ->
   type: -> 'missile'
   update: ->
     super()
     # if collide with other object, then explode
-    destory_area = @destory_area()
+    destroy_area = @destroy_area()
     # START HERE
-    # @explode() unless _.every(destory_area, () -> )
+    return @explode() if @battle_field.is_out_of_bound(destroy_area)
 
-    # objects = @battle_field.find_objects_at(@destroy_area())
+    objects = @battle_field.find_objects_at(destroy_area)
+    _.each(objects, (object) =>
+      @energy -= object.on_hit_missile(this, destroy_area)
+    )
+    @explode() if @energy <= 0
 
   exploded: false
   explode: ->
     # bom!
     @exploded = true
 
-  # handle_move: (order, delta_time) ->
-  #   super(order, delta_time)
   destroy_area: ->
-    [x, y] = [@x(), @y()]
     switch @direction
       when 0
         [
-          x - @battle_field.default_width / 4,
-          y - (@battle_field.default_height / 4) - 1,
-          x + @battle_field.default_width / 4,
-          y - @battle_field.default_height / 4
+          @x() - @battle_field.default_width / 4,
+          @y() - (@battle_field.default_height / 4) - 10,
+          @x() + @battle_field.default_width / 4,
+          @y() - @battle_field.default_height / 4
         ]
       when 90
         [
-          x + @battle_field.default_width / 4,
-          y - @battle_field.default_height / 4,
-          x + (@battle_field.default_width / 4) + 1,
-          y + @battle_field.default_height / 4
+          @x() + @battle_field.default_width / 4,
+          @y() - @battle_field.default_height / 4,
+          @x() + (@battle_field.default_width / 4) + 10,
+          @y() + @battle_field.default_height / 4
         ]
       when 180
         [
-          x - @battle_field.default_width / 4,
-          y + @battle_field.default_height / 4,
-          x + @battle_field.default_width / 4,
-          y + (@battle_field.default_height / 4) + 1
+          @x() - @battle_field.default_width / 4,
+          @y() + @battle_field.default_height / 4,
+          @x() + @battle_field.default_width / 4,
+          @y() + (@battle_field.default_height / 4) + 10
         ]
       when 270
         [
-          x - (@battle_field.default_width / 4) - 1,
-          y - @battle_field.default_height / 4,
-          x - @battle_field.default_width / 4,
-          y + @battle_field.default_height / 4
+          @x() - (@battle_field.default_width / 4) - 10,
+          @y() - @battle_field.default_height / 4,
+          @x() - @battle_field.default_width / 4,
+          @y() + @battle_field.default_height / 4
         ]
 
 class Gift extends BattleFieldObject
@@ -616,6 +649,8 @@ init = ->
     [480, 320, 520, 480]
   ])
   battle_field.add_terrain(HomeTerrain, 240, 480)
+
+  document.battle_field = battle_field
 
   ui = new UI(battle_field)
   # ui.reset_zindex()
