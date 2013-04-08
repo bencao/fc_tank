@@ -144,8 +144,12 @@ class MapUnit2D
   height: () -> @area.y2 - @area.y1
 
   destroy: () ->
-    @display_object.remove()
+    @destroy_display()
     @map.delete_map_unit(this)
+
+  destroy_display: () ->
+    @display_object.remove()
+
   accept: (other_unit) -> @model.accept(other_unit.model)
 
   update: () ->
@@ -278,11 +282,22 @@ class MapUnit2DForMissile extends MovableMapUnit2D
       when 0
         new MapArea2D(@area.x1, @area.y1 - @default_height/4, @area.x2, @area.y1)
       when 90
-        new MapArea2D(@area.x2, @area.y1, @area.y2 + @default_width/4, @area.y2)
+        new MapArea2D(@area.x2, @area.y1, @area.x2 + @default_width/4, @area.y2)
       when 180
         new MapArea2D(@area.x1, @area.y2, @area.x2, @area.y2 + @default_height/4)
       when 270
         new MapArea2D(@area.x1 - @default_width/4, @area.y1, @area.x1, @area.y2)
+  destroy_display: () ->
+    @display_object.width = 2 * @display_object.width
+    @display_object.height = 2 * @display_object.height
+    @display_object.frames = [
+      {x: 360, y: 320, d: 200},
+      {x: 120, y: 320, d: 200},
+      {x: 160, y: 320, d: 200},
+      {x: 200, y: 320, d: 200}
+    ]
+    @display_object.startAnimation()
+    setTimeout((() => @display_object.remove()), 800)
 
 class MapUnit2DForStupidTank extends MapUnit2DForTank
   current_frames: () ->
@@ -697,6 +712,7 @@ init = ->
 
   battle_field.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520))
 
+  # set a reference for easier debug
   document.battle_field = battle_field
 
   console.log "init done"
