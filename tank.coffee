@@ -3,7 +3,22 @@ class Point
 
 class MapArea2D
   constructor: (@x1, @y1, @x2, @y2) ->
-  has_intersection: (area) ->
+  valid: () ->
+    @x2 > @x1 and @y2 > @y1
+  intersect: (area) ->
+    new MapArea2D(_.max([area.x1, @x1]), _.max([area.y1, @y1]), _.min([area.x2, @x2]), _.min([area.y2, @y2]))
+  sub: (area) ->
+    intersect_area = @intersect(area)
+    _.select([
+      new MapArea2D(@x1, @y1, @x2, intersect_area.y1),
+      new MapArea2D(@x1, intersect_area.y2, @x2, @y2),
+      new MapArea2D(@x1, intersect_area.y1, intersect_area.x1, intersect_area.y2),
+      new MapArea2D(intersect_area.x2, intersect_area.y1, @x2, intersect_area.y2)
+    ], (candidate_area) -> candidate_area.valid())
+  collide: (area) ->
+    # fast judge first
+    return false if (@x2 <= area.x1 or @y2 <= area.y1 or @x1 >= area.x2 or @y1 >= area.y2)
+    # slow
     a = (@y2 - @y1) / (@x2 - @x1)
     b = (@x2 * @y1 - @x1 * @y2) / (@x2 - @x1)
     c = (@x2 * @y2 - @x1 * @y1) / (@x2 - @x1)
@@ -15,24 +30,20 @@ class MapArea2D
     (@y1 < (a * area.x2 + b) < @y2) or
     (@y1 < (c - a * area.x1) < @y2) or
     (@y1 < (c - a * area.x2) < @y2)
-  collide: (area) ->
-    # fast method
-    return false if (@x2 <= area.x1 or @y2 <= area.y1 or @x1 >= area.x2 or @y1 >= area.y2)
-    # slow method
-    @has_intersection(area)
-  joint: (area) ->
-    new MapArea2D(_.max(area.x1, @x1), _.max(area.y1, @y1), _.min(area.x2, @x2), _.min(area.y2, @y2))
-  space_sub: (area) ->
-    joint_area = @joint(area)
-    candidates = [
-      new MapArea2D(@x1, @y1, @x2, joint_area.y1),
-      new MapArea2D(@x1, joint_area.y2, @x2, @y2),
-      new MapArea2D(@x1, joint_area.y1, joint_area.x1, joint_area.y2),
-      new MapArea2D(joint_area.x2, joint_area.y1, @x2, joint_area.y2)
-    ]
-    _.select(candidates, (candidate_area) -> candidate_area.is_valid_area())
-  is_valid_area: () ->
-    @x2 > @x1 and @y2 > @y1
+  width: () ->
+    @x2 - @x1
+  height: () ->
+    @y2 - @y1
+  multiply: (direction, factor) ->
+    switch direction
+      when 0
+        new MapArea2D(@x1, @y1 - factor * @height(), @x2, @y2)
+      when 90
+        new MapArea2D(@x1, @y1, @x2 + factor * @width(), @y2)
+      when 180
+        new MapArea2D(@x1, @y1, @x2, @y2 + factor * @height())
+      when 270
+        new MapArea2D(@x1 - factor * @width(), @y1, @x2, @y2)
 
 class Map2D
   max_x: 520
@@ -71,20 +82,20 @@ class Map2D
       _.each(battle_field.all_battle_field_objects(), (object) -> object.render())
       _.each(battle_field.all_battle_field_objects(), (object) -> object.update())
     @canvas.timeline.start()
-  find_units_at: (area) ->
+  units_at: (area) ->
     _.select(@map_units, (map_unit) ->
       map_unit.area.collide(area)
     )
-  is_out_of_bound: (area) ->
+  out_of_bound: (area) ->
     area.x1 < 0 or area.x2 > @max_x or area.y1 < 0 or area.y2 > @max_y
-  space_available: (unit, area) ->
+  area_available: (unit, area) ->
     _.all(@map_units, (map_unit) =>
       (map_unit is unit) or
         map_unit.accept(unit) or
         not map_unit.area.collide(area)
     )
 
-  new_map_unit: (battle_field_object, area) ->
+  add_map_unit: (battle_field_object, area) ->
     map_unit_cls = @unit_map[battle_field_object.type()]
     map_unit = new map_unit_cls(this, battle_field_object, area)
     @canvas.addChild(map_unit.display_object)
@@ -112,7 +123,7 @@ class MapUnit2D
     @default_width = @map.default_width
     @default_height = @map.default_height
     @gravity_point = @update_gravity_point()
-    @init_display()
+    @new_display()
 
   update_area: (@area) ->
     @gravity_point = @update_gravity_point()
@@ -120,7 +131,7 @@ class MapUnit2D
   update_gravity_point: () ->
     new Point(@area.x1, @area.y1)
 
-  init_display: () ->
+  new_display: () ->
     @display_object = @map.canvas.display.sprite({
       frames: @current_frames(),
       image: @map.image,
@@ -152,9 +163,51 @@ class MapUnit2D
 
   accept: (other_unit) -> @model.accept(other_unit.model)
 
-  update: () ->
+  max_depend_point: 9
+  defend: (missile, destroy_area) -> 0
 
-  fight_missile: (missile, destroy_area) -> 0
+class MapUnit2DForBrick extends MapUnit2D
+  current_frames: () -> [{x: 0, y: 240}]
+  defend: (missile, destroy_area) ->
+    # cut self into pieces
+    pieces = @area.sub(destroy_area)
+    _.each(pieces, (piece) =>
+      @model.battle_field.add_terrain(BrickTerrain, piece)
+    )
+    @model.destroy()
+    # return cost of destroy
+    1
+
+class MapUnit2DForIron extends MapUnit2D
+  current_frames: () -> [{x: 80, y: 240}]
+  defend: (missile, destroy_area) ->
+    return @max_depend_point if missile.power < 2
+    double_destroy_area = destroy_area.multiply(missile.direction, 1)
+    pieces = @area.sub(double_destroy_area)
+    _.each(pieces, (piece) =>
+      @model.battle_field.add_terrain(IronTerrain, piece)
+    )
+    @model.destroy()
+    2
+
+class MapUnit2DForIce extends MapUnit2D
+  layer: 0
+  current_frames: () -> [{x: 40, y: 240}]
+
+class MapUnit2DForGrass extends MapUnit2D
+  layer: 2
+  current_frames: () -> [{x: 120, y: 240}]
+
+class MapUnit2DForWater extends MapUnit2D
+  layer: 0
+  current_frames: () -> [{x: 160, y: 240}]
+
+class MapUnit2DForHome extends MapUnit2D
+  current_frames: () ->
+    if @model.is_defeated then [{x: 240, y: 240}] else [{x: 200, y: 240}]
+  defend: (missile, destroy_area) ->
+    @model.is_defeated = true
+    @max_depend_point
 
 class MovableMapUnit2D extends MapUnit2D
   origin_x: 'center'
@@ -186,7 +239,7 @@ class MovableMapUnit2D extends MapUnit2D
     target_x = @area.x1 + offset_x
     target_y = @area.y1 + offset_y
     target_area = new MapArea2D(target_x, target_y, target_x + @width(), target_y + @height())
-    if @map.space_available(this, target_area)
+    if @map.area_available(this, target_area)
       @update_area(target_area)
       @update_display()
       true
@@ -215,78 +268,32 @@ class MovableMapUnit2D extends MapUnit2D
     @area.y2 += offset
     @update_area(@area)
 
-class MapUnit2DForTank extends MovableMapUnit2D
-  missile_area: () ->
-    new MapArea2D(@gravity_point.x - @default_width/4,
-      @gravity_point.y - @default_height/4,
-      @gravity_point.x + @default_width/4,
-      @gravity_point.y + @default_height/4)
-
-class MapUnit2DForUserTankP1 extends MapUnit2DForTank
-  current_frames: () ->
-    switch @model.level
-      when 1 then [{x: 0, y: 0, d: 10}, {x:40, y: 0, d: 10}]
-      when 2 then [{x: 80, y: 0, d: 100}, {x:120, y: 0, d: 100}]
-      when 3 then [{x: 160, y: 0, d: 100}, {x:200, y: 0, d: 100}]
-
-class MapUnit2DForUserTankP2 extends MapUnit2DForTank
-  current_frames: () ->
-    switch @model.level
-      when 1 then [{x: 0, y: 40, d: 100}, {x:40, y: 40, d: 100}]
-      when 2 then [{x: 80, y: 40, d: 100}, {x:120, y: 40, d: 100}]
-      when 3 then [{x: 160, y: 40, d: 100}, {x:200, y: 40, d: 100}]
-
-class MapUnit2DForBrick extends MapUnit2D
-  current_frames: () -> [{x: 0, y: 240}]
-  fight_missile: (missile, destroy_area) ->
-    # cut self into pieces
-    pieces = @area.space_sub(destroy_area)
-    _.each(pieces, (piece) =>
-      @model.battle_field.add_terrain(BrickTerrain, piece)
-    )
-    @model.destroy()
-    # return cost of destroy
-    10
-
-class MapUnit2DForIce extends MapUnit2D
-  current_frames: () -> [{x: 40, y: 240}]
-
-class MapUnit2DForIron extends MapUnit2D
-  current_frames: () -> [{x: 80, y: 240}]
-
-class MapUnit2DForGrass extends MapUnit2D
-  current_frames: () -> [{x: 120, y: 240}]
-
-class MapUnit2DForWater extends MapUnit2D
-  current_frames: () -> [{x: 160, y: 240}]
-
-class MapUnit2DForHome extends MapUnit2D
-  current_frames: () ->
-    if @model.is_defeated then [{x: 240, y: 240}] else [{x: 200, y: 240}]
-
 class MapUnit2DForMissile extends MovableMapUnit2D
   current_frames: () -> [{x: 250, y: 330}]
-  update: () ->
+  move: (offset) ->
+    can_move = super(offset)
+    @attack() unless can_move
+    can_move
+  attack: () ->
     # if collide with other object, then explode
     destroy_area = @destroy_area()
     # START HERE
-    return @model.destroy() if @map.is_out_of_bound(destroy_area)
-
-    hit_map_units = @map.find_units_at(destroy_area)
+    return @model.destroy() if @map.out_of_bound(destroy_area)
+    hit_map_units = @map.units_at(destroy_area)
     _.each(hit_map_units, (unit) =>
-      @model.energy -= unit.fight_missile(this, destroy_area)
+      @model.energy -= unit.defend(@model, destroy_area)
     )
     @model.destroy() if @model.energy <= 0
   destroy_area: ->
     switch @direction
       when 0
-        new MapArea2D(@area.x1, @area.y1 - @default_height/4, @area.x2, @area.y1)
+        new MapArea2D(@area.x1 - @default_width/4, @area.y1 - @default_height/4, @area.x2 + @default_width/4, @area.y1)
       when 90
-        new MapArea2D(@area.x2, @area.y1, @area.x2 + @default_width/4, @area.y2)
+        new MapArea2D(@area.x2, @area.y1 - @default_height/4, @area.x2 + @default_width/4, @area.y2 + @default_height/4)
       when 180
-        new MapArea2D(@area.x1, @area.y2, @area.x2, @area.y2 + @default_height/4)
+        new MapArea2D(@area.x1 - @default_width/4, @area.y2, @area.x2 + @default_width/4, @area.y2 + @default_height/4)
       when 270
-        new MapArea2D(@area.x1 - @default_width/4, @area.y1, @area.x1, @area.y2)
+        new MapArea2D(@area.x1 - @default_width/4, @area.y1 - @default_height/4, @area.x1, @area.y2 + @default_height/4)
   destroy_display: () ->
     @display_object.width = 2 * @display_object.width
     @display_object.height = 2 * @display_object.height
@@ -298,8 +305,45 @@ class MapUnit2DForMissile extends MovableMapUnit2D
     ]
     @display_object.startAnimation()
     setTimeout((() => @display_object.remove()), 800)
+  defend: (missile, destroy_area) ->
+    @model.destroy()
+    @max_depend_point
 
-class MapUnit2DForStupidTank extends MapUnit2DForTank
+class MapUnit2DForTank extends MovableMapUnit2D
+  missile_born_area: () ->
+    new MapArea2D(@gravity_point.x - @default_width/4,
+      @gravity_point.y - @default_height/4,
+      @gravity_point.x + @default_width/4,
+      @gravity_point.y + @default_height/4)
+
+class MapUnit2DForUserTank extends MapUnit2DForTank
+  defend: (missile, destroy_area) ->
+    return 0 if missile.parent is @model
+    @max_depend_point
+
+class MapUnit2DForEnemyTank extends MapUnit2DForTank
+  defend: (missile, destroy_area) ->
+    return 0 if missile.parent is @model
+    defend_point = _.min(@model.life, missile.power)
+    @model.life -= missile.power
+    @model.destroy() if @model.dead()
+    defend_point
+
+class MapUnit2DForUserTankP1 extends MapUnit2DForUserTank
+  current_frames: () ->
+    switch @model.level
+      when 1 then [{x: 0, y: 0, d: 10}, {x:40, y: 0, d: 10}]
+      when 2 then [{x: 80, y: 0, d: 100}, {x:120, y: 0, d: 100}]
+      when 3 then [{x: 160, y: 0, d: 100}, {x:200, y: 0, d: 100}]
+
+class MapUnit2DForUserTankP2 extends MapUnit2DForUserTank
+  current_frames: () ->
+    switch @model.level
+      when 1 then [{x: 0, y: 40, d: 100}, {x:40, y: 40, d: 100}]
+      when 2 then [{x: 80, y: 40, d: 100}, {x:120, y: 40, d: 100}]
+      when 3 then [{x: 160, y: 40, d: 100}, {x:200, y: 40, d: 100}]
+
+class MapUnit2DForStupidTank extends MapUnit2DForEnemyTank
   current_frames: () ->
     origin = switch @model.level
       when 1 then [{x: 0, y: 80, d: 100}, {x:40, y: 80, d: 100}]
@@ -308,13 +352,13 @@ class MapUnit2DForStupidTank extends MapUnit2DForTank
       when 4 then [{x: 240, y: 80, d: 100}, {x:280, y: 80, d: 100}]
       when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
 
-class MapUnit2DForFoolTank extends MapUnit2DForTank
+class MapUnit2DForFoolTank extends MapUnit2DForEnemyTank
   current_frames: () ->
 
-class MapUnit2DForStrongTank extends MapUnit2DForTank
+class MapUnit2DForStrongTank extends MapUnit2DForEnemyTank
   current_frames: () ->
 
-class MapUnit2DForFishTank extends MapUnit2DForTank
+class MapUnit2DForFishTank extends MapUnit2DForEnemyTank
   current_frames: () ->
 
 class BattleField
@@ -324,21 +368,21 @@ class BattleField
   terrains: [] # has_many terrains
   add_terrain: (terrain_cls, area) ->
     terrain = new terrain_cls(this)
-    terrain.view = @map.new_map_unit(terrain, area)
+    terrain.view = @map.add_map_unit(terrain, area)
     @terrains.push(terrain)
     terrain
 
   tanks: [] # has_many tanks
   add_tank: (tank_cls, area) ->
     tank = new tank_cls(this)
-    tank.view = @map.new_map_unit(tank, area)
+    tank.view = @map.add_map_unit(tank, area)
     @tanks.push(tank)
     tank
 
   missiles: [] # has_many missiles
   add_missile: (parent) ->
     missile = new Missile(this, parent)
-    missile.view = @map.new_map_unit(missile, parent.missile_area())
+    missile.view = @map.add_map_unit(missile, parent.missile_born_area())
     @missiles.push(missile)
     missile
 
@@ -392,7 +436,6 @@ class MovableBattleFieldObject extends BattleFieldObject
   update: () ->
     # next round commands
     @commands = @commander.next_commands()
-    @view.update()
 
   turn: (@direction) ->
     @view.turn(@direction)
@@ -431,17 +474,14 @@ class WaterTerrain extends Terrain
     else
       battle_field_object instanceof Missile
   type: -> "water"
-  layer: 0
 
 class IceTerrain extends Terrain
   accept: (battle_field_object) -> true
   type: -> "ice"
-  layer: 0
 
 class GrassTerrain extends Terrain
   accept: (battle_field_object) -> true
   type: -> "grass"
-  layer: 2
 
 class HomeTerrain extends Terrain
   is_defeated: false
@@ -450,40 +490,40 @@ class HomeTerrain extends Terrain
 class Tank extends MovableBattleFieldObject
   accept: (battle_field_object) ->
     (battle_field_object instanceof Missile) and (battle_field_object.parent is this)
+
   life: 1
   set_life: (@life) ->
-  die: ->
-    @set_life(0)
-  is_dead: ->
-    @life <= 0
-
-  level: 1
-  set_level: (@level) ->
-
+  dead: -> @life <= 0
   power: 1
-  set_power: (@power) ->
+  level: 1
+  max_missile: 1
+  missiles: []
+  update_level: (@level) ->
+    switch @level
+      when 1
+        @power = 1
+        @max_missile = 1
+      when 2
+        @power = 2
+        @max_missile = 2
 
   ship: false
-  set_on_ship: (@ship) ->
+  update_ship: (@ship) ->
 
   guard: false
-  set_on_guard: (@guard) ->
+  update_guard: (@guard) ->
 
-  max_missile: 5
-  missiles: []
   fire: () ->
-    missile = @battle_field.add_missile(this)
-    @missiles.push(missile)
-  handle_fire: (command) ->
-    switch(command.type)
-      when "fire"
-        @fire() if _.size(@missiles) < @max_missile
+    if _.size(@missiles) < @max_missile
+      missile = @battle_field.add_missile(this)
+      @missiles.push(missile)
 
   integration: (delta_time) ->
     super(delta_time)
-    @handle_fire(command) for command in @commands
+    @fire() for command in _.select(@commands, (command) -> command.type == "fire")
 
-  missile_area: () -> @view.missile_area()
+  missile_born_area: () -> @view.missile_born_area()
+
   delete_missile: (missile) ->
     @missiles = _.without(@missiles, missile)
 
@@ -528,7 +568,7 @@ class StrongTank extends EnemyTank
 class Missile extends MovableBattleFieldObject
   constructor: (@battle_field, @parent) ->
     @power = @parent.power
-    @energy = 10 * @power
+    @energy = @power
     @direction = @parent.direction
     @commander = new MissileCommander(this)
   speed: -> super() * 4
@@ -549,97 +589,114 @@ class Gift extends BattleFieldObject
 class Commander
   constructor: (@battle_field_object) ->
     @direction = @battle_field_object.direction
-  direction_map: {
+    @commands = []
+  direction_action_map: {
     up: 0,
     down: 180,
     left: 270,
     right: 90
   }
-  next_commands: -> []
-  direction_command: (direction) ->
+  # calculate next commands
+  next: () ->
+
+  next_commands: ->
+    @commands = []
+    @next()
+    @commands
+  direction_changed: (action) ->
+    new_direction = @direction_action_map[action]
+    @direction != new_direction
+  turn: (action) ->
+    new_direction = @direction_action_map[action]
+    if @direction != new_direction
+      @direction = new_direction
+      @commands.push(@_direction_command(new_direction))
+  move: (action) ->
+    switch action
+      when "start"
+        @commands.push(@_start_move_command())
+      when "stop"
+        @commands.push(@_stop_move_command())
+  fire: () ->
+    @commands.push(@_fire_command())
+
+  # private methods
+  _direction_command: (direction) ->
     {
       type: "direction",
       params: { direction: direction }
     }
-  start_move_command: -> { type: "start_move" }
-  stop_move_command: -> { type: "stop_move" }
-  fire_command: -> { type: "fire" }
+  _start_move_command: -> { type: "start_move" }
+  _stop_move_command: -> { type: "stop_move" }
+  _fire_command: -> { type: "fire" }
+
 
 class UserCommander extends Commander
   constructor: (@battle_field_object, key_setting) ->
     super(@battle_field_object)
-    for action, key of key_setting
-      @key_map[key] = action
-    @clear_inputs()
-  key_map: {}
-  inputs: null
-  inputs_key_pressed: {
+    @key_map = {}
+    for key, code of key_setting
+      @key_map[code] = key
+    @reset_input()
+  reset_input: () ->
+    @inputs = { up: [], down: [], left: [], right: [], fire: [] }
+
+  key_status: {
     up: false,
     down: false,
     left: false,
     right: false
   }
-  clear_inputs: () ->
-    @inputs = {
-      up: [],
-      down: [],
-      left: [],
-      right: [],
-      fire: []
-    }
-  is_pressed: (action) ->
-    @inputs_key_pressed[action]
+  is_pressed: (key) ->
+    @key_status[key]
+  set_pressed: (key, bool) ->
+    @key_status[key] = bool
+
+  next: ->
+    @handle_key_up_key_down()
+    @handle_key_press()
+
+  handle_key_up_key_down: () ->
+    for key, types of @inputs
+      continue if _.size(types) == 0
+      switch (key)
+        when "fire"
+          @fire()
+        when "up", "down", "left", "right"
+          if @direction_changed(key)
+            @turn(key)
+            break
+          keyup = _.contains(@inputs[key], "keyup")
+          keydown = _.contains(@inputs[key], "keydown")
+          if keydown
+            @move("start")
+          else
+            @move("stop") if keyup
+    @reset_input()
+
+  handle_key_press: () ->
+    for key in ["up", "down", "left", "right"]
+      if @is_pressed(key)
+        @turn(key)
+        @move("start")
+    @fire() if @is_pressed("fire")
+
   add_key_event: (type, key_code) ->
+    return true if _.isUndefined(@key_map[key_code])
+    key = @key_map[key_code]
     switch type
       when "keyup"
-        return true if _.isUndefined(@key_map[key_code])
-        action = @key_map[key_code]
-        @inputs_key_pressed[action] = false
-        @inputs[action].push("keyup")
+        @set_pressed(key, false)
+        @inputs[key].push("keyup")
       when "keydown"
-        return true if _.isUndefined(@key_map[key_code])
-        action = @key_map[key_code]
-        @inputs_key_pressed[action] = true
-        @inputs[action].push("keydown")
-  commands: []
-  next_commands: ->
-    @commands = []
-    for action, key_actions of @inputs
-      continue if _.size(key_actions) == 0
-      switch (action)
-        when "up", "down", "left", "right"
-          break if @change_direction(action)
-          @do_move(action)
-        when "fire"
-          @commands.push(@fire_command())
-    for action in ["up", "down", "left", "right"]
-      if @is_pressed(action)
-        @change_direction(action)
-        @commands.push(@start_move_command())
-    @clear_inputs()
-    @commands
-  change_direction: (action) ->
-    new_direction = @direction_map[action]
-    if @direction != new_direction
-      @direction = new_direction
-      @commands.push(@direction_command(new_direction))
-      true
-    else
-      false
-  do_move: (action) ->
-    keyup = _.contains(@inputs[action], "keyup")
-    keydown = _.contains(@inputs[action], "keydown")
-    if keydown
-      @commands.push(@start_move_command())
-    else
-      @commands.push(@stop_move_command()) if keyup
+        @set_pressed(key, true)
+        @inputs[key].push("keydown")
 
 class EnemyAICommander extends Commander
-  next_commands: -> []
+  next: ->
 
 class MissileCommander extends Commander
-  constructor: (@battle_field_object) ->
-  next_commands: -> [@start_move_command()]
+  next: -> @move("start")
 
 class TerrainBuilder
   constructor: (@battle_field, @default_width, @default_height) ->
