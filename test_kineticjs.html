@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <title>Tank canvas animation testing - using kineticjs</title>
+
+  <script type='text/javascript' src='lib/jquery-2.0.0b1.js'></script>
+  <script type='text/javascript' src='lib/lodash.min.js'></script>
+  <script type='text/javascript' src="lib/kinetic-v4.4.1.min.js"></script>
+  <style type='text/css'>
+    #tanks {
+      display: none;
+    }
+    #canvas {
+      background: #000;
+    }
+  </style>
+  <script type="text/javascript" defer="defer">//<![CDATA[
+  $(function(){
+    var resource_image = document.getElementById("tanks");
+
+    var stage = new Kinetic.Stage({
+        container: 'canvas',
+        width: 800,
+        height: 800
+      });
+
+    var layer = new Kinetic.Layer();
+
+    var image = new Kinetic.Image({
+      width: 400,
+      height: 360,
+      image: resource_image
+    });
+    layer.add(image);
+
+    var animations = {
+      tank_born: [
+        {x: 360, y: 320, width: 40, height: 40},
+        {x: 0, y: 320, width: 40, height: 40},
+        {x: 40, y: 320, width: 40, height: 40},
+        {x: 0, y: 320, width: 40, height: 40},
+        {x: 80, y: 320, width: 40, height: 40}
+      ],
+      user_tank_p1_level_1: [
+        {x: 0, y: 0, width: 40, height: 40},
+        {x: 40, y: 0, width: 40, height: 40}
+      ],
+      user_tank_p1_level_2: [
+        {x: 80, y: 0, width: 40, height: 40},
+        {x: 120, y: 0, width: 40, height: 40}
+      ],
+      user_tank_p1_level_3: [
+        {x: 160, y: 0, width: 40, height: 40},
+        {x: 200, y: 0, width: 40, height: 40}
+      ],
+      user_tank_p2_level_1: [
+        {x: 0, y: 40, width: 40, height: 40},
+        {x: 40, y: 40, width: 40, height: 40}
+      ],
+      enemy_tank_red: [
+        {x: 0, y: 120, width: 40, height: 40},
+        {x: 40, y: 120, width: 40, height: 40},
+        {x: 320, y: 120, width: 40, height: 40},
+        {x: 360, y: 120, width: 40, height: 40}
+      ],
+      enemy_tank_green: [
+        {x: 240, y: 200, width: 40, height: 40},
+        {x: 280, y: 200, width: 40, height: 40},
+        {x: 320, y: 200, width: 40, height: 40},
+        {x: 360, y: 200, width: 40, height: 40}
+      ],
+      gift_gun: [
+        {x: 80, y: 280, width: 40, height: 40},
+        {x: 360, y: 280, width: 40, height: 40}
+      ],
+      bang: [
+        {x: 360, y: 320, width: 40, height: 40},
+        {x: 120, y: 320, width: 40, height: 40},
+        {x: 160, y: 320, width: 40, height: 40},
+        {x: 200, y: 320, width: 40, height: 40}
+      ],
+      missile: [
+        {x: 250, y: 330, width: 20, height: 20}
+      ]
+    };
+
+    var user_tank_p1 = new Kinetic.Sprite({
+      x: 40,
+      y: 420,
+      image: resource_image,
+      animation: 'tank_born',
+      animations: animations,
+      frameRate: 7,
+      index: 0,
+      offset: {
+        x: 20,
+        y: 20
+      }
+    });
+    layer.add(user_tank_p1);
+
+    user_tank_p1.start();
+    user_tank_p1.afterFrame(4, function() {
+      user_tank_p1.setAnimation('user_tank_p1_level_1');
+      user_tank_p1.afterFrame(1, function() {
+        user_tank_p1.setAnimation('user_tank_p1_level_2');
+        user_tank_p1.afterFrame(1, function() {
+          user_tank_p1.setAnimation('user_tank_p1_level_3');
+        });
+      });
+    });
+
+    var user_tank_p2 = new Kinetic.Sprite({
+      x: 90,
+      y: 420,
+      image: resource_image,
+      animation: 'tank_born',
+      animations: animations,
+      frameRate: 7,
+      index: 0,
+      offset: {
+        x: 20,
+        y: 20
+      }
+    });
+    layer.add(user_tank_p2);
+
+    user_tank_p2.start();
+    user_tank_p2.afterFrame(4, function() {
+      user_tank_p2.setAnimation('user_tank_p2_level_1');
+    });
+
+    var enemy_tank = new Kinetic.Sprite({
+      x: 120,
+      y: 400,
+      image: resource_image,
+      animation: 'tank_born',
+      animations: animations,
+      frameRate: 7,
+      index: 0
+    });
+    layer.add(enemy_tank);
+
+    enemy_tank.start();
+    enemy_tank.afterFrame(4, function() {
+      enemy_tank.setAnimation('enemy_tank_green');
+      enemy_tank.afterFrame(2, function() {
+        enemy_tank.setAnimation('enemy_tank_red');
+      });
+    });
+
+    var gift_gun = new Kinetic.Sprite({
+      x: 20,
+      y: 450,
+      image: resource_image,
+      animation: 'gift_gun',
+      animations: animations,
+      frameRate: 5,
+      index: 0
+    });
+    layer.add(gift_gun);
+    gift_gun.start();
+
+    var bang = new Kinetic.Sprite({
+      x: 70,
+      y: 450,
+      image: resource_image,
+      animation: 'bang',
+      animations: animations,
+      frameRate: 5,
+      index: 0
+    });
+    layer.add(bang);
+    bang.start();
+
+    var missile = new Kinetic.Sprite({
+      x: 30,
+      y: 510,
+      image: resource_image,
+      animation: 'missile',
+      animations: animations,
+      frameRate: 5,
+      index: 0,
+      rotationDeg: 90,
+      offset: {
+        x: 10,
+        y: 10
+      }
+    });
+    layer.add(missile);
+
+    var brick_position_info = {
+      x: 120,
+      y: 450,
+      width: 20,
+      height: 30
+    };
+
+    var brick_animations = {
+      brick: [
+        {
+          x: brick_position_info.x % 40,
+          y: 240 + brick_position_info.y % 40,
+          width: brick_position_info.width,
+          height: brick_position_info.height
+        }
+      ]
+    };
+    var brick = new Kinetic.Sprite({
+      x: 120,
+      y: 450,
+      image: resource_image,
+      animation: 'brick',
+      animations: brick_animations,
+      frameRate: 5,
+      index: 0
+    });
+    layer.add(brick);
+
+    stage.add(layer);
+
+    setInterval(function() {
+      user_tank_p1.rotateDeg(90);
+    }, 3000);
+
+    setTimeout(function() {
+      user_tank_p2.transitionTo({ rotationDeg: 270, duration: 10, easing: "ease-in-out" });
+    }, 3000);
+
+    var missileFlyTo = function(x_target) {
+      missile.transitionTo({
+        x: x_target,
+        duration: 3,
+        easing: "linear",
+        callback: function() {
+          missileTurnAndFlyBack(x_target);
+        }
+      });
+    };
+
+    var missileTurnAndFlyBack = function(x_reached) {
+      missile.transitionTo({
+        rotationDeg: (x_reached == 300 ? 270 : 90),
+        duration: 0.5,
+        easing: "linear",
+        callback: function() {
+          missileFlyTo(x_reached == 300 ? 20 : 300);
+        }
+      });
+    };
+
+    missileTurnAndFlyBack(0);
+
+  });//]]>
+
+</script>
+
+
+</head>
+<body>
+  <img id="tanks" alt="tanks" width="400" height="360" src="tanks.png" />
+  <div id="canvas" width="800" height="800"></div>
+</body>
+</html>
