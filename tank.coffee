@@ -34,11 +34,19 @@ class MapArea2D
       when 270
         new MapArea2D(@x1 - factor * @width(), @y1, @x2, @y2)
 
+class MapArea2DVertex extends MapArea2D
+  constructor: (@x1, @y1, @x2, @y2) ->
+    @siblings = []
+  init_vxy: (@vx, @vy) ->
+  add_sibling: (sibling) ->
+    @siblings.push(sibling)
+
 class Map2D
   max_x: 520
   max_y: 520
   default_width: 40
   default_height: 40
+  infinity: 65535
   map_units: [] # has_many map_units
   constructor: (@battle_field, @canvas, @scene) ->
     @image = document.getElementById('resources')
@@ -57,6 +65,10 @@ class Map2D
       home: MapUnit2DForHome,
       missile: MapUnit2DForMissile
     }
+    @vertexes_columns = 4 * @max_x / @default_width - 3
+    @vertexes_rows = 4 * @max_y / @default_height - 3
+    @vertexes = @init_vertexes()
+    @home_vertex = @vertexes[24][48]
 
   units_at: (area) ->
     _.select(@map_units, (map_unit) ->
@@ -79,6 +91,43 @@ class Map2D
 
   delete_map_unit: (map_unit) ->
     @map_units = _.without(@map_units, map_unit)
+
+  init_vertexes: () ->
+    vertexes = []
+    [x1, x2] = [0, @default_width]
+    while x2 <= @max_x
+      column_vertexes = []
+      [y1, y2] = [0, @default_height]
+      while y2 <= @max_y
+        column_vertexes.push(new MapArea2DVertex(x1, y1, x2, y2))
+        [y1, y2] = [y1 + @default_height/4, y2 + @default_height/4]
+      vertexes.push(column_vertexes)
+      [x1, x2] = [x1 + @default_width/4, x2 + @default_width/4]
+    for x in _.range(0, @vertexes_columns)
+      for y in _.range(0, @vertexes_rows)
+        for sib in [{x: x, y: y - 1}, {x: x + 1, y: y}, {x: x, y: y + 1}, {x: x - 1, y: y}]
+          vertexes[x][y].init_vxy(x, y)
+          if 0 <= sib.x < @vertexes_columns and 0 <= sib.y < @vertexes_rows
+            vertexes[x][y].add_sibling(vertexes[sib.x][sib.y])
+    vertexes
+
+  vertexes_at: (area) ->
+    candidate_points = [
+      {x: area.x1, y: area.y1},
+      {x: area.x2 - 1, y: area.y1},
+      {x: area.x2 - 1, y: area.y2 - 1}
+      {x: area.x1, y: area.y2 - 1},
+    ]
+    vertexes = []
+    for point in candidate_points
+      vertexes.push @vertexes[parseInt(point.x / @default_width)][parseInt(point.y / @default_height)]
+    _.uniq(vertexes)
+
+  weight: (tank, vertex1, vertex2) ->
+    sub_area = _.first(vertex1.sub(vertex2))
+    terrain_units = _.select(@units_at(sub_area), (unit) -> unit.model instanceof Terrain)
+    return 1 if _.isEmpty(terrain_units)
+    _.first(terrain_units).weight(tank) * @default_width * @default_height / (sub_area.width() * sub_area.height())
 
 class MapUnit2D
   layer: 10
@@ -134,6 +183,8 @@ class MapUnit2D
   defend: (missile, destroy_area) -> 0
 
 class MapUnit2DForBrick extends MapUnit2D
+  weight: (tank) ->
+    160 / tank.power
   current_frames: () -> [{x: 0, y: 240}]
   defend: (missile, destroy_area) ->
     # cut self into pieces
@@ -146,6 +197,12 @@ class MapUnit2DForBrick extends MapUnit2D
     1
 
 class MapUnit2DForIron extends MapUnit2D
+  weight: (tank) ->
+    switch tank.power
+      when 1
+        @map.infinity
+      when 2
+        80
   current_frames: () -> [{x: 80, y: 240}]
   defend: (missile, destroy_area) ->
     return @max_depend_point if missile.power < 2
@@ -159,17 +216,26 @@ class MapUnit2DForIron extends MapUnit2D
 
 class MapUnit2DForIce extends MapUnit2D
   layer: "back"
+  weight: (tank) -> 4
   current_frames: () -> [{x: 40, y: 240}]
 
 class MapUnit2DForGrass extends MapUnit2D
   layer: "front"
+  weight: (tank) -> 4
   current_frames: () -> [{x: 120, y: 240}]
 
 class MapUnit2DForWater extends MapUnit2D
   layer: "back"
+  weight: (tank) ->
+    switch tank.ship
+      when true
+        4
+      when false
+        @map.infinity
   current_frames: () -> [{x: 160, y: 240}]
 
 class MapUnit2DForHome extends MapUnit2D
+  weight: (tank) -> 0
   current_frames: () ->
     if @model.is_defeated then [{x: 240, y: 240}] else [{x: 200, y: 240}]
   defend: (missile, destroy_area) ->
@@ -262,13 +328,15 @@ class MapUnit2DForMissile extends MovableMapUnit2D
 
     if @map.out_of_bound(destroy_area)
       @bom_on_destroy = true
-      @model.destroy()
+      @model.energy -= @max_depend_point
     else
       hit_map_units = @map.units_at(destroy_area)
       _.each(hit_map_units, (unit) =>
-        @model.energy -= unit.defend(@model, destroy_area)
+        defend_point = unit.defend(@model, destroy_area)
+        @bom_on_destroy = (defend_point == @max_depend_point)
+        @model.energy -= defend_point
       )
-      @model.destroy() if @model.energy <= 0
+    @model.destroy() if @model.energy <= 0
   destroy_area: ->
     switch @direction
       when 0
@@ -318,7 +386,7 @@ class MapUnit2DForTank extends MovableMapUnit2D
 class MapUnit2DForUserTank extends MapUnit2DForTank
   defend: (missile, destroy_area) ->
     return 0 if missile.parent is @model
-    @max_depend_point
+    @max_depend_point - 1
 
 class MapUnit2DForEnemyTank extends MapUnit2DForTank
   defend: (missile, destroy_area) ->
@@ -616,12 +684,10 @@ class Commander
     )
   direction_changed: (action) ->
     new_direction = @direction_action_map[action]
-    @direction != new_direction
+    @battle_field_object.direction != new_direction
   turn: (action) ->
     new_direction = @direction_action_map[action]
-    if @direction != new_direction
-      @direction = new_direction
-      @commands.push(@_direction_command(new_direction))
+    @commands.push(@_direction_command(new_direction))
   move: (action) ->
     switch action
       when "start"
@@ -705,10 +771,59 @@ class UserCommander extends Commander
         @inputs[key].push("keydown")
 
 class EnemyAICommander extends Commander
+  constructor: (@battle_field_object) ->
+    super(@battle_field_object)
+    @map = @battle_field_object.battle_field.map
+    @target = null
   next: ->
-    # attack home
-    # attack user tank
-    @battle_field_object
+    # move towards home
+    # TODO attack user tank or home
+    return @calculate_shortest_path() if @target is null
+    if @target.equals(@battle_field_object.view.area)
+      @target = null
+    else
+      # turn
+      # move
+  calculate_shortest_path: () ->
+    @start_vertex = @map.home_vertex
+    @end_vertex = _.first(@map.vertexes_at(@battle_field_object.view.area))
+    @intialize_single_source()
+    # dijkstra shortest path
+    searched_vertexes = []
+    remain_vertexes = @all_v()
+    while _.size(remain_vertexes) > 0
+      u = @extract_min(remain_vertexes)
+      remain_vertexes = _.without(remain_vertexes, u)
+      searched_vertexes.push u
+      _.each(u.siblings, (v) => @relax(u, v, @map.weight(@battle_field_object, u, v)))
+      break if u is @end_vertex
+    @target = @pi[@end_vertex.vx][@end_vertex.vy]
+
+  intialize_single_source: () ->
+    @d = []
+    @pi = []
+    for x in _.range(0, @map.vertexes_columns)
+      column_ds = []
+      column_pi = []
+      for y in _.range(0, @map.vertexes_rows)
+        column_ds.push(@map.infinity)
+        column_pi.push(null)
+      @d.push(column_ds)
+      @pi.push(column_pi)
+    @d[@start_vertex.vx][@start_vertex.vy] = 0
+
+  all_v: () ->
+    _.flatten(@map.vertexes)
+
+  relax: (u, v, w) ->
+    if @d[v.vx][v.vy] > @d[u.vx][u.vy] + w
+      @d[v.vx][v.vy] = @d[u.vx][u.vy] + w
+      @pi[v.vx][v.vy] = u
+
+  extract_min: (vertexes) ->
+    _.min(vertexes, (vertex) =>
+      @d[vertex.vx][vertex.vy]
+    )
 
 class MissileCommander extends Commander
   next: -> @move("start")
@@ -857,4 +972,4 @@ class Game
           @pause()
 
 $(document).ready () ->
-  new Game(30)
+  new Game(45)
