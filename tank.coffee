@@ -8,14 +8,15 @@ class MapArea2D
   valid: () ->
     @x2 > @x1 and @y2 > @y1
   intersect: (area) ->
-    new MapArea2D(_.max([area.x1, @x1]), _.max([area.y1, @y1]), _.min([area.x2, @x2]), _.min([area.y2, @y2]))
+    new MapArea2D(_.max([area.x1, @x1]), _.max([area.y1, @y1]),
+      _.min([area.x2, @x2]), _.min([area.y2, @y2]))
   sub: (area) ->
-    intersect_area = @intersect(area)
+    intersection = @intersect(area)
     _.select([
-      new MapArea2D(@x1, @y1, @x2, intersect_area.y1),
-      new MapArea2D(@x1, intersect_area.y2, @x2, @y2),
-      new MapArea2D(@x1, intersect_area.y1, intersect_area.x1, intersect_area.y2),
-      new MapArea2D(intersect_area.x2, intersect_area.y1, @x2, intersect_area.y2)
+      new MapArea2D(@x1, @y1, @x2, intersection.y1),
+      new MapArea2D(@x1, intersection.y2, @x2, @y2),
+      new MapArea2D(@x1, intersection.y1, intersection.x1, intersection.y2),
+      new MapArea2D(intersection.x2, intersection.y1, @x2, intersection.y2)
     ], (candidate_area) -> candidate_area.valid())
   collide: (area) ->
     not (@x2 <= area.x1 or @y2 <= area.y1 or @x1 >= area.x2 or @y1 >= area.y2)
@@ -105,7 +106,12 @@ class Map2D
       [x1, x2] = [x1 + @default_width/4, x2 + @default_width/4]
     for x in _.range(0, @vertexes_columns)
       for y in _.range(0, @vertexes_rows)
-        for sib in [{x: x, y: y - 1}, {x: x + 1, y: y}, {x: x, y: y + 1}, {x: x - 1, y: y}]
+        for sib in [
+          {x: x, y: y - 1},
+          {x: x + 1, y: y},
+          {x: x, y: y + 1},
+          {x: x - 1, y: y}
+        ]
           vertexes[x][y].init_vxy(x, y)
           if 0 <= sib.x < @vertexes_columns and 0 <= sib.y < @vertexes_rows
             vertexes[x][y].add_sibling(vertexes[sib.x][sib.y])
@@ -120,14 +126,20 @@ class Map2D
     ]
     vertexes = []
     for point in candidate_points
-      vertexes.push @vertexes[parseInt(point.x / @default_width)][parseInt(point.y / @default_height)]
+      vx = parseInt(point.x / @default_width)
+      vy = parseInt(point.y / @default_height)
+      vertexes.push @vertexes[vx][vy]
     _.uniq(vertexes)
 
   weight: (tank, vertex1, vertex2) ->
     sub_area = _.first(vertex1.sub(vertex2))
-    terrain_units = _.select(@units_at(sub_area), (unit) -> unit.model instanceof Terrain)
+    terrain_units = _.select(@units_at(sub_area), (unit) ->
+      unit.model instanceof Terrain
+    )
     return 1 if _.isEmpty(terrain_units)
-    _.first(terrain_units).weight(tank) * @default_width * @default_height / (sub_area.width() * sub_area.height())
+    _.first(terrain_units).weight(tank) *
+      @default_width * @default_height /
+      (sub_area.width() * sub_area.height())
 
 class MapUnit2D
   layer: 10
@@ -265,11 +277,11 @@ class MovableMapUnit2D extends MapUnit2D
     _.detect(_.range(1, offset).reverse(), (os) => @_try_move(os))
 
   turn: (direction) ->
-    adjusted_area = if (direction % 180 is 0) then @_adjust_x() else @_adjust_y()
-    if @map.area_available(this, adjusted_area)
+    target_area = if (direction % 180 is 0) then @_adjust_x() else @_adjust_y()
+    if @map.area_available(this, target_area)
       @direction = direction
       @model.direction = direction
-      @update_area(adjusted_area)
+      @update_area(target_area)
       @update_display()
 
   _try_move: (offset) ->
@@ -277,7 +289,8 @@ class MovableMapUnit2D extends MapUnit2D
     return false if offset_x == 0 and offset_y == 0
     target_x = @area.x1 + offset_x
     target_y = @area.y1 + offset_y
-    target_area = new MapArea2D(target_x, target_y, target_x + @width(), target_y + @height())
+    target_area = new MapArea2D(target_x, target_y,
+      target_x + @width(), target_y + @height())
     if @map.area_available(this, target_area)
       @update_area(target_area)
       @update_display()
@@ -297,10 +310,12 @@ class MovableMapUnit2D extends MapUnit2D
         [- _.min([offset, @area.x1]), 0]
 
   _adjust_x: () ->
-    offset = (@default_height/4) - (@area.x1 + @default_height/4) % (@default_height/2)
+    offset = (@default_height/4) -
+      (@area.x1 + @default_height/4) % (@default_height/2)
     new MapArea2D(@area.x1 + offset, @area.y1, @area.x2 + offset, @area.y2)
   _adjust_y: () ->
-    offset = (@default_width/4) - (@area.y1 + @default_width/4) % (@default_width/2)
+    offset = (@default_width/4) -
+      (@area.y1 + @default_width/4) % (@default_width/2)
     new MapArea2D(@area.x1, @area.y1 + offset, @area.x2, @area.y2 + offset)
 
   destroy_display: () ->
@@ -340,13 +355,33 @@ class MapUnit2DForMissile extends MovableMapUnit2D
   destroy_area: ->
     switch @direction
       when 0
-        new MapArea2D(@area.x1 - @default_width/4, @area.y1 - @default_height/4, @area.x2 + @default_width/4, @area.y1)
+        new MapArea2D(
+          @area.x1 - @default_width/4,
+          @area.y1 - @default_height/4,
+          @area.x2 + @default_width/4,
+          @area.y1
+        )
       when 90
-        new MapArea2D(@area.x2, @area.y1 - @default_height/4, @area.x2 + @default_width/4, @area.y2 + @default_height/4)
+        new MapArea2D(
+          @area.x2,
+          @area.y1 - @default_height/4,
+          @area.x2 + @default_width/4,
+          @area.y2 + @default_height/4
+        )
       when 180
-        new MapArea2D(@area.x1 - @default_width/4, @area.y2, @area.x2 + @default_width/4, @area.y2 + @default_height/4)
+        new MapArea2D(
+          @area.x1 - @default_width/4,
+          @area.y2,
+          @area.x2 + @default_width/4,
+          @area.y2 + @default_height/4
+        )
       when 270
-        new MapArea2D(@area.x1 - @default_width/4, @area.y1 - @default_height/4, @area.x1, @area.y2 + @default_height/4)
+        new MapArea2D(
+          @area.x1 - @default_width/4,
+          @area.y1 - @default_height/4,
+          @area.x1,
+          @area.y2 + @default_height/4
+        )
   defend: (missile, destroy_area) ->
     @model.destroy()
     @max_depend_point
@@ -567,7 +602,8 @@ class HomeTerrain extends Terrain
 
 class Tank extends MovableBattleFieldObject
   accept: (battle_field_object) ->
-    (battle_field_object instanceof Missile) and (battle_field_object.parent is this)
+    (battle_field_object instanceof Missile) and
+      (battle_field_object.parent is this)
 
   life: 1
   dead: () ->
@@ -598,7 +634,9 @@ class Tank extends MovableBattleFieldObject
 
   integration: (delta_time) ->
     super(delta_time)
-    @fire() for command in _.select(@commands, (command) -> command.type == "fire")
+    @fire() for command in _.select(@commands, (command)
+      -> command.type == "fire"
+    )
 
   missile_born_area: () -> @view.missile_born_area()
 
@@ -795,7 +833,9 @@ class EnemyAICommander extends Commander
       u = @extract_min(remain_vertexes)
       remain_vertexes = _.without(remain_vertexes, u)
       searched_vertexes.push u
-      _.each(u.siblings, (v) => @relax(u, v, @map.weight(@battle_field_object, u, v)))
+      _.each(u.siblings, (v) =>
+        @relax(u, v, @map.weight(@battle_field_object, u, v))
+      )
       break if u is @end_vertex
     @target = @pi[@end_vertex.vx][@end_vertex.vy]
 
@@ -828,14 +868,17 @@ class MissileCommander extends Commander
 class TerrainBuilder
   constructor: (@battle_field, @default_width, @default_height) ->
   batch_build: (terrain_cls, array_of_xys) ->
-    @build_by_range(terrain_cls, xys[0], xys[1], xys[2], xys[3]) for xys in array_of_xys
+    for xys in array_of_xys
+      @build_by_range(terrain_cls, xys[0], xys[1], xys[2], xys[3])
 
   build_by_range: (terrain_cls, x1, y1, x2, y2) ->
     xs = x1
     while xs < x2
       ys = y1
       while ys < y2
-        area = new MapArea2D(xs, ys, _.min([x2, xs + @default_height]), _.min([y2, ys + @default_width]))
+        area = new MapArea2D(xs, ys,
+          _.min([x2, xs + @default_height]),
+          _.min([y2, ys + @default_width]))
         @battle_field.add_terrain(terrain_cls, area)
         ys += @default_width
       xs += @default_height
@@ -858,7 +901,9 @@ class Game
     battle_field.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
     battle_field.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
 
-    builder = new TerrainBuilder(battle_field, battle_field.map.default_width, battle_field.map.default_height)
+    builder = new TerrainBuilder(battle_field,
+      battle_field.map.default_width,
+      battle_field.map.default_height)
 
     builder.batch_build(IceTerrain, [
       [40, 0, 240, 40],
@@ -912,13 +957,17 @@ class Game
   start: () ->
     $(document).unbind "keyup"
     $(document).bind "keyup", (event) =>
-      @battle_field.p1_tank() and @battle_field.p1_tank().commander.add_key_event("keyup", event.which)
-      @battle_field.p2_tank() and @battle_field.p2_tank().commander.add_key_event("keyup", event.which)
+      if @battle_field.p1_tank()
+        @battle_field.p1_tank().commander.add_key_event("keyup", event.which)
+      if @battle_field.p2_tank()
+        @battle_field.p2_tank().commander.add_key_event("keyup", event.which)
 
     $(document).unbind "keydown"
     $(document).bind "keydown", (event) =>
-      @battle_field.p1_tank() and @battle_field.p1_tank().commander.add_key_event("keydown", event.which)
-      @battle_field.p2_tank() and @battle_field.p2_tank().commander.add_key_event("keydown", event.which)
+      if @battle_field.p1_tank()
+        @battle_field.p1_tank().commander.add_key_event("keydown", event.which)
+      if @battle_field.p2_tank()
+        @battle_field.p2_tank().commander.add_key_event("keydown", event.which)
     @canvas.timeline.start()
 
   pause: () ->
@@ -952,9 +1001,13 @@ class Game
       delta_time = current_time.getMilliseconds() - last_time.getMilliseconds()
       # suppose a frame will not be more than 1 second
       delta_time += 1000 if delta_time < 0
-      _.each(@battle_field.all_battle_field_objects(), (object) -> object.integration(delta_time))
+      _.each(@battle_field.all_battle_field_objects(), (object) ->
+        object.integration(delta_time)
+      )
       mod = (mod + 1) % 10
-      _.each(@battle_field.map.map_units, (unit) -> unit.reset_zindex()) if mod == 0
+      _.each(@battle_field.map.map_units, (unit) ->
+        unit.reset_zindex()
+      ) if mod == 0
       last_time = current_time
 
     $(document).bind "keypress", (event) =>
