@@ -3,17 +3,26 @@
 <head>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8">
   <title>FC Tank - a coffeescript rewritten of classic 90 tank on Nintendo family computer</title>
-  <script type="text/javascript" src="lib/coffeescript.js"></script>
-  <script type='text/javascript' src='lib/jquery-2.0.0b1.js'></script>
-  <script type='text/javascript' src='lib/lodash.min.js'></script>
-  <script type='text/javascript' src="lib/ocanvas-2.3.1.min.js"></script>
+  <script type="text/javascript" src="js/coffeescript.js"></script>
+  <script type='text/javascript' src='js/jquery-2.0.0b1.js'></script>
+  <script type='text/javascript' src='js/lodash.min.js'></script>
+  <script type='text/javascript' src="js/ocanvas-2.3.1.min.js"></script>
   <style type='text/css'>
     #resources { display: none; }
   </style>
-  <script type="text/coffeescript" src="tank.coffee"></script>
+  <script type="text/coffeescript">
+    loadCoffee =  (files) ->
+        $head = $ "head"
+        load = (file) ->
+             $.get file, (content) ->
+                compiled = CoffeeScript.compile content, {bare: on}
+                $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
+        load file for file in files
+    loadCoffee ["tank.coffee", "game.coffee"]
+  </script>
 </head>
 <body>
-  <img id="resources" alt="tanks" width="400" height="360" src="tanks.png" />
+  <img id="resources" alt="tanks" width="400" height="360" src="image/tanks.png" />
   <canvas id="canvas" width="520" height="520"></canvas>
 </body>
 </html>

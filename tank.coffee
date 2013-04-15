@@ -790,7 +790,7 @@ class EnemyAICommander extends Commander
     @intialize_single_source()
     # dijkstra shortest path
     searched_vertexes = []
-    remain_vertexes = @all_v()
+    remain_vertexes = _.flatten(@map.vertexes)
     while _.size(remain_vertexes) > 0
       u = @extract_min(remain_vertexes)
       remain_vertexes = _.without(remain_vertexes, u)
@@ -811,9 +811,6 @@ class EnemyAICommander extends Commander
       @d.push(column_ds)
       @pi.push(column_pi)
     @d[@start_vertex.vx][@start_vertex.vy] = 0
-
-  all_v: () ->
-    _.flatten(@map.vertexes)
 
   relax: (u, v, w) ->
     if @d[v.vx][v.vy] > @d[u.vx][u.vy] + w
@@ -970,6 +967,3 @@ class Game
         when space
           @canvas.scenes.load("welcome", true)
           @pause()
-
-$(document).ready () ->
-  new Game(45)
