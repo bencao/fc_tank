@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "grunt test"
+    "test": "node_modules/grunt-cli/bin/grunt test"
   },
   "repository": {
     "type": "git",
@@ -23,9 +23,9 @@
   "gitHead": "f40d76b02d29f6f24f01bda2b729abec458fa957",
   "readmeFilename": "README.md",
   "devDependencies": {
-    "grunt": "~0.4.1",
-    "grunt-contrib-jshint": "~0.1.1",
-    "grunt-contrib-nodeunit": "~0.1.2",
+    "grunt": "~0.4.0",
+    "grunt-cli": "~0.1.7",
+    "grunt-coffeelint": "~0.0.6",
     "grunt-contrib-qunit": "~0.2.1"
   }
 }
