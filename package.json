@@ -1,0 +1,31 @@
+{
+  "name": "fc_tank",
+  "version": "0.1.0",
+  "description": "rewrite of classic fc 90 tank",
+  "main": "index.html",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "grunt test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "github.com:bencao/fc_tank.git"
+  },
+  "keywords": [
+    "fc",
+    "90",
+    "tank"
+  ],
+  "author": "Ben Cao",
+  "license": "MIT",
+  "gitHead": "f40d76b02d29f6f24f01bda2b729abec458fa957",
+  "readmeFilename": "README.md",
+  "devDependencies": {
+    "grunt": "~0.4.1",
+    "grunt-contrib-jshint": "~0.1.1",
+    "grunt-contrib-nodeunit": "~0.1.2",
+    "grunt-contrib-qunit": "~0.2.1"
+  }
+}
