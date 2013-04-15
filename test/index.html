@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>QUnit Test for Tank</title>
+  <link rel="stylesheet" href="../css/qunit-v1.11.0.css">
+  <script type='text/javascript' src="../js/qunit-v1.11.0.js"></script>
+  <script type="text/javascript" src="../js/coffeescript.js"></script>
+  <script type='text/javascript' src='../js/jquery-2.0.0b1.js'></script>
+  <script type='text/javascript' src='../js/lodash.min.js'></script>
+  <script type='text/javascript' src="../js/ocanvas-2.3.1.min.js"></script>
+  <script type="text/coffeescript">
+    scriptsToTest = ["../tank.coffee"]
+    tests = ["test.coffee"]
+    loadCoffee =  (files) ->
+        $head = $ "head"
+        load = (file) ->
+             $.get file, (content) ->
+                compiled = CoffeeScript.compile content, {bare: on}
+                $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
+        load file for file in files
+    loadCoffee scriptsToTest
+    loadCoffee tests
+  </script>
+</head>
+<body>
+  <div id="qunit"></div>
+  <div id="qunit-fixture"></div>
+
+</body>
+</html>
