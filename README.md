@@ -16,7 +16,7 @@ open your browser and visit "http://localhost:8000", you'll find it!
 ##Contribute
 
 ###Source files
-main logic are in tank.coffee and game.coffee.
+main logic are in src/tank.coffee and src/game.coffee.
 
 ###Test
 To run test, you need to install [npm](https://npmjs.org/) first. Then
