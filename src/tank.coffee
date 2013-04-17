@@ -4,6 +4,7 @@ class Point
 class MapArea2D
   constructor: (@x1, @y1, @x2, @y2) ->
   equals: (area) ->
+    return false unless area instanceof MapArea2D
     area.x1 == @x1 and area.x2 == @x2 and area.y1 == @y1 and area.y2 == @y2
   valid: () ->
     @x2 > @x1 and @y2 > @y1
@@ -34,6 +35,8 @@ class MapArea2D
         new MapArea2D(@x1, @y1, @x2, @y2 + factor * @height())
       when 270
         new MapArea2D(@x1 - factor * @width(), @y1, @x2, @y2)
+  to_s: () ->
+    "[" + @x1 + ", " + @y1 + ", " + @x2 + ", " + @y2 + "]"
 
 class MapArea2DVertex extends MapArea2D
   constructor: (@x1, @y1, @x2, @y2) ->
@@ -117,29 +120,67 @@ class Map2D
             vertexes[x][y].add_sibling(vertexes[sib.x][sib.y])
     vertexes
 
+  # area must be the same with one of map vertexes
   vertexes_at: (area) ->
-    candidate_points = [
-      {x: area.x1, y: area.y1},
-      {x: area.x2 - 1, y: area.y1},
-      {x: area.x2 - 1, y: area.y2 - 1}
-      {x: area.x1, y: area.y2 - 1},
-    ]
-    vertexes = []
-    for point in candidate_points
-      vx = parseInt(point.x / @default_width)
-      vy = parseInt(point.y / @default_height)
-      vertexes.push @vertexes[vx][vy]
-    _.uniq(vertexes)
+    vx = parseInt(area.x1 * 4 / @default_width)
+    vy = parseInt(area.y1 * 4 / @default_height)
+    @vertexes[vx][vy]
 
-  weight: (tank, vertex1, vertex2) ->
-    sub_area = _.first(vertex1.sub(vertex2))
+  weight: (tank, from, to) ->
+    sub_area = _.first(to.sub(from))
     terrain_units = _.select(@units_at(sub_area), (unit) ->
       unit.model instanceof Terrain
     )
     return 1 if _.isEmpty(terrain_units)
     _.first(terrain_units).weight(tank) *
-      @default_width * @default_height /
-      (sub_area.width() * sub_area.height())
+      sub_area.width() * sub_area.height() /
+      (@default_width * @default_height)
+
+  shortest_path: (tank, start_vertex, end_vertex) ->
+    [d, pi] = @intialize_single_source()
+    d[start_vertex.vx][start_vertex.vy] = 0
+    # dijkstra shortest path
+    # searched_vertexes = []
+    remain_vertexes = _.flatten(@vertexes)
+    while _.size(remain_vertexes) > 0
+      u = @extract_min(remain_vertexes, d)
+      remain_vertexes = _.without(remain_vertexes, u)
+      # searched_vertexes.push u
+      _.each(u.siblings, (v) =>
+        @relax(d, pi, u, v, @weight(tank, u, v))
+      )
+      break if u is end_vertex
+    @shortest_path_by_pi(pi, d, start_vertex, end_vertex)
+
+  intialize_single_source: () ->
+    d = []
+    pi = []
+    for x in _.range(0, @vertexes_columns)
+      column_ds = []
+      column_pi = []
+      for y in _.range(0, @vertexes_rows)
+        column_ds.push(@infinity)
+        column_pi.push(null)
+      d.push(column_ds)
+      pi.push(column_pi)
+    [d, pi]
+
+  relax: (d, pi, u, v, w) ->
+    if d[v.vx][v.vy] > d[u.vx][u.vy] + w
+      d[v.vx][v.vy] = d[u.vx][u.vy] + w
+      pi[v.vx][v.vy] = u
+
+  extract_min: (vertexes, d) ->
+    _.min(vertexes, (vertex) => d[vertex.vx][vertex.vy])
+
+  shortest_path_by_pi: (pi, d, start_vertex, end_vertex) ->
+    reverse_paths = []
+    v = end_vertex
+    until pi[v.vx][v.vy] is null
+      reverse_paths.push(v)
+      v = pi[v.vx][v.vy]
+    reverse_paths.push(start_vertex)
+    reverse_paths.reverse()
 
 class MapUnit2D
   layer: 10
@@ -196,7 +237,7 @@ class MapUnit2D
 
 class MapUnit2DForBrick extends MapUnit2D
   weight: (tank) ->
-    160 / tank.power
+    40 / tank.power
   current_frames: () -> [{x: 0, y: 240}]
   defend: (missile, destroy_area) ->
     # cut self into pieces
@@ -214,7 +255,7 @@ class MapUnit2DForIron extends MapUnit2D
       when 1
         @map.infinity
       when 2
-        80
+        20
   current_frames: () -> [{x: 80, y: 240}]
   defend: (missile, destroy_area) ->
     return @max_depend_point if missile.power < 2
@@ -274,7 +315,7 @@ class MovableMapUnit2D extends MapUnit2D
     @display_object.moveTo(@gravity_point.x, @gravity_point.y)
 
   move: (offset) ->
-    _.detect(_.range(1, offset).reverse(), (os) => @_try_move(os))
+    _.detect(_.range(1, offset + 1).reverse(), (os) => @_try_move(os))
 
   turn: (direction) ->
     target_area = if (direction % 180 is 0) then @_adjust_x() else @_adjust_y()
@@ -417,35 +458,32 @@ class MapUnit2DForTank extends MovableMapUnit2D
       @display_object.frames = @current_frames()
       @display_object.frame = 1
     ), 1000)
-
-class MapUnit2DForUserTank extends MapUnit2DForTank
   defend: (missile, destroy_area) ->
-    return 0 if missile.parent is @model
-    @max_depend_point - 1
-
-class MapUnit2DForEnemyTank extends MapUnit2DForTank
-  defend: (missile, destroy_area) ->
-    return 0 if missile.parent is @model
+    if (@_is_user_tank(missile.parent) ^ @_is_user_tank(@model)) is 0
+      return @max_depend_point - 1
     defend_point = _.min(@model.life, missile.power)
     @model.life -= missile.power
     @model.destroy() if @model.dead()
     defend_point
 
-class MapUnit2DForUserTankP1 extends MapUnit2DForUserTank
+  _is_user_tank: (tank) ->
+    tank.type() == "user_p1" or tank.type() == "user_p2"
+
+class MapUnit2DForUserTankP1 extends MapUnit2DForTank
   current_frames: () ->
     switch @model.level
       when 1 then [{x: 0, y: 0, d: 10}, {x:40, y: 0, d: 10}]
       when 2 then [{x: 80, y: 0, d: 100}, {x:120, y: 0, d: 100}]
       when 3 then [{x: 160, y: 0, d: 100}, {x:200, y: 0, d: 100}]
 
-class MapUnit2DForUserTankP2 extends MapUnit2DForUserTank
+class MapUnit2DForUserTankP2 extends MapUnit2DForTank
   current_frames: () ->
     switch @model.level
       when 1 then [{x: 0, y: 40, d: 100}, {x:40, y: 40, d: 100}]
       when 2 then [{x: 80, y: 40, d: 100}, {x:120, y: 40, d: 100}]
       when 3 then [{x: 160, y: 40, d: 100}, {x:200, y: 40, d: 100}]
 
-class MapUnit2DForStupidTank extends MapUnit2DForEnemyTank
+class MapUnit2DForStupidTank extends MapUnit2DForTank
   current_frames: () ->
     origin = switch @model.level
       when 1 then [{x: 0, y: 80, d: 100}, {x:40, y: 80, d: 100}]
@@ -454,7 +492,7 @@ class MapUnit2DForStupidTank extends MapUnit2DForEnemyTank
       when 4 then [{x: 240, y: 80, d: 100}, {x:280, y: 80, d: 100}]
       when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
 
-class MapUnit2DForFoolTank extends MapUnit2DForEnemyTank
+class MapUnit2DForFoolTank extends MapUnit2DForTank
   current_frames: () ->
     origin = switch @model.level
       when 1 then [{x: 0, y: 120, d: 100}, {x:40, y: 120, d: 100}]
@@ -463,7 +501,7 @@ class MapUnit2DForFoolTank extends MapUnit2DForEnemyTank
       when 4 then [{x: 240, y: 120, d: 100}, {x:280, y: 120, d: 100}]
       when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
 
-class MapUnit2DForFishTank extends MapUnit2DForEnemyTank
+class MapUnit2DForFishTank extends MapUnit2DForTank
   current_frames: () ->
     origin = switch @model.level
       when 1 then [{x: 0, y: 160, d: 100}, {x:40, y: 160, d: 100}]
@@ -472,7 +510,7 @@ class MapUnit2DForFishTank extends MapUnit2DForEnemyTank
       when 4 then [{x: 240, y: 160, d: 100}, {x:280, y: 160, d: 100}]
       when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
 
-class MapUnit2DForStrongTank extends MapUnit2DForEnemyTank
+class MapUnit2DForStrongTank extends MapUnit2DForTank
   current_frames: () ->
     origin = switch @model.level
       when 1 then [{x: 0, y: 200, d: 100}, {x:40, y: 200, d: 100}]
@@ -518,6 +556,7 @@ class BattleField
 
   p1_tank: -> _.first(_.select(@tanks, (tank) -> tank.type() == "user_p1"))
   p2_tank: -> _.first(_.select(@tanks, (tank) -> tank.type() == "user_p2"))
+  home: -> _.first(_.select(@terrains, (terrain) -> terrain.type() == "home"))
 
 class BattleFieldObject
   id: null
@@ -538,17 +577,27 @@ class MovableBattleFieldObject extends BattleFieldObject
   direction: 0
 
   constructor: (@battle_field) ->
+    @delayed_commands = []
+    @init_commander()
+    @moving = false
+
+  init_commander: () ->
     @commander = new Commander()
 
-  speed: () -> 0.08
+  speed: 0.08
 
-  moving: false
+  queued_delayed_commands: () ->
+    [commands, @delayed_commands] = [@delayed_commands, []]
+    commands
+
+  add_delayed_command: (command) ->
+    @delayed_commands.push(command)
 
   integration: (delta_time) ->
     super(delta_time)
-    @commands = @commander.next_commands()
-    @handle_turn(command) for command in @commands
-    @handle_move(command, delta_time) for command in @commands
+    @commands = _.union(@commander.next_commands(), @queued_delayed_commands())
+    @handle_turn(cmd) for cmd in @commands
+    @handle_move(cmd, delta_time) for cmd in @commands
 
   turn: (direction) ->
     @view.turn(direction)
@@ -564,9 +613,19 @@ class MovableBattleFieldObject extends BattleFieldObject
   handle_move: (command, delta_time) ->
     switch(command.type)
       when "start_move"
-        # try move max distance
         @moving = true
-        @move(@speed() * delta_time)
+        max_offset = parseInt(@speed * delta_time)
+        intent_offset = command.params.offset
+        if intent_offset is null
+          @move(max_offset)
+        else
+          real_offset = _.min([intent_offset, max_offset])
+          if @move(real_offset)
+            command.params.offset -= real_offset
+            @add_delayed_command(command) if command.params.offset > 0
+          else
+            @add_delayed_command(command)
+
       when "stop_move"
         # do not move by default
         @moving = false
@@ -599,19 +658,27 @@ class GrassTerrain extends Terrain
 class HomeTerrain extends Terrain
   is_defeated: false
   type: -> "home"
+  accept: (battle_field_object) ->
+    return true if @is_defeated and battle_field_object instanceof Missile
+    false
 
 class Tank extends MovableBattleFieldObject
+  constructor: (@battle_field) ->
+    super(@battle_field)
+    @life = 1
+    @power = 1
+    @level = 1
+    @max_missile = 1
+    @missiles = []
+    @on_ship = false
+    @on_guard = false
+
   accept: (battle_field_object) ->
     (battle_field_object instanceof Missile) and
       (battle_field_object.parent is this)
 
-  life: 1
   dead: () ->
     @life <= 0
-  power: 1
-  level: 1
-  max_missile: 1
-  missiles: []
   update_level: (@level) ->
     switch @level
       when 1
@@ -621,22 +688,17 @@ class Tank extends MovableBattleFieldObject
         @power = 2
         @max_missile = 2
 
-  ship: false
-  update_ship: (@ship) ->
-
-  guard: false
-  update_guard: (@guard) ->
-
   fire: () ->
-    if _.size(@missiles) < @max_missile
+    if @can_fire()
       missile = @battle_field.add_missile(this)
       @missiles.push(missile)
 
+  can_fire: () ->
+    _.size(@missiles) < @max_missile
+
   integration: (delta_time) ->
     super(delta_time)
-    @fire() for command in _.select(@commands, (command)
-      -> command.type == "fire"
-    )
+    @fire() for command in _.select(@commands, (cmd) -> cmd.type == "fire")
 
   missile_born_area: () -> @view.missile_born_area()
 
@@ -644,17 +706,17 @@ class Tank extends MovableBattleFieldObject
     @missiles = _.without(@missiles, missile)
 
 class UserTank extends Tank
-  speed: () -> super() * 2
+  speed: 0.16
 
 class UserP1Tank extends UserTank
-  constructor: (@battle_field) ->
+  init_commander: () ->
     @commander = new UserCommander(this, {
       up: 38, down: 40, left: 37, right: 39, fire: 70
     })
   type: -> 'user_p1'
 
 class UserP2Tank extends UserTank
-  constructor: (@battle_field) ->
+  init_commander: () ->
     @commander = new UserCommander(this, {
       up: 71, down: 72, left: 73, right: 74, fire: 75
     })
@@ -662,30 +724,35 @@ class UserP2Tank extends UserTank
 
 class EnemyTank extends Tank
   direction: 180
-  constructor: (@battle_field) ->
+  init_commander: () ->
     @commander = new EnemyAICommander(this)
   gift: 0
 
 class StupidTank extends EnemyTank
+  speed: 0.07
   type: -> 'stupid'
 
 class FoolTank extends EnemyTank
+  speed: 0.07
   type: -> 'fool'
 
 class FishTank extends EnemyTank
-  speed: () -> super() * 3
+  speed: 0.18
   type: -> 'fish'
 
 class StrongTank extends EnemyTank
+  speed: 0.05
   type: -> 'strong'
 
 class Missile extends MovableBattleFieldObject
   constructor: (@battle_field, @parent) ->
+    super(@battle_field)
     @power = @parent.power
     @energy = @power
     @direction = @parent.direction
+  init_commander: () ->
     @commander = new MissileCommander(this)
-  speed: -> super() * 4
+  speed: 0.30
   type: -> 'missile'
 
   exploded: false
@@ -701,8 +768,8 @@ class Gift extends BattleFieldObject
   test: ->
 
 class Commander
-  constructor: (@battle_field_object) ->
-    @direction = @battle_field_object.direction
+  constructor: (@movable) ->
+    @direction = @movable.direction
     @commands = []
   direction_action_map: {
     up: 0,
@@ -722,16 +789,14 @@ class Commander
     )
   direction_changed: (action) ->
     new_direction = @direction_action_map[action]
-    @battle_field_object.direction != new_direction
+    @movable.direction != new_direction
   turn: (action) ->
     new_direction = @direction_action_map[action]
     @commands.push(@_direction_command(new_direction))
-  move: (action) ->
-    switch action
-      when "start"
-        @commands.push(@_start_move_command())
-      when "stop"
-        @commands.push(@_stop_move_command())
+  start_move: (offset = null) ->
+    @commands.push(@_start_move_command(offset))
+  stop_move: () ->
+    @commands.push(@_stop_move_command())
   fire: () ->
     @commands.push(@_fire_command())
 
@@ -741,13 +806,17 @@ class Commander
       type: "direction",
       params: { direction: direction }
     }
-  _start_move_command: -> { type: "start_move" }
+  _start_move_command: (offset = null) ->
+    {
+      type: "start_move",
+      params: { offset: offset }
+    }
   _stop_move_command: -> { type: "stop_move" }
   _fire_command: -> { type: "fire" }
 
 class UserCommander extends Commander
-  constructor: (@battle_field_object, key_setting) ->
-    super(@battle_field_object)
+  constructor: (@movable, key_setting) ->
+    super(@movable)
     @key_map = {}
     for key, code of key_setting
       @key_map[code] = key
@@ -784,16 +853,16 @@ class UserCommander extends Commander
           keyup = _.contains(@inputs[key], "keyup")
           keydown = _.contains(@inputs[key], "keydown")
           if keydown
-            @move("start")
+            @start_move()
           else
-            @move("stop") if keyup
+            @stop_move() if keyup
     @reset_input()
 
   handle_key_press: () ->
     for key in ["up", "down", "left", "right"]
       if @is_pressed(key)
         @turn(key)
-        @move("start")
+        @start_move()
     if @is_pressed("fire")
       @fire()
 
@@ -809,61 +878,60 @@ class UserCommander extends Commander
         @inputs[key].push("keydown")
 
 class EnemyAICommander extends Commander
-  constructor: (@battle_field_object) ->
-    super(@battle_field_object)
-    @map = @battle_field_object.battle_field.map
-    @target = null
+  constructor: (@movable) ->
+    super(@movable)
+    @battle_field = @movable.battle_field
+    @map = @battle_field.map
+    @reset_path()
+    @last_area = null
   next: ->
     # move towards home
-    # TODO attack user tank or home
-    return @calculate_shortest_path() if @target is null
-    if @target.equals(@battle_field_object.view.area)
-      @target = null
+    if _.size(@path) == 0
+      console.log "calc path"
+      @path = @map.shortest_path(@movable, @current_vertex(), @map.home_vertex)
+      @next_move()
+      # setTimeout((() => @reset_path()), 3000 + Math.random()*1000)
     else
-      # turn
-      # move
-  calculate_shortest_path: () ->
-    @start_vertex = @map.home_vertex
-    @end_vertex = _.first(@map.vertexes_at(@battle_field_object.view.area))
-    @intialize_single_source()
-    # dijkstra shortest path
-    searched_vertexes = []
-    remain_vertexes = _.flatten(@map.vertexes)
-    while _.size(remain_vertexes) > 0
-      u = @extract_min(remain_vertexes)
-      remain_vertexes = _.without(remain_vertexes, u)
-      searched_vertexes.push u
-      _.each(u.siblings, (v) =>
-        @relax(u, v, @map.weight(@battle_field_object, u, v))
-      )
-      break if u is @end_vertex
-    @target = @pi[@end_vertex.vx][@end_vertex.vy]
+      @next_move() if @current_vertex().equals(@target_vertex)
 
-  intialize_single_source: () ->
-    @d = []
-    @pi = []
-    for x in _.range(0, @map.vertexes_columns)
-      column_ds = []
-      column_pi = []
-      for y in _.range(0, @map.vertexes_rows)
-        column_ds.push(@map.infinity)
-        column_pi.push(null)
-      @d.push(column_ds)
-      @pi.push(column_pi)
-    @d[@start_vertex.vx][@start_vertex.vy] = 0
+    # fire if can't move
+    @fire() if @movable.can_fire() and
+      @last_area and @last_area.equals(@movable.view.area)
+    # fire if user or home in front of me
+    targets = _.compact([@battle_field.p1_tank(), @battle_field.p2_tank(), @battle_field.home()])
+    for target in targets
+      @fire() if @in_attack_range(target.view.area)
 
-  relax: (u, v, w) ->
-    if @d[v.vx][v.vy] > @d[u.vx][u.vy] + w
-      @d[v.vx][v.vy] = @d[u.vx][u.vy] + w
-      @pi[v.vx][v.vy] = u
+    @last_area = @movable.view.area
 
-  extract_min: (vertexes) ->
-    _.min(vertexes, (vertex) =>
-      @d[vertex.vx][vertex.vy]
-    )
+  next_move: () ->
+    @target_vertex = @path.shift()
+    [direction, offset] = @offset_of(@current_vertex(), @target_vertex)
+    @turn(direction)
+    @start_move(offset)
+
+  reset_path: () ->
+    @path = []
+
+  offset_of: (current_vertex, target_vertex) ->
+    if target_vertex.y1 < current_vertex.y1
+      return ["up", current_vertex.y1 - target_vertex.y1]
+    if target_vertex.y1 > current_vertex.y1
+      return ["down", target_vertex.y1 - current_vertex.y1]
+    if target_vertex.x1 < current_vertex.x1
+      return ["left", current_vertex.x1 - target_vertex.x1]
+    if target_vertex.x1 > current_vertex.x1
+      return ["right", target_vertex.x1 - current_vertex.x1]
+    ["down", 0]
+
+  current_vertex: () ->
+    @map.vertexes_at(@movable.view.area)
+
+  in_attack_range: (area) ->
+    @movable.view.area.x1 == area.x1 or @movable.view.area.y1 == area.y1
 
 class MissileCommander extends Commander
-  next: -> @move("start")
+  next: -> @start_move()
 
 class TerrainBuilder
   constructor: (@battle_field, @default_width, @default_height) ->
@@ -882,141 +950,3 @@ class TerrainBuilder
         @battle_field.add_terrain(terrain_cls, area)
         ys += @default_width
       xs += @default_height
-
-class Game
-  constructor: (@fps) ->
-    @init_canvas()
-    @init_scenes()
-    @init_control()
-    @canvas.scenes.load("game")
-    @start()
-    window.game = this
-
-  init_battle_field: (canvas, scene) ->
-    battle_field = new BattleField(canvas, scene)
-
-    battle_field.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
-    battle_field.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
-
-    battle_field.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
-    battle_field.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
-
-    builder = new TerrainBuilder(battle_field,
-      battle_field.map.default_width,
-      battle_field.map.default_height)
-
-    builder.batch_build(IceTerrain, [
-      [40, 0, 240, 40],
-      [280, 0, 480, 40],
-      [0, 40, 80, 280],
-      [440, 40, 520, 280],
-      [80, 240, 440, 280]
-    ])
-    builder.batch_build(BrickTerrain, [
-      [120, 40, 240, 80],
-      [120, 80, 160, 160],
-      [160, 120, 200, 160],
-      [200, 80, 240, 200],
-      [120, 200, 240, 240],
-      [280, 40, 400, 80],
-      [280, 80, 320, 200],
-      [360, 80, 400, 200],
-      [280, 200, 400, 240],
-      [40, 340, 80, 480],
-      [120, 340, 160, 480],
-      [360, 340, 400, 480],
-      [440, 340, 480, 480],
-      [200, 300, 240, 420],
-      [240, 320, 280, 400],
-      [280, 300, 320, 420],
-      [220, 460, 300, 480],
-      [220, 480, 240, 520],
-      [280, 480, 300, 520]
-    ])
-    builder.batch_build(IronTerrain, [
-      [0, 280, 40, 320],
-      [240, 280, 280, 320],
-      [480, 280, 520, 320],
-      [80, 360, 120, 400],
-      [160, 360, 200, 400],
-      [320, 360, 360, 400],
-      [400, 360, 440, 400]
-    ])
-    builder.batch_build(GrassTerrain, [
-      [0, 320, 40, 520],
-      [40, 480, 120, 520],
-      [400, 480, 480, 520],
-      [480, 320, 520, 480]
-    ])
-
-    battle_field.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520))
-
-    # set a reference for easier debug
-    window.bf = battle_field
-
-  start: () ->
-    $(document).unbind "keyup"
-    $(document).bind "keyup", (event) =>
-      if @battle_field.p1_tank()
-        @battle_field.p1_tank().commander.add_key_event("keyup", event.which)
-      if @battle_field.p2_tank()
-        @battle_field.p2_tank().commander.add_key_event("keyup", event.which)
-
-    $(document).unbind "keydown"
-    $(document).bind "keydown", (event) =>
-      if @battle_field.p1_tank()
-        @battle_field.p1_tank().commander.add_key_event("keydown", event.which)
-      if @battle_field.p2_tank()
-        @battle_field.p2_tank().commander.add_key_event("keydown", event.which)
-    @canvas.timeline.start()
-
-  pause: () ->
-    $(document).unbind "keyup"
-    $(document).unbind "keydown"
-    @canvas.timeline.stop()
-
-  init_canvas: () ->
-    @canvas = oCanvas.create({canvas: "#canvas", background: "#000", fps: @fps})
-
-  init_scenes: () ->
-    welcome_text = @canvas.display.text({
-      x: 260,
-      y: 170,
-      origin: { x: "center", y: "top" },
-      align: "center",
-      font: "bold 30px sans-serif",
-      text: "Hello dude\n\nPress Enter to start game!",
-      fill: "#fff"
-    })
-    @canvas.scenes.create "welcome", () -> @add(welcome_text)
-
-    game_scene = @canvas.scenes.create "game", () ->
-    @battle_field = @init_battle_field(@canvas, game_scene)
-
-  init_control: () ->
-    last_time = new Date()
-    mod = 0
-    @canvas.setLoop () =>
-      current_time = new Date()
-      delta_time = current_time.getMilliseconds() - last_time.getMilliseconds()
-      # suppose a frame will not be more than 1 second
-      delta_time += 1000 if delta_time < 0
-      _.each(@battle_field.all_battle_field_objects(), (object) ->
-        object.integration(delta_time)
-      )
-      mod = (mod + 1) % 10
-      _.each(@battle_field.map.map_units, (unit) ->
-        unit.reset_zindex()
-      ) if mod == 0
-      last_time = current_time
-
-    $(document).bind "keypress", (event) =>
-      # key code mapping
-      [space, enter] = [32, 13]
-      switch event.which
-        when enter
-          @canvas.scenes.load("game", true)
-          @start()
-        when space
-          @canvas.scenes.load("welcome", true)
-          @pause()

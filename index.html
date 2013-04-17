@@ -9,14 +9,21 @@
   <script type='text/javascript' src="js/ocanvas-v2.3.1.min.js"></script>
   <style type='text/css'>
     #resources { display: none; }
+    #canvas {margin: 50px 20px;}
   </style>
   <script type="text/coffeescript">
-    loadCoffee =  (files) ->
+    loadCoffee = (files) ->
         $head = $ "head"
+        compile_and_add = (content) ->
+          compiled = CoffeeScript.compile content, {bare: on}
+          $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
         load = (file) ->
-             $.get file, (content) ->
-                compiled = CoffeeScript.compile content, {bare: on}
-                $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
+          $.ajax {
+            url: file,
+            success: compile_and_add,
+            dataType: 'text'
+            async: false
+          }
         load file for file in files
     loadCoffee ["src/tank.coffee", "src/game.coffee"]
   </script>

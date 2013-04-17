@@ -12,12 +12,18 @@
   <script type="text/coffeescript">
     scriptsToTest = ["../src/tank.coffee"]
     tests = ["test.coffee"]
-    loadCoffee =  (files) ->
+    loadCoffee = (files) ->
         $head = $ "head"
+        compile_and_add = (content) ->
+          compiled = CoffeeScript.compile content, {bare: on}
+          $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
         load = (file) ->
-             $.get file, (content) ->
-                compiled = CoffeeScript.compile content, {bare: on}
-                $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
+          $.ajax {
+            url: file,
+            success: compile_and_add,
+            dataType: 'text'
+            async: false
+          }
         load file for file in files
     loadCoffee scriptsToTest
     loadCoffee tests
