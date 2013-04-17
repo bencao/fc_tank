@@ -19,6 +19,9 @@ test "equals", () ->
   ok(new MapArea2D(40, 40, 80, 80).equals(new MapArea2D(40, 40, 80, 80)),
     "area with the same x1,y1,x2,y2 equals to each other")
 
+  equal(new MapArea2D(40, 40, 80, 80).equals(null), false,
+    "do not equals to a null object")
+
 test "intersect", () ->
   area1 = new MapArea2D(40, 40, 80, 80)
   area2 = new MapArea2D(60, 60, 100, 100)
@@ -57,7 +60,18 @@ test "sub", () ->
     new MapArea2D(40, 60, 60, 80)
   ], "[40, 40, 80, 80] sub [60, 60, 80, 80] is divided to [40, 40, 80, 60] and [40, 60, 60, 80]")
 
+  area3 = new MapArea2D(40, 40, 80, 80)
+  area4 = new MapArea2D(40, 50, 80, 90)
+  sub_areas2 = area3.sub(area4)
+  equal(_.size(sub_areas2), 1,
+    "[40, 40, 80, 80] sub [40, 50, 80, 90] is divided to 1 sub areas")
+  deepEqual(sub_areas2, [new MapArea2D(40, 40, 80, 50)],
+    "[40, 40, 80, 80] sub [40, 50, 80, 90] is divided to [40, 40, 80, 50]")
+
 module "Map2D"
+test "shortest_path", () ->
+  # todo
+  ok(true)
 
 module "Terrain"
 
