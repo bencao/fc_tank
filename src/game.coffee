@@ -7,19 +7,17 @@ class Game
     @start()
     window.game = this
 
-  init_battle_field: (canvas, scene) ->
-    battle_field = new BattleField(canvas, scene)
+  init_map: (canvas, scene) ->
+    map = new Map2D(canvas, scene)
 
-    battle_field.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
-    battle_field.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
+    map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
+    map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
 
-    battle_field.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
-    battle_field.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
-    battle_field.add_tank(StrongTank, new MapArea2D(480, 0, 520, 40))
+    map.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
+    map.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
+    map.add_tank(StrongTank, new MapArea2D(480, 0, 520, 40))
 
-    builder = new TerrainBuilder(battle_field,
-      battle_field.map.default_width,
-      battle_field.map.default_height)
+    builder = new TerrainBuilder(map, map.default_width, map.default_height)
 
     builder.batch_build(IceTerrain, [
       [40, 0, 240, 40],
@@ -65,25 +63,25 @@ class Game
       [480, 320, 520, 480]
     ])
 
-    battle_field.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520))
+    map.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520))
 
     # set a reference for easier debug
-    window.bf = battle_field
+    window.map = map
 
   start: () ->
     $(document).unbind "keyup"
     $(document).bind "keyup", (event) =>
-      if @battle_field.p1_tank()
-        @battle_field.p1_tank().commander.add_key_event("keyup", event.which)
-      if @battle_field.p2_tank()
-        @battle_field.p2_tank().commander.add_key_event("keyup", event.which)
+      if @map.p1_tank()
+        @map.p1_tank().commander.add_key_event("keyup", event.which)
+      if @map.p2_tank()
+        @map.p2_tank().commander.add_key_event("keyup", event.which)
 
     $(document).unbind "keydown"
     $(document).bind "keydown", (event) =>
-      if @battle_field.p1_tank()
-        @battle_field.p1_tank().commander.add_key_event("keydown", event.which)
-      if @battle_field.p2_tank()
-        @battle_field.p2_tank().commander.add_key_event("keydown", event.which)
+      if @map.p1_tank()
+        @map.p1_tank().commander.add_key_event("keydown", event.which)
+      if @map.p2_tank()
+        @map.p2_tank().commander.add_key_event("keydown", event.which)
     @canvas.timeline.start()
 
   pause: () ->
@@ -107,7 +105,7 @@ class Game
     @canvas.scenes.create "welcome", () -> @add(welcome_text)
 
     game_scene = @canvas.scenes.create "game", () ->
-    @battle_field = @init_battle_field(@canvas, game_scene)
+    @map = @init_map(@canvas, game_scene)
 
   init_control: () ->
     last_time = new Date()
@@ -118,11 +116,11 @@ class Game
       delta_time = current_time.getMilliseconds() - last_time.getMilliseconds()
       # suppose a frame will not be more than 1 second
       delta_time += 1000 if delta_time < 0
-      _.each(@battle_field.all_battle_field_objects(), (object) ->
-        object.integration(delta_time)
+      _.each(@map.map_units, (unit) ->
+        unit.integration(delta_time)
       )
       mod = (mod + 1) % 10
-      _.each(@battle_field.map.map_units, (unit) ->
+      _.each(@map.map_units, (unit) ->
         unit.reset_zindex()
       ) if mod == 0
       last_time = current_time
