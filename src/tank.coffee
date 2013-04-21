@@ -1,3 +1,10 @@
+class Direction
+  @UP: 0
+  @DOWN: 180
+  @LEFT: 90
+  @RIGHT: 90
+  @all: () -> [@UP, @DOWN, @LEFT, @RIGHT]
+
 class Point
   constructor: (@x, @y) ->
 
@@ -27,13 +34,13 @@ class MapArea2D
     @y2 - @y1
   multiply: (direction, factor) ->
     switch direction
-      when 0
+      when Direction.UP
         new MapArea2D(@x1, @y1 - factor * @height(), @x2, @y2)
-      when 90
+      when Direction.RIGHT
         new MapArea2D(@x1, @y1, @x2 + factor * @width(), @y2)
-      when 180
+      when Direction.DOWN
         new MapArea2D(@x1, @y1, @x2, @y2 + factor * @height())
-      when 270
+      when Direction.LEFT
         new MapArea2D(@x1 - factor * @width(), @y1, @x2, @y2)
   to_s: () ->
     "[" + @x1 + ", " + @y1 + ", " + @x2 + ", " + @y2 + "]"
@@ -305,7 +312,7 @@ class MovableMapUnit2D extends MapUnit2D
         intent_offset = command.params.offset
         if intent_offset is null
           @move(max_offset)
-        else
+        if intent_offset > 0
           real_offset = _.min([intent_offset, max_offset])
           if @move(real_offset)
             command.params.offset -= real_offset
@@ -317,21 +324,26 @@ class MovableMapUnit2D extends MapUnit2D
         @moving = false
 
   turn: (direction) ->
-    target_area = if (direction % 180 is 0) then @_adjust_x() else @_adjust_y()
-    if @map.area_available(this, target_area)
-      @direction = direction
-      @update_area(target_area)
-      @update_display()
+    if _.contains([Direction.UP, Direction.DOWN], direction)
+      @direction = direction if @_adjust_x()
+    else
+      @direction = direction if @_adjust_y()
+    @update_display()
+
+  _try_adjust: (area) ->
+    if @map.area_available(this, area)
+      @update_area(area)
+      true
+    else
+      false
 
   _adjust_x: () ->
-    offset = (@default_height/4) -
-      (@area.x1 + @default_height/4) % (@default_height/2)
-    new MapArea2D(@area.x1 + offset, @area.y1, @area.x2 + offset, @area.y2)
+    offset = (@default_height/4) - (@area.x1 + @default_height/4) % (@default_height/2)
+    @_try_adjust(new MapArea2D(@area.x1 + offset, @area.y1, @area.x2 + offset, @area.y2))
 
   _adjust_y: () ->
-    offset = (@default_width/4) -
-      (@area.y1 + @default_width/4) % (@default_width/2)
-    new MapArea2D(@area.x1, @area.y1 + offset, @area.x2, @area.y2 + offset)
+    offset = (@default_width/4) - (@area.y1 + @default_width/4) % (@default_width/2)
+    @_try_adjust(new MapArea2D(@area.x1, @area.y1 + offset, @area.x2, @area.y2 + offset))
 
   move: (offset) ->
     _.detect(_.range(1, offset + 1).reverse(), (os) => @_try_move(os))
@@ -480,16 +492,12 @@ class Tank extends MovableMapUnit2D
     _.size(@missiles) < @max_missile
 
   integration: (delta_time) ->
+    return if @frozen
     super(delta_time)
     @fire() for command in _.select(@commands, (cmd) -> cmd.type == "fire")
 
   delete_missile: (missile) ->
     @missiles = _.without(@missiles, missile)
-
-  move: (offset) ->
-    if @frozen then false else super(offset)
-  turn: (direction) ->
-    if @frozen then false else super(direction)
 
   missile_born_area: () ->
     new MapArea2D(@gravity_point.x - @default_width/4,
@@ -589,7 +597,7 @@ class FoolTank extends EnemyTank
       when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
 
 class FishTank extends EnemyTank
-  speed: 0.18
+  speed: 0.13
   type: -> 'fish'
   current_frames: () ->
     origin = switch @level
@@ -600,7 +608,7 @@ class FishTank extends EnemyTank
       when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
 
 class StrongTank extends EnemyTank
-  speed: 0.05
+  speed: 0.07
   type: -> 'strong'
   current_frames: () ->
     origin = switch @level
@@ -682,7 +690,7 @@ class Missile extends MovableMapUnit2D
   defend: (missile, destroy_area) ->
     @destroy()
     @max_depend_point - 1
-  accept: (map_unit) -> false
+  accept: (map_unit) -> map_unit is @parent
 
 class Gift extends MapUnit2D
   test: ->
@@ -811,7 +819,8 @@ class EnemyAICommander extends Commander
       @next_move()
       # setTimeout((() => @reset_path()), 3000 + Math.random()*1000)
     else
-      @next_move() if @current_vertex().equals(@target_vertex)
+      if @current_vertex().equals(@target_vertex)
+        @next_move()
 
     # fire if can't move
     @fire() if @map_unit.can_fire() and
@@ -824,6 +833,7 @@ class EnemyAICommander extends Commander
     @last_area = @map_unit.area
 
   next_move: () ->
+    return if _.size(@map_unit.delayed_commands) > 0
     @target_vertex = @path.shift()
     [direction, offset] = @offset_of(@current_vertex(), @target_vertex)
     @turn(direction)
