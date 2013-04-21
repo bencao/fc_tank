@@ -125,6 +125,8 @@ class Game
       ) if mod == 0
       last_time = current_time
       frame_rate += 1
+      # console.log "current_frame=" + frame_rate
+      # game.pause() if mod == 9
     frame_text = @canvas.display.text({
       x: 510,
       y: 10,
