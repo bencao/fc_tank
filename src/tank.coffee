@@ -1,7 +1,7 @@
 class Direction
   @UP: 0
   @DOWN: 180
-  @LEFT: 90
+  @LEFT: 270
   @RIGHT: 90
   @all: () -> [@UP, @DOWN, @LEFT, @RIGHT]
 
@@ -386,13 +386,13 @@ class MovableMapUnit2D extends MapUnit2D
   _offset_by_direction: (offset) ->
     offset = parseInt(offset)
     switch (@direction)
-      when 0
+      when Direction.UP
         [0, - _.min([offset, @area.y1])]
-      when 90
+      when Direction.RIGHT
         [_.min([offset, @map.max_x - @area.x2]), 0]
-      when 180
+      when Direction.DOWN
         [0, _.min([offset, @map.max_y - @area.y2])]
-      when 270
+      when Direction.LEFT
         [- _.min([offset, @area.x1]), 0]
 
 class Terrain extends MapUnit2D
@@ -778,28 +778,28 @@ class Missile extends MovableMapUnit2D
     @destroy() if @energy <= 0
   destroy_area: ->
     switch @direction
-      when 0
+      when Direction.UP
         new MapArea2D(
           @area.x1 - @default_width/4,
           @area.y1 - @default_height/4,
           @area.x2 + @default_width/4,
           @area.y1
         )
-      when 90
+      when Direction.RIGHT
         new MapArea2D(
           @area.x2,
           @area.y1 - @default_height/4,
           @area.x2 + @default_width/4,
           @area.y2 + @default_height/4
         )
-      when 180
+      when Direction.DOWN
         new MapArea2D(
           @area.x1 - @default_width/4,
           @area.y2,
           @area.x2 + @default_width/4,
           @area.y2 + @default_height/4
         )
-      when 270
+      when Direction.LEFT
         new MapArea2D(
           @area.x1 - @default_width/4,
           @area.y1 - @default_height/4,
@@ -819,10 +819,10 @@ class Commander
     @direction = @map_unit.direction
     @commands = []
   direction_action_map: {
-    up: 0,
-    down: 180,
-    left: 270,
-    right: 90
+    up: Direction.UP,
+    down: Direction.DOWN,
+    left: Direction.LEFT,
+    right: Direction.RIGHT
   }
   # calculate next commands
   next: () ->
