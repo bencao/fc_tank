@@ -10,11 +10,6 @@ class Point
 
 class MapArea2D
   constructor: (@x1, @y1, @x2, @y2) ->
-  equals: (area) ->
-    return false unless area instanceof MapArea2D
-    area.x1 == @x1 and area.x2 == @x2 and area.y1 == @y1 and area.y2 == @y2
-  valid: () ->
-    @x2 > @x1 and @y2 > @y1
   intersect: (area) ->
     new MapArea2D(_.max([area.x1, @x1]), _.max([area.y1, @y1]),
       _.min([area.x2, @x2]), _.min([area.y2, @y2]))
@@ -28,10 +23,6 @@ class MapArea2D
     ], (candidate_area) -> candidate_area.valid())
   collide: (area) ->
     not (@x2 <= area.x1 or @y2 <= area.y1 or @x1 >= area.x2 or @y1 >= area.y2)
-  width: () ->
-    @x2 - @x1
-  height: () ->
-    @y2 - @y1
   multiply: (direction, factor) ->
     switch direction
       when Direction.UP
@@ -42,19 +33,20 @@ class MapArea2D
         new MapArea2D(@x1, @y1, @x2, @y2 + factor * @height())
       when Direction.LEFT
         new MapArea2D(@x1 - factor * @width(), @y1, @x2, @y2)
-  center: () ->
-    new Point((@x1 + @x2)/2, (@y1 + @y2)/2)
-  clone: () ->
-    new MapArea2D(@x1, @y1, @x2, @y2)
-  to_s: () ->
-    "[" + @x1 + ", " + @y1 + ", " + @x2 + ", " + @y2 + "]"
+  equals: (area) ->
+    return false unless area instanceof MapArea2D
+    area.x1 == @x1 and area.x2 == @x2 and area.y1 == @y1 and area.y2 == @y2
+  valid: () -> @x2 > @x1 and @y2 > @y1
+  center: () -> new Point((@x1 + @x2)/2, (@y1 + @y2)/2)
+  clone: () -> new MapArea2D(@x1, @y1, @x2, @y2)
+  width: () -> @x2 - @x1
+  height: () -> @y2 - @y1
+  to_s: () -> "[" + @x1 + ", " + @y1 + ", " + @x2 + ", " + @y2 + "]"
 
 class MapArea2DVertex extends MapArea2D
-  constructor: (@x1, @y1, @x2, @y2) ->
-    @siblings = []
+  constructor: (@x1, @y1, @x2, @y2) -> @siblings = []
   init_vxy: (@vx, @vy) ->
-  add_sibling: (sibling) ->
-    @siblings.push(sibling)
+  add_sibling: (sibling) -> @siblings.push(sibling)
 
 class Map2D
   max_x: 520
@@ -106,7 +98,7 @@ class Map2D
     tank
 
   add_missile: (parent) ->
-    missile = new Missile(this, parent.missile_born_area(), parent)
+    missile = new Missile(this, parent)
     @missiles.push(missile)
     @map_units.push(missile)
     missile
@@ -114,7 +106,8 @@ class Map2D
   random_gift: () ->
     _.each(@gifts, (gift) -> gift.destroy())
 
-    gift_classes = [GunGift, HatGift, ShipGift, StarGift, LifeGift, ClockGift, ShovelGift, LandMineGift]
+    gift_classes = [GunGift, HatGift, ShipGift, StarGift,
+      LifeGift, ClockGift, ShovelGift, LandMineGift]
     vx = parseInt(Math.random() * @vertexes_rows)
     vy = parseInt(Math.random() * @vertexes_columns)
     gift_choice = parseInt(Math.random() * 1000) % _.size(gift_classes)
@@ -177,7 +170,7 @@ class Map2D
             vertexes[x][y].add_sibling(vertexes[sib.x][sib.y])
     vertexes
 
-  # area must be the same with one of map vertexes
+  # area must be the same with a map vertexe
   vertexes_at: (area) ->
     vx = parseInt(area.x1 * 4 / @default_width)
     vy = parseInt(area.y1 * 4 / @default_height)
@@ -189,9 +182,11 @@ class Map2D
       unit instanceof Terrain
     )
     return 1 if _.isEmpty(terrain_units)
-    _.first(terrain_units).weight(tank) *
-      sub_area.width() * sub_area.height() /
-      (@default_width * @default_height)
+    max_weight = _.max(_.map(terrain_units, (terrain_unit) ->
+      terrain_unit.weight(tank)
+    ))
+    max_weight / (@default_width * @default_height) *
+      sub_area.width() * sub_area.height()
 
   shortest_path: (tank, start_vertex, end_vertex) ->
     [d, pi] = @intialize_single_source()
@@ -223,12 +218,18 @@ class Map2D
     [d, pi]
 
   relax: (d, pi, u, v, w) ->
+    # a area like [30, 50, 70, 90] is not movable, so do not relax here
+    return if v.vx % 2 == 1 and u.vx % 2 == 1
+    return if v.vy % 2 == 1 and u.vy % 2 == 1
     if d[v.vx][v.vy] > d[u.vx][u.vy] + w
       d[v.vx][v.vy] = d[u.vx][u.vy] + w
       pi[v.vx][v.vy] = u
 
   extract_min: (vertexes, d) ->
-    _.min(vertexes, (vertex) => d[vertex.vx][vertex.vy])
+    _.min(vertexes, (vertex) =>
+      d[vertex.vx][vertex.vy] +
+        (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
+    )
 
   calculate_shortest_path_from_pi: (pi, d, start_vertex, end_vertex) ->
     reverse_paths = []
@@ -280,8 +281,10 @@ class MapUnit2D
       @display_object.setAnimation('bom')
       @display_object.start()
       @display_object.afterFrame 3, () =>
+        @display_object.stop()
         @display_object.destroy()
     else
+      @display_object.stop()
       @display_object.destroy()
 
   width: () -> @area.x2 - @area.x1
@@ -334,8 +337,7 @@ class MovableMapUnit2D extends MapUnit2D
   queued_delayed_commands: () ->
     [commands, @delayed_commands] = [@delayed_commands, []]
     commands
-  add_delayed_command: (command) ->
-    @delayed_commands.push(command)
+  add_delayed_command: (command) -> @delayed_commands.push(command)
 
   integration: (delta_time) ->
     @commands = _.union(@commander.next_commands(), @queued_delayed_commands())
@@ -465,7 +467,7 @@ class IronTerrain extends Terrain
     )
     @destroy()
     2
-  image_x_offset: -> 100
+  image_x_offset: -> 120
 
 class WaterTerrain extends Terrain
   accept: (map_unit) ->
@@ -481,7 +483,7 @@ class WaterTerrain extends Terrain
         4
       when false
         @map.infinity
-  image_x_offset: -> 180
+  image_x_offset: -> 240
 
 class IceTerrain extends Terrain
   accept: (map_unit) -> true
@@ -495,7 +497,7 @@ class GrassTerrain extends Terrain
   type: -> "grass"
   group: "front"
   weight: (tank) -> 4
-  image_x_offset: -> 140
+  image_x_offset: -> 180
 
 class HomeTerrain extends Terrain
   is_defeated: false
@@ -508,8 +510,8 @@ class HomeTerrain extends Terrain
     if @is_defeated then 'defeated' else 'origin'
   animations: () ->
     {
-      origin: [{x: 220, y: 240, width: 40, height: 40}],
-      defeated: [{x: 260, y: 240, width: 40, height: 40}]
+      origin: [{x: 320, y: 240, width: 40, height: 40}],
+      defeated: [{x: 360, y: 240, width: 40, height: 40}]
     }
   defend: (missile, destroy_area) ->
     @is_defeated = true
@@ -526,38 +528,56 @@ class Tank extends MovableMapUnit2D
     @missiles = []
     @ship = false
     @guard = false
-    @bom_on_destroy = true
     @initializing = true
+    @cooling = false
     @frozen = false
     super(@map, @area)
+    @bom_on_destroy = true
 
   accept: (map_unit) ->
     (map_unit instanceof Missile) and (map_unit.parent is this)
 
-  dead: () ->
-    @life <= 0
+  dead: () -> @life <= 0
 
   level_up: (levels) ->
     @level = _.min([@level + levels, 3])
+    @_level_adjust()
+
+  _level_adjust: () ->
     switch @level
       when 1
         @power = 1
         @max_missile = 1
       when 2
         @power = 1
+        @life = _.max([@life + 1, @max_life])
         @max_missile = 2
       when 3
         @power = 2
-        @life = _.max([@life, @max_life])
+        @life = _.max([@life + 1, @max_life])
         @max_missile = 2
     @update_display()
+
+  life_down: (lives) ->
+    @life -= lives
+    if @dead()
+      @destroy()
+    else
+      @level = _.max([1, @level - 1])
+      @_level_adjust()
 
   on_ship: (@ship) ->
   on_guard: (@guard) ->
 
-  fire: () -> @missiles.push(@map.add_missile(this)) if @can_fire()
+  fire: () ->
+    if @can_fire()
+      @missiles.push(@map.add_missile(this))
+      if _.size(@missiles) == @max_missile
+        @cooling = true
+        setTimeout((() => @cooling = false), 200)
 
-  can_fire: () -> _.size(@missiles) < @max_missile
+  can_fire: () ->
+    (not @cooling) and _.size(@missiles) < @max_missile
 
   freeze: () ->
     @frozen = true
@@ -567,25 +587,16 @@ class Tank extends MovableMapUnit2D
       @update_display()
     , 6000)
 
-  handle_move: (cmd, delta_time) ->
-    super(cmd, delta_time) unless @frozen
+  handle_move: (cmd, delta_time) -> super(cmd, delta_time) unless @frozen
 
-  handle_turn: (cmd) ->
-    super(cmd) unless @frozen
+  handle_turn: (cmd) -> super(cmd) unless @frozen
 
   integration: (delta_time) ->
     return if @initializing
     super(delta_time)
     @fire() for command in _.select(@commands, (cmd) -> cmd.type == "fire")
 
-  delete_missile: (missile) ->
-    @missiles = _.without(@missiles, missile)
-
-  missile_born_area: () ->
-    new MapArea2D(@area.x1 + @default_width/4,
-      @area.y1 + @default_height/4,
-      @area.x2 - @default_width/4,
-      @area.y2 - @default_height/4)
+  delete_missile: (missile) -> @missiles = _.without(@missiles, missile)
 
   new_display: () ->
     super()
@@ -593,7 +604,6 @@ class Tank extends MovableMapUnit2D
     @display_object.afterFrame 4, () =>
       @display_object.setAnimation(@current_animation())
       @initializing = false
-
 
   animations: () ->
     _.merge(super(), {
@@ -608,12 +618,11 @@ class Tank extends MovableMapUnit2D
 
 
 class UserTank extends Tank
-  speed: 0.16
+  speed: 0.13
   defend: (missile, destroy_area) ->
     return @max_depend_point - 1 if missile.parent instanceof UserTank
     defend_point = _.min(@life, missile.power)
-    @life -= missile.power
-    @destroy() if @dead()
+    @life_down(missile.power)
     defend_point
   current_animation: () -> "lv" + @level
 
@@ -644,7 +653,7 @@ class UserP2Tank extends UserTank
   constructor: (@map, @area) ->
     super(@map, @area)
     @commander = new UserCommander(this, {
-      up: 71, down: 72, left: 73, right: 74, fire: 75
+      up: 73, down: 75, left: 74, right: 76, fire: 72
     })
   type: -> 'user_p2'
   animations: () ->
@@ -666,18 +675,19 @@ class UserP2Tank extends UserTank
 class EnemyTank extends Tank
   constructor: (@map, @area) ->
     super(@map, @area)
-    @max_life = 4
-    @life = parseInt(Math.random() * @max_life)
+    @max_life = 10
+    @life = 1 + parseInt(Math.random() * (@max_life - 1))
     @gift_counts = parseInt(Math.random() * @max_life / 2)
     @direction = 180
     @commander = new EnemyAICommander(this)
+  life_down: (lives) ->
+    @map.random_gift() if @gift_counts > 0
+    @gift_counts -= lives
+    super(lives)
   defend: (missile, destroy_area) ->
     return @max_depend_point - 1 if missile.parent instanceof EnemyTank
     defend_point = _.min(@life, missile.power)
-    @life -= missile.power
-    @map.random_gift() if @gift_counts > 0
-    @gift_counts -= missile.power
-    @destroy() if @dead()
+    @life_down(missile.power)
     defend_point
   animations: () ->
     _.merge(super(), {
@@ -692,103 +702,52 @@ class EnemyTank extends Tank
     else if @gift_counts > 0
       'with_gift'
     else
-      'life' + _.min([@life, 3])
+      'life' + _.min([@life, 4])
+  animations: () ->
+    _.merge(super(), {
+      life1: [
+        {x: 0, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      life2: [
+        {x: 80, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      life3: [
+        {x: 160, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      life4: [
+        {x: 240, y: @image_y_offset(), width: 40, height: 40}
+      ]
+      with_gift: [
+        {x: 320, y: @image_y_offset(), width: 40, height: 40}
+      ]
+    })
+  image_y_offset: -> 80
+  gift_up: (gifts) -> @gift_counts += gifts
 
 class StupidTank extends EnemyTank
   speed: 0.07
   type: -> 'stupid'
-  animations: () ->
-    _.merge(super(), {
-      life1: [
-        {x: 0, y: 80, width: 40, height: 40}
-        # {x: 40, y: 80, width: 40, height: 40}
-      ],
-      life2: [
-        {x: 80, y: 80, width: 40, height: 40}
-        # {x: 120, y: 80, width: 40, height: 40}
-      ],
-      life3: [
-        {x: 160, y: 80, width: 40, height: 40}
-        # {x: 200, y: 80, width: 40, height: 40}
-      ],
-      with_gift: [
-        {x: 240, y: 80, width: 40, height: 40}
-        # {x: 280, y: 80, width: 40, height: 40}
-      ]
-    })
+  image_y_offset: -> 80
 
 class FoolTank extends EnemyTank
   speed: 0.07
   type: -> 'fool'
-  animations: () ->
-    _.merge(super(), {
-      life1: [
-        {x: 0, y: 120, width: 40, height: 40}
-        # {x: 40, y: 120, width: 40, height: 40}
-      ],
-      life2: [
-        {x: 80, y: 120, width: 40, height: 40}
-        # {x: 120, y: 120, width: 40, height: 40}
-      ],
-      life3: [
-        {x: 160, y: 120, width: 40, height: 40}
-        # {x: 200, y: 120, width: 40, height: 40}
-      ],
-      with_gift: [
-        {x: 240, y: 120, width: 40, height: 40}
-        # {x: 280, y: 120, width: 40, height: 40}
-      ]
-    })
+  image_y_offset: -> 120
 
 class FishTank extends EnemyTank
   speed: 0.13
   type: -> 'fish'
-  animations: () ->
-    _.merge(super(), {
-      life1: [
-        {x: 0, y: 160, width: 40, height: 40}
-        # {x: 40, y: 160, width: 40, height: 40}
-      ],
-      life2: [
-        {x: 80, y: 160, width: 40, height: 40}
-        # {x: 120, y: 160, width: 40, height: 40}
-      ],
-      life3: [
-        {x: 160, y: 160, width: 40, height: 40}
-        # {x: 200, y: 160, width: 40, height: 40}
-      ],
-      with_gift: [
-        {x: 240, y: 160, width: 40, height: 40}
-        # {x: 280, y: 160, width: 40, height: 40}
-      ]
-    })
+  image_y_offset: -> 160
 
 class StrongTank extends EnemyTank
   speed: 0.07
   type: -> 'strong'
-  animations: () ->
-    _.merge(super(), {
-      life1: [
-        {x: 0, y: 200, width: 40, height: 40}
-        # {x: 40, y: 200, width: 40, height: 40}
-      ],
-      life2: [
-        {x: 80, y: 200, width: 40, height: 40}
-        # {x: 120, y: 200, width: 40, height: 40}
-      ],
-      life3: [
-        {x: 160, y: 200, width: 40, height: 40}
-        # {x: 200, y: 200, width: 40, height: 40}
-      ],
-      with_gift: [
-        {x: 240, y: 200, width: 40, height: 40}
-        # {x: 280, y: 200, width: 40, height: 40}
-      ]
-    })
+  image_y_offset: -> 200
 
 class Missile extends MovableMapUnit2D
   speed: 0.30
-  constructor: (@map, @area, @parent) ->
+  constructor: (@map, @parent) ->
+    @area = @born_area(@parent)
     super(@map, @area)
     @power = @parent.power
     @energy = @power
@@ -796,10 +755,31 @@ class Missile extends MovableMapUnit2D
     @exploded = false
     @commander = new MissileCommander(this)
 
+  born_area: (parent) ->
+    switch parent.direction
+      when Direction.UP
+        new MapArea2D(parent.area.x1 + @map.default_width/4,
+          parent.area.y1,
+          parent.area.x2 - @map.default_width/4,
+          parent.area.y1 + @map.default_height/2)
+      when Direction.DOWN
+        new MapArea2D(parent.area.x1 + @map.default_width/4,
+          parent.area.y2 - @map.default_height/2,
+          parent.area.x2 - @map.default_width/4,
+          parent.area.y2)
+      when Direction.LEFT
+        new MapArea2D(parent.area.x1,
+          parent.area.y1 + @map.default_height/4,
+          parent.area.x1 + @map.default_width/2,
+          parent.area.y2 - @map.default_height/4)
+      when Direction.RIGHT
+        new MapArea2D(parent.area.x2 - @map.default_width/2,
+          parent.area.y1 + @map.default_height/4,
+          parent.area.x2,
+          parent.area.y2 - @map.default_height/4)
+
   type: -> 'missile'
-  explode: ->
-    # bom!
-    @exploded = true
+  explode: -> @exploded = true
 
   destroy: () ->
     super()
@@ -881,6 +861,14 @@ class Gift extends MapUnit2D
   apply: (tank) ->
   current_animation: () -> 'blink'
   current_frame_rate: () -> 4
+  animations: () ->
+    {
+      'blink': [
+        {x: @image_x_offset(), y: 300, width: 40, height: 40},
+        {x: 360, y: 300, width: 40, height: 40}
+      ]
+    }
+  image_x_offset: -> 0
 
 class LandMineGift extends Gift
   apply: (tank) ->
@@ -888,44 +876,19 @@ class LandMineGift extends Gift
       _.each(@map.user_tanks(), (tank) -> tank.destroy())
     else
       _.each(@map.enemy_tanks(), (tank) -> tank.destroy())
-
-  animations: () ->
-    {
-      'blink': [
-        {x: 0, y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
+  image_x_offset: -> 0
 
 class GunGift extends Gift
   apply: (tank) -> tank.level_up(2)
-  animations: () ->
-    {
-      'blink': [
-        {x: 80, y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
+  image_x_offset: -> 80
 
 class ShipGift extends Gift
   apply: (tank) -> tank.on_ship(true)
-  animations: () ->
-    {
-      'blink': [
-        {x: 40, y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
+  image_x_offset: -> 40
 
 class StarGift extends Gift
   apply: (tank) -> tank.level_up(1)
-  animations: () ->
-    {
-      'blink': [
-        {x: 160, y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
+  image_x_offset: -> 160
 
 class ShovelGift extends Gift
   home_defend_terrains: () ->
@@ -936,6 +899,7 @@ class ShovelGift extends Gift
     )
 
   apply: (tank) ->
+    console.log @home_defend_terrains()
     _.each(@home_defend_terrains(), (terrain) -> terrain.destroy())
     if tank instanceof UserTank
       # add iron instead
@@ -949,37 +913,20 @@ class ShovelGift extends Gift
         @map.add_terrain(BrickTerrain, new MapArea2D(220, 480, 240, 520))
         @map.add_terrain(BrickTerrain, new MapArea2D(280, 480, 300, 520))
       , 10000)
-  animations: () ->
-    {
-      'blink': [
-        {x: 120, y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
+  image_x_offset: -> 120
 
 class LifeGift extends Gift
   apply: (tank) ->
     if tank instanceof EnemyTank
       tank.level_up(5)
+      tank.gift_up(3)
     else
       # TODO add extra user life
-  animations: () ->
-    {
-      'blink': [
-        {x: 240, y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
+  image_x_offset: -> 240
 
 class HatGift extends Gift
   apply: (tank) -> tank.on_guard(true)
-  animations: () ->
-    {
-      'blink': [
-        {x: 200, y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
+  image_x_offset: -> 200
 
 class ClockGift extends Gift
   apply: (tank) ->
@@ -987,13 +934,7 @@ class ClockGift extends Gift
       _.each(@map.user_tanks(), (tank) -> tank.freeze())
     else
       _.each(@map.enemy_tanks(), (tank) -> tank.freeze())
-  animations: () ->
-    {
-      'blink': [
-        {x: 280, y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
+  image_x_offset: -> 280
 
 class Commander
   constructor: (@map_unit) ->
@@ -1114,17 +1055,15 @@ class EnemyAICommander extends Commander
   next: ->
     # move towards home
     if _.size(@path) == 0
-      console.log "calc path"
       @path = @map.shortest_path(@map_unit, @current_vertex(), @map.home_vertex)
       @next_move()
-      # setTimeout((() => @reset_path()), 3000 + Math.random()*1000)
+      setTimeout((() => @reset_path()), 3000 + Math.random()*1000)
     else
-      if @current_vertex().equals(@target_vertex)
-        @next_move()
+      @next_move() if @current_vertex().equals(@target_vertex)
 
     # fire if can't move
-    @fire() if @map_unit.can_fire() and
-      @last_area and @last_area.equals(@map_unit.area)
+    if @map_unit.can_fire() and @last_area and @last_area.equals(@map_unit.area)
+      @fire()
     # fire if user or home in front of me
     targets = _.compact([@map.p1_tank(), @map.p2_tank(), @map.home()])
     for target in targets
@@ -1134,6 +1073,7 @@ class EnemyAICommander extends Commander
 
   next_move: () ->
     return if _.size(@map_unit.delayed_commands) > 0
+    return if _.size(@path) == 0
     @target_vertex = @path.shift()
     [direction, offset] = @offset_of(@current_vertex(), @target_vertex)
     @turn(direction)
@@ -1153,8 +1093,7 @@ class EnemyAICommander extends Commander
       return ["right", target_vertex.x1 - current_vertex.x1]
     ["down", 0]
 
-  current_vertex: () ->
-    @map.vertexes_at(@map_unit.area)
+  current_vertex: () -> @map.vertexes_at(@map_unit.area)
 
   in_attack_range: (area) ->
     @map_unit.area.x1 == area.x1 or @map_unit.area.y1 == area.y1
