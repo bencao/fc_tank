@@ -1,23 +1,39 @@
+class TerrainBuilder
+  constructor: (@map, @default_width, @default_height) ->
+  batch_build: (terrain_cls, array_of_xys) ->
+    for xys in array_of_xys
+      @build_by_range(terrain_cls, xys[0], xys[1], xys[2], xys[3])
+
+  build_by_range: (terrain_cls, x1, y1, x2, y2) ->
+    xs = x1
+    while xs < x2
+      ys = y1
+      while ys < y2
+        area = new MapArea2D(xs, ys,
+          _.min([x2, xs + @default_height]),
+          _.min([y2, ys + @default_width]))
+        @map.add_terrain(terrain_cls, area)
+        ys += @default_width
+      xs += @default_height
+
 class Game
   constructor: (@fps) ->
-    @init_canvas()
-    @init_scenes()
+    @init_map()
     @init_control()
-    @canvas.scenes.load("game")
     @start()
     window.game = this
 
-  init_map: (canvas, scene) ->
-    map = new Map2D(canvas, scene)
+  init_map: () ->
+    @map = new Map2D
 
-    map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
-    map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
+    @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
+    @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
 
-    map.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
-    map.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
-    map.add_tank(StrongTank, new MapArea2D(480, 0, 520, 40))
+    @map.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
+    @map.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
+    @map.add_tank(StrongTank, new MapArea2D(480, 0, 520, 40))
 
-    builder = new TerrainBuilder(map, map.default_width, map.default_height)
+    builder = new TerrainBuilder(@map, @map.default_width, @map.default_height)
 
     builder.batch_build(IceTerrain, [
       [40, 0, 240, 40],
@@ -63,10 +79,7 @@ class Game
       [480, 320, 520, 480]
     ])
 
-    map.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520))
-
-    # set a reference for easier debug
-    window.map = map
+    @map.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520))
 
   start: () ->
     $(document).unbind "keyup"
@@ -82,76 +95,50 @@ class Game
         @map.p1_tank().commander.add_key_event("keydown", event.which)
       if @map.p2_tank()
         @map.p2_tank().commander.add_key_event("keydown", event.which)
-    @canvas.timeline.start()
+    @start_time_line()
 
   pause: () ->
     $(document).unbind "keyup"
     $(document).unbind "keydown"
-    @canvas.timeline.stop()
+    @stop_time_line()
 
-  init_canvas: () ->
-    @canvas = oCanvas.create({canvas: "#canvas", background: "#000", fps: @fps})
-
-  init_scenes: () ->
-    welcome_text = @canvas.display.text({
-      x: 260,
-      y: 170,
-      origin: { x: "center", y: "top" },
-      align: "center",
-      font: "bold 30px sans-serif",
-      text: "Hello dude\n\nPress Enter to start game!",
-      fill: "#fff"
-    })
-    @canvas.scenes.create "welcome", () -> @add(welcome_text)
-
-    game_scene = @canvas.scenes.create "game", () ->
-    @map = @init_map(@canvas, game_scene)
-
-  init_control: () ->
-    last_time = new Date()
-    mod = 0
+  start_time_line: () ->
     frame_rate = 0
-    @canvas.setLoop () =>
+    last_time = new Date()
+    @timeline = setInterval(() =>
       current_time = new Date()
       delta_time = current_time.getMilliseconds() - last_time.getMilliseconds()
-      # suppose a frame will not be more than 1 second
+      # assume a frame will never last more than 1 second
       delta_time += 1000 if delta_time < 0
-      _.each(@map.map_units, (unit) ->
+      _.each(@map.tanks.concat(@map.missiles), (unit) ->
         unit.integration(delta_time)
       )
-      mod = (mod + 1) % 10
-      _.each(@map.map_units, (unit) ->
-        unit.reset_zindex()
-      ) if mod == 0
       last_time = current_time
       frame_rate += 1
       # console.log "current_frame=" + frame_rate
       # game.pause() if mod == 9
-    frame_text = @canvas.display.text({
-      x: 510,
-      y: 10,
-      origin: { x: "right", y: "top" },
-      font: "bold 20px sans-serif",
-      text: "0 fps"
-      fill: "#0f0"
-    })
-    @canvas.addChild(frame_text)
+    , parseInt(1000/@fps))
     # show frame rate
-    setInterval(() =>
-      frame_text.text = (frame_rate + " fps")
+    @frame_timeline = setInterval(() =>
+      @frame_text.setText(frame_rate + " fps")
       frame_rate = 0
     , 1000)
 
-    $(document).bind "keypress", (event) =>
-      # key code mapping
-      [space, enter] = [32, 13]
-      switch event.which
-        when enter
-          @canvas.scenes.load("game", true)
-          @start()
-        when space
-          @canvas.scenes.load("welcome", true)
-          @pause()
+  stop_time_line: () ->
+    clearInterval(@timeline)
+    clearInterval(@frame_timeline)
+
+  init_control: () ->
+    last_time = new Date()
+    @frame_text = new Kinetic.Text({
+      x: 480,
+      y: 10,
+      fontSize: 20,
+      fontStyle: "bold",
+      text: "0 fps"
+      fill: "#0f0"
+    })
+    @map.groups['status'].add(@frame_text)
 
 $ ->
   new Game(60)
