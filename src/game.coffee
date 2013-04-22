@@ -110,7 +110,7 @@ class Game
       delta_time = current_time.getMilliseconds() - last_time.getMilliseconds()
       # assume a frame will never last more than 1 second
       delta_time += 1000 if delta_time < 0
-      _.each(@map.tanks.concat(@map.missiles), (unit) ->
+      _.each(@map.tanks.concat(@map.missiles).concat(@map.gifts), (unit) ->
         unit.integration(delta_time)
       )
       last_time = current_time

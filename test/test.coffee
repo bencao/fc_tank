@@ -25,7 +25,6 @@ test "equals", () ->
 test "intersect", () ->
   area1 = new MapArea2D(40, 40, 80, 80)
   area2 = new MapArea2D(60, 60, 100, 100)
-  # ok(area1.intersect(area2).equals(new MapArea2D(60, 60, 80, 80)),
   deepEqual(area1.intersect(area2), new MapArea2D(60, 60, 80, 80),
     "intersection of [40, 40, 80, 80] and [60, 60, 100, 100] is [60, 60, 80, 80]")
 
@@ -68,6 +67,11 @@ test "sub", () ->
   deepEqual(sub_areas2, [new MapArea2D(40, 40, 80, 50)],
     "[40, 40, 80, 80] sub [40, 50, 80, 90] is divided to [40, 40, 80, 50]")
 
+test "clone", () ->
+  area = new MapArea2D(40, 40, 80, 80)
+  clone_area = area.clone()
+  deepEqual(area, clone_area, "cloned area equals to original one")
+
 module "Map2D"
 test "shortest_path", () ->
   # todo
@@ -76,3 +80,5 @@ test "shortest_path", () ->
 module "Terrain"
 
 module "Tank"
+
+module "Gift"
