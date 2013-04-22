@@ -42,6 +42,8 @@ class MapArea2D
         new MapArea2D(@x1, @y1, @x2, @y2 + factor * @height())
       when Direction.LEFT
         new MapArea2D(@x1 - factor * @width(), @y1, @x2, @y2)
+  center: () ->
+    new Point((@x1 + @x2)/2, (@y1 + @y2)/2)
   to_s: () ->
     "[" + @x1 + ", " + @y1 + ", " + @x2 + ", " + @y2 + "]"
 
@@ -64,8 +66,25 @@ class Map2D
   tanks: [] # has_many tanks
   missiles: [] # has_many missiles
 
-  constructor: (@canvas, @scene) ->
-    @image = document.getElementById('resources')
+  constructor: () ->
+    @canvas = new Kinetic.Stage({container: 'canvas', width: 520, height: 520})
+    game_layer = new Kinetic.Layer()
+    @canvas.add(game_layer)
+    @groups = {
+      status: new Kinetic.Group(),
+      gift: new Kinetic.Group(),
+      front: new Kinetic.Group(),
+      middle: new Kinetic.Group(),
+      back: new Kinetic.Group()
+    }
+    game_layer.add(@groups['back'])
+    game_layer.add(@groups['middle'])
+    game_layer.add(@groups['front'])
+    game_layer.add(@groups['gift'])
+    game_layer.add(@groups['status'])
+
+    @image = document.getElementById("tank_sprite")
+
     @vertexes_columns = 4 * @max_x / @default_width - 3
     @vertexes_rows = 4 * @max_y / @default_height - 3
     @vertexes = @init_vertexes()
@@ -202,10 +221,7 @@ class Map2D
     reverse_paths.reverse()
 
 class MapUnit2D
-  layer: 10
-
-  origin_x: 'left'
-  origin_y: 'top'
+  group: 'middle'
 
   max_depend_point: 9
   type: null
@@ -213,36 +229,40 @@ class MapUnit2D
   constructor: (@map, @area) ->
     @default_width = @map.default_width
     @default_height = @map.default_height
-    @gravity_point = @update_gravity_point()
+    @bom_on_destroy = false
     @new_display()
 
-  update_area: (@area) ->
-    @gravity_point = @update_gravity_point()
-
-  update_gravity_point: () ->
-    new Point(@area.x1, @area.y1)
-
   new_display: () ->
-    @display_object = @map.canvas.display.sprite({
-      frames: @initial_frames(),
+    @display_object = new Kinetic.Sprite({
+      x: @area.x1,
+      y: @area.y1,
       image: @map.image,
-      width: @width(),
-      height: @height(),
-      x: @gravity_point.x,
-      y: @gravity_point.y,
-      origin: { x: @origin_x, y: @origin_y}
+      animation: @current_animation(),
+      animations: @animations(),
+      frameRate: 1,
+      index: 0
     })
-    @map.scene.add(@display_object)
+    @map.groups[@group].add(@display_object)
+    @display_object.start()
 
-  current_frames: () -> []
-  initial_frames: () -> @current_frames()
-  update_display: () ->
-    @display_object.frames = @current_frames()
+  animations: () -> {
+    bom: [
+      {x: 360, y: 340, width: 40, height: 40},
+      {x: 120, y: 340, width: 40, height: 40},
+      {x: 160, y: 340, width: 40, height: 40},
+      {x: 200, y: 340, width: 40, height: 40}
+    ]
+  }
+  current_animation: () -> null
   destroy_display: () ->
-    @display_object.remove()
-
-  reset_zindex: () ->
-    @display_object.zIndex = @layer
+    if @bom_on_destroy
+      @display_object.setOffset(20, 20)
+      @display_object.setAnimation('bom')
+      @display_object.start()
+      @display_object.afterFrame 3, () =>
+        @display_object.destroy()
+    else
+      @display_object.destroy()
 
   width: () -> @area.x2 - @area.x1
   height: () -> @area.y2 - @area.y1
@@ -254,38 +274,40 @@ class MapUnit2D
   defend: (missile, destroy_area) -> 0
   accept: (map_unit) -> true
 
-  integration: (delta_time) ->
-
 class MovableMapUnit2D extends MapUnit2D
-  origin_x: 'center'
-  origin_y: 'center'
   speed: 0.08
 
   constructor: (@map, @area) ->
-    super(@map, @area)
     @delayed_commands = []
     @moving = false
-    @bom_on_destroy = false
     @direction = 0
     @commander = new Commander(this)
+    super(@map, @area)
+
+  new_display: () ->
+    center = @area.center()
+    @display_object = new Kinetic.Sprite({
+      x: center.x,
+      y: center.y,
+      image: @map.image,
+      animation: @current_animation(),
+      animations: @animations(),
+      frameRate: 6,
+      index: 0,
+      offset: {
+        x: @area.width()/2,
+        y: @area.height()/2
+      },
+      rotationDeg: @direction
+    })
+    @map.groups[@group].add(@display_object)
+    @display_object.start()
 
   update_display: () ->
-    @display_object.frames = @current_frames()
-    @display_object.rotateTo(@direction)
-    @display_object.moveTo(@gravity_point.x, @gravity_point.y)
-
-  destroy_display: () ->
-    return super() unless @bom_on_destroy
-    @display_object.width = @default_width
-    @display_object.height = @default_height
-    @display_object.frames = [
-      {x: 360, y: 320, d: 150},
-      {x: 120, y: 320, d: 150},
-      {x: 160, y: 320, d: 150},
-      {x: 200, y: 320, d: 150}
-    ]
-    @display_object.startAnimation()
-    setTimeout((() => @display_object.remove()), 600)
+    @display_object.setAnimation(@current_animation())
+    @display_object.setRotationDeg(@direction)
+    center = @area.center()
+    @display_object.setAbsolutePosition(center.x, center.y)
 
   queued_delayed_commands: () ->
     [commands, @delayed_commands] = [@delayed_commands, []]
@@ -294,7 +316,6 @@ class MovableMapUnit2D extends MapUnit2D
     @delayed_commands.push(command)
 
   integration: (delta_time) ->
-    super(delta_time)
     @commands = _.union(@commander.next_commands(), @queued_delayed_commands())
     @handle_turn(cmd) for cmd in @commands
     @handle_move(cmd, delta_time) for cmd in @commands
@@ -332,7 +353,7 @@ class MovableMapUnit2D extends MapUnit2D
 
   _try_adjust: (area) ->
     if @map.area_available(this, area)
-      @update_area(area)
+      @area = area
       true
     else
       false
@@ -356,7 +377,7 @@ class MovableMapUnit2D extends MapUnit2D
     target_area = new MapArea2D(target_x, target_y,
       target_x + @width(), target_y + @height())
     if @map.area_available(this, target_area)
-      @update_area(target_area)
+      @area = target_area
       @update_display()
       true
     else
@@ -374,17 +395,26 @@ class MovableMapUnit2D extends MapUnit2D
       when 270
         [- _.min([offset, @area.x1]), 0]
 
-  update_gravity_point: () ->
-    new Point((@area.x1 + @area.x2)/2, (@area.y1 + @area.y2)/2)
-
 class Terrain extends MapUnit2D
   accept: (map_unit) -> false
+  animations: () ->
+    _.merge(super(), {
+      static: [
+        {
+          x: @image_x_offset() + @area.x1 % 40,
+          y: 240 + @area.y1 % 40,
+          width: @area.width(),
+          height: @area.height()
+        }
+      ]
+    })
+  current_animation: () -> 'static'
+  image_x_offset: -> 0
 
 class BrickTerrain extends Terrain
   type: -> "brick"
   weight: (tank) ->
     40 / tank.power
-  current_frames: () -> [{x: 0, y: 240}]
   defend: (missile, destroy_area) ->
     # cut self into pieces
     pieces = @area.sub(destroy_area)
@@ -394,6 +424,7 @@ class BrickTerrain extends Terrain
     @destroy()
     # return cost of destroy
     1
+  image_x_offset: -> 0
 
 class IronTerrain extends Terrain
   type: -> "iron"
@@ -403,7 +434,6 @@ class IronTerrain extends Terrain
         @map.infinity
       when 2
         20
-  current_frames: () -> [{x: 80, y: 240}]
   defend: (missile, destroy_area) ->
     return @max_depend_point if missile.power < 2
     double_destroy_area = destroy_area.multiply(missile.direction, 1)
@@ -413,6 +443,7 @@ class IronTerrain extends Terrain
     )
     @destroy()
     2
+  image_x_offset: -> 100
 
 class WaterTerrain extends Terrain
   accept: (map_unit) ->
@@ -421,28 +452,28 @@ class WaterTerrain extends Terrain
     else
       map_unit instanceof Missile
   type: -> "water"
-  layer: "back"
+  group: "back"
   weight: (tank) ->
     switch tank.ship
       when true
         4
       when false
         @map.infinity
-  current_frames: () -> [{x: 160, y: 240}]
+  image_x_offset: -> 180
 
 class IceTerrain extends Terrain
   accept: (map_unit) -> true
   type: -> "ice"
-  layer: "back"
+  group: "back"
   weight: (tank) -> 4
-  current_frames: () -> [{x: 40, y: 240}]
+  image_x_offset: -> 60
 
 class GrassTerrain extends Terrain
   accept: (map_unit) -> true
   type: -> "grass"
-  layer: "front"
+  group: "front"
   weight: (tank) -> 4
-  current_frames: () -> [{x: 120, y: 240}]
+  image_x_offset: -> 140
 
 class HomeTerrain extends Terrain
   is_defeated: false
@@ -451,16 +482,20 @@ class HomeTerrain extends Terrain
     return true if @is_defeated and map_unit instanceof Missile
     false
   weight: (tank) -> 0
-  current_frames: () ->
-    if @is_defeated then [{x: 240, y: 240}] else [{x: 200, y: 240}]
+  current_animation: () ->
+    if @is_defeated then 'defeated' else 'origin'
+  animations: () ->
+    {
+      origin: [{x: 220, y: 240, width: 40, height: 40}],
+      defeated: [{x: 260, y: 240, width: 40, height: 40}]
+    }
   defend: (missile, destroy_area) ->
     @is_defeated = true
-    @update_display()
+    @display_object.setAnimation(@current_animation())
     @max_depend_point
 
 class Tank extends MovableMapUnit2D
   constructor: (@map, @area) ->
-    super(@map, @area)
     @life = 1
     @power = 1
     @level = 1
@@ -470,6 +505,7 @@ class Tank extends MovableMapUnit2D
     @on_guard = false
     @bom_on_destroy = true
     @frozen = true
+    super(@map, @area)
 
   accept: (map_unit) ->
     (map_unit instanceof Missile) and (map_unit.parent is this)
@@ -500,35 +536,36 @@ class Tank extends MovableMapUnit2D
     @missiles = _.without(@missiles, missile)
 
   missile_born_area: () ->
-    new MapArea2D(@gravity_point.x - @default_width/4,
-      @gravity_point.y - @default_height/4,
-      @gravity_point.x + @default_width/4,
-      @gravity_point.y + @default_height/4)
-
-  initial_frames: () ->
-    [
-      {x: 360, y: 320, d: 200},
-      {x: 0, y: 320, d: 200},
-      {x: 40, y: 320, d: 200},
-      {x: 0, y: 320, d: 200},
-      {x: 80, y: 320, d: 200}
-    ]
+    new MapArea2D(@area.x1 + @default_width/4,
+      @area.y1 + @default_height/4,
+      @area.x2 - @default_width/4,
+      @area.y2 - @default_height/4)
 
   new_display: () ->
     super()
-    @display_object.startAnimation()
-    setTimeout((() =>
-      @display_object.stopAnimation()
+    @display_object.setAnimation('tank_born')
+    @display_object.afterFrame 4, () =>
+      @display_object.setAnimation(@current_animation())
       @frozen = false
-      @display_object.frames = @current_frames()
-      @display_object.frame = 1
-    ), 1000)
 
   defend: (missile, destroy_area) ->
     defend_point = _.min(@life, missile.power)
     @life -= missile.power
     @destroy() if @dead()
     defend_point
+
+  animations: () ->
+    _.merge(super(), {
+      tank_born: [
+        {x: 360, y: 340, width: 40, height: 40},
+        {x: 0, y: 340, width: 40, height: 40},
+        {x: 40, y: 340, width: 40, height: 40},
+        {x: 0, y: 340, width: 40, height: 40},
+        {x: 80, y: 340, width: 40, height: 40}
+      ]
+    })
+  current_animation: () ->
+    "lv" + @level
 
 class UserTank extends Tank
   speed: 0.16
@@ -544,11 +581,21 @@ class UserP1Tank extends UserTank
       up: 38, down: 40, left: 37, right: 39, fire: 70
     })
   type: -> 'user_p1'
-  current_frames: () ->
-    switch @level
-      when 1 then [{x: 0, y: 0, d: 10}, {x:40, y: 0, d: 10}]
-      when 2 then [{x: 80, y: 0, d: 100}, {x:120, y: 0, d: 100}]
-      when 3 then [{x: 160, y: 0, d: 100}, {x:200, y: 0, d: 100}]
+  animations: () ->
+    _.merge(super(), {
+      lv1: [
+        {x: 0, y: 0, width: 40, height: 40}
+        # {x: 40, y: 0, width: 40, height: 40}
+      ],
+      lv2: [
+        {x: 80, y: 0, width: 40, height: 40}
+        # {x: 120, y: 0, width: 40, height: 40}
+      ],
+      lv3: [
+        {x: 160, y: 0, width: 40, height: 40}
+        # {x: 200, y: 0, width: 40, height: 40}
+      ]
+    })
 
 class UserP2Tank extends UserTank
   constructor: (@map, @area) ->
@@ -557,11 +604,21 @@ class UserP2Tank extends UserTank
       up: 71, down: 72, left: 73, right: 74, fire: 75
     })
   type: -> 'user_p2'
-  current_frames: () ->
-    switch @level
-      when 1 then [{x: 0, y: 40, d: 100}, {x:40, y: 40, d: 100}]
-      when 2 then [{x: 80, y: 40, d: 100}, {x:120, y: 40, d: 100}]
-      when 3 then [{x: 160, y: 40, d: 100}, {x:200, y: 40, d: 100}]
+  animations: () ->
+    _.merge(super(), {
+      lv1: [
+        {x: 0, y: 40, width: 40, height: 40}
+        # {x: 40, y: 40, width: 40, height: 40}
+      ],
+      lv2: [
+        {x: 80, y: 40, width: 40, height: 40}
+        # {x: 120, y: 40, width: 40, height: 40}
+      ],
+      lv3: [
+        {x: 160, y: 40, width: 40, height: 40}
+        # {x: 200, y: 40, width: 40, height: 40}
+      ]
+    })
 
 class EnemyTank extends Tank
   constructor: (@map, @area) ->
@@ -573,50 +630,105 @@ class EnemyTank extends Tank
     # destroy missile but do not bom
     return @max_depend_point - 1 if missile.parent instanceof EnemyTank
     super(missile, destroy_area)
+  animations: () ->
+    _.merge(super(), {
+      lv5: [
+        {x: 240, y: 40, width: 40, height: 40}
+        # {x: 280, y: 40, width: 40, height: 40}
+      ]
+    })
 
 class StupidTank extends EnemyTank
   speed: 0.07
   type: -> 'stupid'
-  current_frames: () ->
-    origin = switch @level
-      when 1 then [{x: 0, y: 80, d: 100}, {x:40, y: 80, d: 100}]
-      when 2 then [{x: 80, y: 80, d: 100}, {x:120, y: 80, d: 100}]
-      when 3 then [{x: 160, y: 80, d: 100}, {x:200, y: 80, d: 100}]
-      when 4 then [{x: 240, y: 80, d: 100}, {x:280, y: 80, d: 100}]
-      when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
+  animations: () ->
+    _.merge(super(), {
+      lv1: [
+        {x: 0, y: 80, width: 40, height: 40}
+        # {x: 40, y: 80, width: 40, height: 40}
+      ],
+      lv2: [
+        {x: 80, y: 80, width: 40, height: 40}
+        # {x: 120, y: 80, width: 40, height: 40}
+      ],
+      lv3: [
+        {x: 160, y: 80, width: 40, height: 40}
+        # {x: 200, y: 80, width: 40, height: 40}
+      ],
+      lv4: [
+        {x: 240, y: 80, width: 40, height: 40}
+        # {x: 280, y: 80, width: 40, height: 40}
+      ]
+    })
 
 class FoolTank extends EnemyTank
   speed: 0.07
   type: -> 'fool'
-  current_frames: () ->
-    origin = switch @level
-      when 1 then [{x: 0, y: 120, d: 100}, {x:40, y: 120, d: 100}]
-      when 2 then [{x: 80, y: 120, d: 100}, {x:120, y: 120, d: 100}]
-      when 3 then [{x: 160, y: 120, d: 100}, {x:200, y: 120, d: 100}]
-      when 4 then [{x: 240, y: 120, d: 100}, {x:280, y: 120, d: 100}]
-      when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
+  animations: () ->
+    _.merge(super(), {
+      lv1: [
+        {x: 0, y: 120, width: 40, height: 40}
+        # {x: 40, y: 120, width: 40, height: 40}
+      ],
+      lv2: [
+        {x: 80, y: 120, width: 40, height: 40}
+        # {x: 120, y: 120, width: 40, height: 40}
+      ],
+      lv3: [
+        {x: 160, y: 120, width: 40, height: 40}
+        # {x: 200, y: 120, width: 40, height: 40}
+      ],
+      lv4: [
+        {x: 240, y: 120, width: 40, height: 40}
+        # {x: 280, y: 120, width: 40, height: 40}
+      ]
+    })
 
 class FishTank extends EnemyTank
   speed: 0.13
   type: -> 'fish'
-  current_frames: () ->
-    origin = switch @level
-      when 1 then [{x: 0, y: 160, d: 100}, {x:40, y: 160, d: 100}]
-      when 2 then [{x: 80, y: 160, d: 100}, {x:120, y: 160, d: 100}]
-      when 3 then [{x: 160, y: 160, d: 100}, {x:200, y: 160, d: 100}]
-      when 4 then [{x: 240, y: 160, d: 100}, {x:280, y: 160, d: 100}]
-      when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
+  animations: () ->
+    _.merge(super(), {
+      lv1: [
+        {x: 0, y: 160, width: 40, height: 40}
+        # {x: 40, y: 160, width: 40, height: 40}
+      ],
+      lv2: [
+        {x: 80, y: 160, width: 40, height: 40}
+        # {x: 120, y: 160, width: 40, height: 40}
+      ],
+      lv3: [
+        {x: 160, y: 160, width: 40, height: 40}
+        # {x: 200, y: 160, width: 40, height: 40}
+      ],
+      lv4: [
+        {x: 240, y: 160, width: 40, height: 40}
+        # {x: 280, y: 160, width: 40, height: 40}
+      ]
+    })
 
 class StrongTank extends EnemyTank
   speed: 0.07
   type: -> 'strong'
-  current_frames: () ->
-    origin = switch @level
-      when 1 then [{x: 0, y: 200, d: 100}, {x:40, y: 200, d: 100}]
-      when 2 then [{x: 80, y: 200, d: 100}, {x:120, y: 200, d: 100}]
-      when 3 then [{x: 160, y: 200, d: 100}, {x:200, y: 200, d: 100}]
-      when 4 then [{x: 240, y: 200, d: 100}, {x:280, y: 200, d: 100}]
-      when 5 then [{x: 240, y: 40, d: 100}, {x:280, y: 40, d: 100}]
+  animations: () ->
+    _.merge(super(), {
+      lv1: [
+        {x: 0, y: 200, width: 40, height: 40}
+        # {x: 40, y: 200, width: 40, height: 40}
+      ],
+      lv2: [
+        {x: 80, y: 200, width: 40, height: 40}
+        # {x: 120, y: 200, width: 40, height: 40}
+      ],
+      lv3: [
+        {x: 160, y: 200, width: 40, height: 40}
+        # {x: 200, y: 200, width: 40, height: 40}
+      ],
+      lv4: [
+        {x: 240, y: 200, width: 40, height: 40}
+        # {x: 280, y: 200, width: 40, height: 40}
+      ]
+    })
 
 class Missile extends MovableMapUnit2D
   speed: 0.30
@@ -637,7 +749,14 @@ class Missile extends MovableMapUnit2D
     super()
     @parent.delete_missile(this)
 
-  current_frames: () -> [{x: 250, y: 330}]
+  animations: () ->
+    _.merge(super(), {
+      static: [
+        {x: 250, y: 350, width: 20, height: 20}
+      ]
+    })
+  current_animation: () -> 'static'
+
   move: (offset) ->
     can_move = super(offset)
     @attack() unless can_move
@@ -861,21 +980,3 @@ class EnemyAICommander extends Commander
 
 class MissileCommander extends Commander
   next: -> @start_move()
-
-class TerrainBuilder
-  constructor: (@map, @default_width, @default_height) ->
-  batch_build: (terrain_cls, array_of_xys) ->
-    for xys in array_of_xys
-      @build_by_range(terrain_cls, xys[0], xys[1], xys[2], xys[3])
-
-  build_by_range: (terrain_cls, x1, y1, x2, y2) ->
-    xs = x1
-    while xs < x2
-      ys = y1
-      while ys < y2
-        area = new MapArea2D(xs, ys,
-          _.min([x2, xs + @default_height]),
-          _.min([y2, ys + @default_width]))
-        @map.add_terrain(terrain_cls, area)
-        ys += @default_width
-      xs += @default_height

@@ -6,10 +6,15 @@
   <script type="text/javascript" src="js/coffeescript-v1.6.2.min.js"></script>
   <script type='text/javascript' src='js/jquery-v1.9.1.min.js'></script>
   <script type='text/javascript' src='js/lodash-v1.1.1.min.js'></script>
-  <script type='text/javascript' src="js/ocanvas-v2.3.1.min.js"></script>
+  <script type='text/javascript' src="js/kinetic-v4.4.1.min.js"></script>
   <style type='text/css'>
-    #resources { display: none; }
-    #canvas {margin: 50px 20px;}
+    #tank_sprite { display: none; }
+    #canvas {
+      margin: 50px 20px;
+      background: #000;
+      width: 520px;
+      height: 520px;
+    }
   </style>
   <script type="text/coffeescript">
     loadCoffee = (files) ->
@@ -29,7 +34,7 @@
   </script>
 </head>
 <body>
-  <img id="resources" alt="tanks" width="400" height="360" src="image/tanks.png" />
-  <canvas id="canvas" width="520" height="520"></canvas>
+  <img id="tank_sprite" alt="tanks" width="400" height="360" src="image/tanks.png" />
+  <div id="canvas"></div>
 </body>
 </html>
