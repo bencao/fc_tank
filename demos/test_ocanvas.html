@@ -65,25 +65,25 @@ var enemy_tank_green = canvas.display.sprite(_.merge({
 var gift_gun = canvas.display.sprite(_.merge({
   x: 120,
   y: 450,
-  frames: [{x: 80, y: 280, d: 200}, {x: 360, y: 280, d: 200}]
+  frames: [{x: 80, y: 300, d: 200}, {x: 360, y: 300, d: 200}]
 }, sprite_params));
 
 var tank_born = canvas.display.sprite(_.merge({
   x: 170,
   y: 450,
-  frames: [{x: 360, y: 320, d: 200}, {x: 0, y: 320, d: 200}, {x: 40, y: 320, d: 200}, {x: 0, y: 320, d: 200}, {x: 80, y: 320, d: 200}]
+  frames: [{x: 360, y: 340, d: 200}, {x: 0, y: 340, d: 200}, {x: 40, y: 340, d: 200}, {x: 0, y: 340, d: 200}, {x: 80, y: 340, d: 200}]
 }, sprite_params));
 
 var bang = canvas.display.sprite(_.merge({
   x: 220,
   y: 450,
-  frames: [{x: 360, y: 320, d: 200}, {x: 120, y: 320, d: 200}, {x: 160, y: 320, d: 200}, {x: 200, y: 320, d: 200}]
+  frames: [{x: 360, y: 340, d: 200}, {x: 120, y: 340, d: 200}, {x: 160, y: 340, d: 200}, {x: 200, y: 340, d: 200}]
 }, sprite_params));
 
 var missile = canvas.display.sprite(_.merge({
   x: 20,
   y: 500,
-  frames: [{x: 250, y: 330}]
+  frames: [{x: 250, y: 350}]
 }, sprite_params, {width: 20, height: 20}));
 
 var broken_brick = canvas.display.sprite(_.merge({
@@ -162,7 +162,7 @@ missileTurnAndFlyBack(0);
 
 </head>
 <body>
-  <img id="tanks" alt="tanks" width="400" height="360" src="../image/tanks.png" />
+  <img id="tanks" alt="tanks" width="400" height="380" src="../image/tanks.png" />
   <canvas id="canvas" width="800" height="800"></canvas>
 </body>
 </html>
