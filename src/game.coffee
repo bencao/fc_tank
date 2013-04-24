@@ -18,13 +18,16 @@ class TerrainBuilder
 
 class Game
   constructor: (@fps) ->
+    @canvas = new Kinetic.Stage({container: 'canvas', width: 600, height: 520})
+    @game_scene = new Kinetic.Layer()
+    @canvas.add(@game_scene)
     @init_map()
-    @init_control()
+    @init_status()
     @start()
     window.game = this
 
   init_map: () ->
-    @map = new Map2D
+    @map = new Map2D(@game_scene)
 
     @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
     @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
@@ -103,7 +106,6 @@ class Game
     @stop_time_line()
 
   start_time_line: () ->
-    frame_rate = 0
     last_time = new Date()
     @timeline = setInterval(() =>
       current_time = new Date()
@@ -114,31 +116,127 @@ class Game
         unit.integration(delta_time)
       )
       last_time = current_time
-      frame_rate += 1
-      # console.log "current_frame=" + frame_rate
+      @frame_rate += 1
+      # console.log "current_frame=" + @frame_rate
       # game.pause() if mod == 9
     , parseInt(1000/@fps))
     # show frame rate
     @frame_timeline = setInterval(() =>
-      @frame_text.setText(frame_rate + " fps")
-      frame_rate = 0
+      @frame_rate_label.setText(@frame_rate + " fps")
+      @frame_rate = 0
     , 1000)
 
   stop_time_line: () ->
     clearInterval(@timeline)
     clearInterval(@frame_timeline)
 
-  init_control: () ->
-    last_time = new Date()
-    @frame_text = new Kinetic.Text({
-      x: 480,
+  init_status: () ->
+    @status_panel = new Kinetic.Group()
+    @game_scene.add(@status_panel)
+
+    # background
+    @status_panel.add(new Kinetic.Rect({
+      x: 520,
+      y: 0,
+      fill: "#999",
+      width: 80,
+      height: 520
+    }))
+
+    # frame rate
+    @frame_rate = 0
+    @frame_rate_label = new Kinetic.Text({
+      x: 530,
       y: 10,
       fontSize: 20,
       fontStyle: "bold",
       text: "0 fps"
       fill: "#0f0"
     })
-    @map.groups['status'].add(@frame_text)
+    @status_panel.add(@frame_rate_label)
+
+    @remain_enemy_counts = 20
+    @enemy_symbols = []
+    # enemy tanks
+    for i in [1..@remain_enemy_counts]
+      tx = (if i % 2 == 1 then 530 else 550)
+      ty = parseInt((i - 1) / 2) * 25 + 50
+      symbol = @new_symbol(@status_panel, 'enemy', tx, ty)
+      @enemy_symbols.push(symbol)
+
+    # user tank status
+    @remain_user_p1_lives = 2
+    user_p1_label = new Kinetic.Text({
+      x: 530,
+      y: 320,
+      fontSize: 14,
+      text: "1P",
+      fill: "#000"
+    })
+    user_p1_symbol = @new_symbol(@status_panel, 'user', 530, 335)
+    user_p1_remain_lives_label = new Kinetic.Text({
+      x: 552,
+      y: 335,
+      fontSize: 12,
+      text: "#{@remain_user_p1_lives}",
+      fill: "#000"
+    })
+    @status_panel.add(user_p1_label)
+    @status_panel.add(user_p1_remain_lives_label)
+
+    @remain_user_p2_lives = 2
+    user_p2_label = new Kinetic.Text({
+      x: 530,
+      y: 360,
+      fontSize: 14,
+      text: "2P",
+      fill: "#000"
+    })
+    user_p2_symbol = @new_symbol(@status_panel, 'user', 530, 375)
+    user_p2_remain_lives_label = new Kinetic.Text({
+      x: 552,
+      y: 375,
+      fontSize: 12,
+      text: "#{@remain_user_p2_lives}",
+      fill: "#000"
+    })
+    @status_panel.add(user_p2_label)
+    @status_panel.add(user_p2_remain_lives_label)
+
+    # stage status
+    @current_stage = 1
+    @new_symbol(@status_panel, 'stage', 530, 400)
+    stage_label = new Kinetic.Text({
+      x: 552,
+      y: 445,
+      fontSize: 12,
+      text: "#{@current_stage}",
+      fill: "#000"
+    })
+    @status_panel.add(stage_label)
+
+  new_symbol: (parent, type, tx, ty) ->
+    animations = switch type
+      when 'enemy'
+        [{x: 320, y: 340, width: 20, height: 20}]
+      when 'user'
+        [{x: 340, y: 340, width: 20, height: 20}]
+      when 'stage'
+        [{x: 280, y: 340, width: 40, height: 40}]
+    symbol = new Kinetic.Sprite({
+      x: tx,
+      y: ty,
+      image: @map.image,
+      animation: 'static',
+      animations: {
+        'static': animations
+      },
+      frameRate: 1,
+      index: 0
+    })
+    parent.add(symbol)
+    symbol.start()
+    symbol
 
 $ ->
   new Game(60)

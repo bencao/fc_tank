@@ -12,24 +12,24 @@
     #canvas {
       margin: 50px 20px;
       background: #000;
-      width: 520px;
+      width: 600px;
       height: 520px;
     }
   </style>
   <script type="text/coffeescript">
     loadCoffee = (files) ->
-        $head = $ "head"
-        compile_and_add = (content) ->
-          compiled = CoffeeScript.compile content, {bare: on}
-          $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
-        load = (file) ->
-          $.ajax {
-            url: file,
-            success: compile_and_add,
-            dataType: 'text'
-            async: false
-          }
-        load file for file in files
+      $head = $ "head"
+      compile_and_add = (content) ->
+        compiled = CoffeeScript.compile content, {bare: on}
+        $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
+      load = (file) ->
+        $.ajax {
+          url: file,
+          success: compile_and_add,
+          dataType: 'text'
+          async: false
+        }
+      load file for file in files
     loadCoffee ["src/tank.coffee", "src/game.coffee"]
   </script>
 </head>
