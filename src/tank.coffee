@@ -61,22 +61,17 @@ class Map2D
   missiles: [] # has_many missiles
   gifts: [] # has_many gifts
 
-  constructor: () ->
-    @canvas = new Kinetic.Stage({container: 'canvas', width: 520, height: 520})
-    game_layer = new Kinetic.Layer()
-    @canvas.add(game_layer)
+  constructor: (@canvas) ->
     @groups = {
-      status: new Kinetic.Group(),
       gift: new Kinetic.Group(),
       front: new Kinetic.Group(),
       middle: new Kinetic.Group(),
       back: new Kinetic.Group()
     }
-    game_layer.add(@groups['back'])
-    game_layer.add(@groups['middle'])
-    game_layer.add(@groups['front'])
-    game_layer.add(@groups['gift'])
-    game_layer.add(@groups['status'])
+    @canvas.add(@groups['back'])
+    @canvas.add(@groups['middle'])
+    @canvas.add(@groups['front'])
+    @canvas.add(@groups['gift'])
 
     @image = document.getElementById("tank_sprite")
 
@@ -383,12 +378,16 @@ class MovableMapUnit2D extends MapUnit2D
       false
 
   _adjust_x: () ->
-    offset = (@default_height/4) - (@area.x1 + @default_height/4) % (@default_height/2)
-    @_try_adjust(new MapArea2D(@area.x1 + offset, @area.y1, @area.x2 + offset, @area.y2))
+    offset = (@default_height/4) -
+      (@area.x1 + @default_height/4)%(@default_height/2)
+    @_try_adjust(new MapArea2D(@area.x1 + offset, @area.y1,
+      @area.x2 + offset, @area.y2))
 
   _adjust_y: () ->
-    offset = (@default_width/4) - (@area.y1 + @default_width/4) % (@default_width/2)
-    @_try_adjust(new MapArea2D(@area.x1, @area.y1 + offset, @area.x2, @area.y2 + offset))
+    offset = (@default_width/4) -
+      (@area.y1 + @default_width/4)%(@default_width/2)
+    @_try_adjust(new MapArea2D(@area.x1, @area.y1 + offset,
+      @area.x2, @area.y2 + offset))
 
   move: (offset) ->
     _.detect(_.range(1, offset + 1).reverse(), (os) => @_try_move(os))
@@ -520,11 +519,11 @@ class HomeTerrain extends Terrain
 
 class Tank extends MovableMapUnit2D
   constructor: (@map, @area) ->
-    @life = 1
+    @hp = 1
     @power = 1
     @level = 1
     @max_missile = 1
-    @max_life = 2
+    @max_hp = 2
     @missiles = []
     @ship = false
     @guard = false
@@ -537,7 +536,7 @@ class Tank extends MovableMapUnit2D
   accept: (map_unit) ->
     (map_unit instanceof Missile) and (map_unit.parent is this)
 
-  dead: () -> @life <= 0
+  dead: () -> @hp <= 0
 
   level_up: (levels) ->
     @level = _.min([@level + levels, 3])
@@ -550,16 +549,16 @@ class Tank extends MovableMapUnit2D
         @max_missile = 1
       when 2
         @power = 1
-        @life = _.max([@life + 1, @max_life])
+        @hp = _.max([@hp + 1, @max_hp])
         @max_missile = 2
       when 3
         @power = 2
-        @life = _.max([@life + 1, @max_life])
+        @hp = _.max([@hp + 1, @max_hp])
         @max_missile = 2
     @update_display()
 
-  life_down: (lives) ->
-    @life -= lives
+  hp_down: (lives) ->
+    @hp -= lives
     if @dead()
       @destroy()
     else
@@ -618,11 +617,13 @@ class Tank extends MovableMapUnit2D
 
 
 class UserTank extends Tank
+  @life: 1
+  @add_extra_life: -> @life += 1
   speed: 0.13
   defend: (missile, destroy_area) ->
     return @max_depend_point - 1 if missile.parent instanceof UserTank
-    defend_point = _.min(@life, missile.power)
-    @life_down(missile.power)
+    defend_point = _.min(@hp, missile.power)
+    @hp_down(missile.power)
     defend_point
   current_animation: () -> "lv" + @level
 
@@ -675,19 +676,19 @@ class UserP2Tank extends UserTank
 class EnemyTank extends Tank
   constructor: (@map, @area) ->
     super(@map, @area)
-    @max_life = 10
-    @life = 1 + parseInt(Math.random() * (@max_life - 1))
-    @gift_counts = parseInt(Math.random() * @max_life / 2)
+    @max_hp = 10
+    @hp = 1 + parseInt(Math.random() * (@max_hp - 1))
+    @gift_counts = parseInt(Math.random() * @max_hp / 2)
     @direction = 180
     @commander = new EnemyAICommander(this)
-  life_down: (lives) ->
+  hp_down: (lives) ->
     @map.random_gift() if @gift_counts > 0
     @gift_counts -= lives
     super(lives)
   defend: (missile, destroy_area) ->
     return @max_depend_point - 1 if missile.parent instanceof EnemyTank
-    defend_point = _.min(@life, missile.power)
-    @life_down(missile.power)
+    defend_point = _.min(@hp, missile.power)
+    @hp_down(missile.power)
     defend_point
   animations: () ->
     _.merge(super(), {
@@ -702,19 +703,19 @@ class EnemyTank extends Tank
     else if @gift_counts > 0
       'with_gift'
     else
-      'life' + _.min([@life, 4])
+      'hp' + _.min([@hp, 4])
   animations: () ->
     _.merge(super(), {
-      life1: [
+      hp1: [
         {x: 0, y: @image_y_offset(), width: 40, height: 40}
       ],
-      life2: [
+      hp2: [
         {x: 80, y: @image_y_offset(), width: 40, height: 40}
       ],
-      life3: [
+      hp3: [
         {x: 160, y: @image_y_offset(), width: 40, height: 40}
       ],
-      life4: [
+      hp4: [
         {x: 240, y: @image_y_offset(), width: 40, height: 40}
       ]
       with_gift: [
@@ -921,7 +922,7 @@ class LifeGift extends Gift
       tank.level_up(5)
       tank.gift_up(3)
     else
-      # TODO add extra user life
+      # TODO add extra user hp
   image_x_offset: -> 240
 
 class HatGift extends Gift

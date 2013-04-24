@@ -2,7 +2,7 @@ module.exports = (grunt) ->
   grunt.initConfig({
     pkg: grunt.file.readJSON('package.json'),
     coffeelint: {
-      app: ['*.coffee'],
+      app: ['src/*.coffee'],
       tests: {
         files: {
           src: ['test/*.coffee']
