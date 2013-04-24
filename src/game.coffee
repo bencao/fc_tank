@@ -146,12 +146,12 @@ class Game
     # frame rate
     @frame_rate = 0
     @frame_rate_label = new Kinetic.Text({
-      x: 530,
-      y: 10,
+      x: 535,
+      y: 490,
       fontSize: 20,
       fontStyle: "bold",
       text: "0 fps"
-      fill: "#0f0"
+      fill: "#c00"
     })
     @status_panel.add(@frame_rate_label)
 
@@ -159,25 +159,26 @@ class Game
     @enemy_symbols = []
     # enemy tanks
     for i in [1..@remain_enemy_counts]
-      tx = (if i % 2 == 1 then 530 else 550)
-      ty = parseInt((i - 1) / 2) * 25 + 50
+      tx = (if i % 2 == 1 then 540 else 560)
+      ty = parseInt((i - 1) / 2) * 25 + 20
       symbol = @new_symbol(@status_panel, 'enemy', tx, ty)
       @enemy_symbols.push(symbol)
 
     # user tank status
     @remain_user_p1_lives = 2
     user_p1_label = new Kinetic.Text({
-      x: 530,
-      y: 320,
-      fontSize: 14,
+      x: 540,
+      y: 300,
+      fontSize: 18,
+      fontStyle: "bold",
       text: "1P",
       fill: "#000"
     })
-    user_p1_symbol = @new_symbol(@status_panel, 'user', 530, 335)
+    user_p1_symbol = @new_symbol(@status_panel, 'user', 540, 320)
     user_p1_remain_lives_label = new Kinetic.Text({
-      x: 552,
-      y: 335,
-      fontSize: 12,
+      x: 565,
+      y: 324,
+      fontSize: 16,
       text: "#{@remain_user_p1_lives}",
       fill: "#000"
     })
@@ -186,17 +187,18 @@ class Game
 
     @remain_user_p2_lives = 2
     user_p2_label = new Kinetic.Text({
-      x: 530,
-      y: 360,
-      fontSize: 14,
+      x: 540,
+      y: 350,
+      fontSize: 18,
+      fontStyle: "bold",
       text: "2P",
       fill: "#000"
     })
-    user_p2_symbol = @new_symbol(@status_panel, 'user', 530, 375)
+    user_p2_symbol = @new_symbol(@status_panel, 'user', 540, 370)
     user_p2_remain_lives_label = new Kinetic.Text({
-      x: 552,
-      y: 375,
-      fontSize: 12,
+      x: 565,
+      y: 374,
+      fontSize: 16,
       text: "#{@remain_user_p2_lives}",
       fill: "#000"
     })
@@ -205,11 +207,11 @@ class Game
 
     # stage status
     @current_stage = 1
-    @new_symbol(@status_panel, 'stage', 530, 400)
+    @new_symbol(@status_panel, 'stage', 540, 420)
     stage_label = new Kinetic.Text({
-      x: 552,
+      x: 560,
       y: 445,
-      fontSize: 12,
+      fontSize: 16,
       text: "#{@current_stage}",
       fill: "#000"
     })
