@@ -517,6 +517,33 @@ class HomeTerrain extends Terrain
     @display_object.setAnimation(@current_animation())
     @max_depend_point
 
+  defend_terrains: () ->
+    home_defend_area = new MapArea2D(220, 460, 300, 520)
+    home_area = @map.home.area
+    _.reject(@map.units_at(home_defend_area), (unit) ->
+      unit instanceof HomeTerrain or unit instanceof Tank
+    )
+
+  delete_defend_terrains: () ->
+    _.each(@defend_terrains(), (terrain) -> terrain.destroy())
+
+  add_defend_terrains: (terrain_cls) ->
+    for area in [
+      new MapArea2D(220, 460, 260, 480),
+      new MapArea2D(260, 460, 300, 480),
+      new MapArea2D(220, 480, 240, 520),
+      new MapArea2D(280, 480, 300, 520)
+    ]
+      @map.add_terrain(terrain_cls, area) if _.size(@map.units_at(area)) is 0
+
+  setup_defend_terrains: () ->
+    @delete_defend_terrains()
+    @add_defend_terrains(IronTerrain)
+
+  restore_defend_terrains: () ->
+    @delete_defend_terrains()
+    @add_defend_terrains(BrickTerrain)
+
 class Tank extends MovableMapUnit2D
   constructor: (@map, @area) ->
     @hp = 1
@@ -557,6 +584,9 @@ class Tank extends MovableMapUnit2D
         @max_missile = 2
     @update_display()
 
+  hp_up: (lives) ->
+    hp_down(-lives)
+
   hp_down: (lives) ->
     @hp -= lives
     if @dead()
@@ -565,8 +595,7 @@ class Tank extends MovableMapUnit2D
       @level = _.max([1, @level - 1])
       @_level_adjust()
 
-  on_ship: (@ship) ->
-  on_guard: (@guard) ->
+  on_ship: (@ship) -> @update_display()
 
   fire: () ->
     if @can_fire()
@@ -590,10 +619,15 @@ class Tank extends MovableMapUnit2D
 
   handle_turn: (cmd) -> super(cmd) unless @frozen
 
+  handle_fire: (cmd) ->
+    switch cmd.type
+      when "fire"
+        @fire()
+
   integration: (delta_time) ->
     return if @initializing
     super(delta_time)
-    @fire() for command in _.select(@commands, (cmd) -> cmd.type == "fire")
+    @handle_fire(cmd) for cmd in @commands
 
   delete_missile: (missile) -> @missiles = _.without(@missiles, missile)
 
@@ -615,17 +649,80 @@ class Tank extends MovableMapUnit2D
       ]
     })
 
-
 class UserTank extends Tank
-  @life: 1
-  @add_extra_life: -> @life += 1
+  constructor: (@map, @area) ->
+    super(@map, @area)
+    @guard = false
+  on_guard: (@guard) ->
+    setTimeout((() => @on_guard(false)), 10000) if @guard
+    @update_display()
   speed: 0.13
   defend: (missile, destroy_area) ->
-    return @max_depend_point - 1 if missile.parent instanceof UserTank
+    if missile.parent instanceof UserTank
+      @freeze() unless missile.parent is this
+      return @max_depend_point - 1
+    return @max_depend_point - 1 if @guard
+    if @ship
+      @on_ship(false)
+      return @max_depend_point - 1
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
     defend_point
-  current_animation: () -> "lv" + @level
+  current_animation: () ->
+    if @guard
+      "lv" + @level + "_with_guard"
+    else if @frozen
+      "lv" + @level + "_frozen"
+    else if @ship
+      "lv" + @level + "_with_ship"
+    else
+      "lv" + @level
+  animations: () ->
+    _.merge(super(), {
+      lv1: [
+        {x: 0, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      lv1_frozen: [
+        {x: 0, y: @image_y_offset(), width: 40, height: 40},
+        {x: 360, y: 320, width: 40, height: 40}
+      ],
+      lv1_with_ship: [
+        {x: 40, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      lv1_with_guard: [
+        {x: 0, y: @image_y_offset(), width: 40, height: 40},
+        {x: 80, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      lv2: [
+        {x: 120, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      lv2_frozen: [
+        {x: 120, y: @image_y_offset(), width: 40, height: 40},
+        {x: 360, y: 320, width: 40, height: 40}
+      ],
+      lv2_with_ship: [
+        {x: 160, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      lv2_with_guard: [
+        {x: 120, y: @image_y_offset(), width: 40, height: 40},
+        {x: 200, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      lv3: [
+        {x: 240, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      lv3_frozen: [
+        {x: 240, y: @image_y_offset(), width: 40, height: 40},
+        {x: 360, y: 320, width: 40, height: 40}
+      ],
+      lv3_with_ship: [
+        {x: 280, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      lv3_with_guard: [
+        {x: 240, y: @image_y_offset(), width: 40, height: 40},
+        {x: 320, y: @image_y_offset(), width: 40, height: 40}
+      ]
+    })
+  image_y_offset: -> 0
 
 class UserP1Tank extends UserTank
   constructor: (@map, @area) ->
@@ -634,21 +731,7 @@ class UserP1Tank extends UserTank
       up: 38, down: 40, left: 37, right: 39, fire: 70
     })
   type: -> 'user_p1'
-  animations: () ->
-    _.merge(super(), {
-      lv1: [
-        {x: 0, y: 0, width: 40, height: 40}
-        # {x: 40, y: 0, width: 40, height: 40}
-      ],
-      lv2: [
-        {x: 80, y: 0, width: 40, height: 40}
-        # {x: 120, y: 0, width: 40, height: 40}
-      ],
-      lv3: [
-        {x: 160, y: 0, width: 40, height: 40}
-        # {x: 200, y: 0, width: 40, height: 40}
-      ]
-    })
+  image_y_offset: -> 0
 
 class UserP2Tank extends UserTank
   constructor: (@map, @area) ->
@@ -657,21 +740,7 @@ class UserP2Tank extends UserTank
       up: 73, down: 75, left: 74, right: 76, fire: 72
     })
   type: -> 'user_p2'
-  animations: () ->
-    _.merge(super(), {
-      lv1: [
-        {x: 0, y: 40, width: 40, height: 40}
-        # {x: 40, y: 40, width: 40, height: 40}
-      ],
-      lv2: [
-        {x: 80, y: 40, width: 40, height: 40}
-        # {x: 120, y: 40, width: 40, height: 40}
-      ],
-      lv3: [
-        {x: 160, y: 40, width: 40, height: 40}
-        # {x: 200, y: 40, width: 40, height: 40}
-      ]
-    })
+  image_y_offset: -> 40
 
 class EnemyTank extends Tank
   constructor: (@map, @area) ->
@@ -687,43 +756,67 @@ class EnemyTank extends Tank
     super(lives)
   defend: (missile, destroy_area) ->
     return @max_depend_point - 1 if missile.parent instanceof EnemyTank
+    if @ship
+      @on_ship(false)
+      return @max_depend_point - 1
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
     defend_point
   animations: () ->
     _.merge(super(), {
       lv3: [
-        {x: 240, y: 40, width: 40, height: 40}
-        # {x: 280, y: 40, width: 40, height: 40}
+        {x: 360, y: 0, width: 40, height: 40}
+      ],
+      lv3_with_ship: [
+        {x: 360, y: 40, width: 40, height: 40}
       ]
     })
   current_animation: () ->
-    if @level == 3
+    prefix = if @level == 3
       'lv3'
     else if @gift_counts > 0
       'with_gift'
     else
       'hp' + _.min([@hp, 4])
+    prefix + (if @ship then "_with_ship" else "")
   animations: () ->
     _.merge(super(), {
       hp1: [
         {x: 0, y: @image_y_offset(), width: 40, height: 40}
       ],
+      hp1_with_ship: [
+        {x: 40, y: @image_y_offset(), width: 40, height: 40}
+      ],
       hp2: [
         {x: 80, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      hp2_with_ship: [
+        {x: 120, y: @image_y_offset(), width: 40, height: 40}
       ],
       hp3: [
         {x: 160, y: @image_y_offset(), width: 40, height: 40}
       ],
+      hp3_with_ship: [
+        {x: 200, y: @image_y_offset(), width: 40, height: 40}
+      ],
       hp4: [
         {x: 240, y: @image_y_offset(), width: 40, height: 40}
-      ]
+      ],
+      hp4_with_ship: [
+        {x: 280, y: @image_y_offset(), width: 40, height: 40}
+      ],
       with_gift: [
-        {x: 320, y: @image_y_offset(), width: 40, height: 40}
+        {x: 320, y: @image_y_offset(), width: 40, height: 40},
+        {x: 0, y: @image_y_offset(), width: 40, height: 40}
+      ],
+      with_gift_with_ship: [
+        {x: 360, y: @image_y_offset(), width: 40, height: 40},
+        {x: 40, y: @image_y_offset(), width: 40, height: 40}
       ]
     })
   image_y_offset: -> 80
   gift_up: (gifts) -> @gift_counts += gifts
+  handle_fire: (cmd) -> super(cmd) unless @frozen
 
 class StupidTank extends EnemyTank
   speed: 0.07
@@ -846,7 +939,9 @@ class Missile extends MovableMapUnit2D
   defend: (missile, destroy_area) ->
     @destroy()
     @max_depend_point - 1
-  accept: (map_unit) -> map_unit is @parent
+  accept: (map_unit) ->
+    map_unit is @parent or
+      (map_unit instanceof Missile and map_unit.parent is @parent)
 
 class Gift extends MapUnit2D
   group: 'gift'
@@ -892,28 +987,14 @@ class StarGift extends Gift
   image_x_offset: -> 160
 
 class ShovelGift extends Gift
-  home_defend_terrains: () ->
-    home_defend_area = new MapArea2D(220, 460, 300, 520)
-    home_area = @map.home.area
-    _.select(@map.units_at(home_defend_area), (unit) ->
-      unit instanceof Terrain and not unit.area.equals(home_area)
-    )
-
   apply: (tank) ->
-    console.log @home_defend_terrains()
-    _.each(@home_defend_terrains(), (terrain) -> terrain.destroy())
     if tank instanceof UserTank
       # add iron instead
-      @map.add_terrain(IronTerrain, new MapArea2D(220, 460, 300, 480))
-      @map.add_terrain(IronTerrain, new MapArea2D(220, 480, 240, 520))
-      @map.add_terrain(IronTerrain, new MapArea2D(280, 480, 300, 520))
-      # transfer back to brick after 10 seconds
-      setTimeout(() =>
-        _.each(@home_defend_terrains(), (terrain) -> terrain.destroy())
-        @map.add_terrain(BrickTerrain, new MapArea2D(220, 460, 300, 480))
-        @map.add_terrain(BrickTerrain, new MapArea2D(220, 480, 240, 520))
-        @map.add_terrain(BrickTerrain, new MapArea2D(280, 480, 300, 520))
-      , 10000)
+      @map.home().setup_defend_terrains()
+    else
+      @map.home().delete_defend_terrains()
+    # transfer back to brick after 10 seconds
+    setTimeout((() => @map.home().restore_defend_terrains()), 10000)
   image_x_offset: -> 120
 
 class LifeGift extends Gift
@@ -922,11 +1003,15 @@ class LifeGift extends Gift
       tank.level_up(5)
       tank.gift_up(3)
     else
-      # TODO add extra user hp
+      # TODO add extra user life
   image_x_offset: -> 240
 
 class HatGift extends Gift
-  apply: (tank) -> tank.on_guard(true)
+  apply: (tank) ->
+    if tank instanceof EnemyTank
+      tank.hp_up(5)
+    else
+      tank.on_guard(true)
   image_x_offset: -> 200
 
 class ClockGift extends Gift
