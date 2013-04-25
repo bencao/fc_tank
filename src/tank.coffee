@@ -1,10 +1,3 @@
-class Direction
-  @UP: 0
-  @DOWN: 180
-  @LEFT: 270
-  @RIGHT: 90
-  @all: () -> [@UP, @DOWN, @LEFT, @RIGHT]
-
 class Point
   constructor: (@x, @y) ->
 
@@ -237,43 +230,25 @@ class Map2D
 
 class MapUnit2D
   group: 'middle'
-
   max_depend_point: 9
-  type: null
 
   constructor: (@map, @area) ->
     @default_width = @map.default_width
     @default_height = @map.default_height
     @bom_on_destroy = false
-    @new_display()
+    @new_display() # should be overwrite
+    @after_new_display()
 
-  new_display: () ->
-    @display_object = new Kinetic.Sprite({
-      x: @area.x1,
-      y: @area.y1,
-      image: @map.image,
-      animation: @current_animation(),
-      animations: @animations(),
-      frameRate: @current_frame_rate(),
-      index: 0
-    })
+  after_new_display: () ->
     @map.groups[@group].add(@display_object)
     @display_object.start()
 
-  animations: () -> {
-    bom: [
-      {x: 360, y: 340, width: 40, height: 40},
-      {x: 120, y: 340, width: 40, height: 40},
-      {x: 160, y: 340, width: 40, height: 40},
-      {x: 200, y: 340, width: 40, height: 40}
-    ]
-  }
-  current_frame_rate: () -> 1
-  current_animation: () -> null
   destroy_display: () ->
     if @bom_on_destroy
       @display_object.setOffset(20, 20)
+      @display_object.setAnimations(Animations.movables)
       @display_object.setAnimation('bom')
+      @display_object.setFrameRate(Animations.rate('bom'))
       @display_object.start()
       @display_object.afterFrame 3, () =>
         @display_object.stop()
@@ -302,29 +277,23 @@ class MovableMapUnit2D extends MapUnit2D
     @commander = new Commander(this)
     super(@map, @area)
 
-  current_frame_rate: () -> 6
-
   new_display: () ->
     center = @area.center()
     @display_object = new Kinetic.Sprite({
       x: center.x,
       y: center.y,
       image: @map.image,
-      animation: @current_animation(),
-      animations: @animations(),
-      frameRate: @current_frame_rate(),
+      animation: @animation_state(),
+      animations: Animations.movables,
+      frameRate: Animations.rate(@animation_state()),
       index: 0,
-      offset: {
-        x: @area.width()/2,
-        y: @area.height()/2
-      },
+      offset: {x: @area.width()/2, y: @area.height()/2},
       rotationDeg: @direction
     })
-    @map.groups[@group].add(@display_object)
-    @display_object.start()
 
   update_display: () ->
-    @display_object.setAnimation(@current_animation())
+    @display_object.setAnimation(@animation_state())
+    @display_object.setFrameRate(Animations.rate(@animation_state()))
     @display_object.setRotationDeg(@direction)
     center = @area.center()
     @display_object.setAbsolutePosition(center.x, center.y)
@@ -420,19 +389,21 @@ class MovableMapUnit2D extends MapUnit2D
 
 class Terrain extends MapUnit2D
   accept: (map_unit) -> false
-  animations: () ->
-    _.merge(super(), {
-      static: [
-        {
-          x: @image_x_offset() + @area.x1 % 40,
-          y: 240 + @area.y1 % 40,
-          width: @area.width(),
-          height: @area.height()
-        }
-      ]
+  new_display: () ->
+    animations = _.cloneDeep(Animations.terrain(@type()))
+    for animation in animations
+      animation.x += (@area.x1 % 40)
+      animation.y += (@area.y1 % 40)
+      animation.width = @area.width()
+      animation.height = @area.height()
+    @display_object = new Kinetic.Sprite({
+      x: @area.x1,
+      y: @area.y1,
+      image: @map.image,
+      index: 0,
+      animation: 'static',
+      animations: {static: animations}
     })
-  current_animation: () -> 'static'
-  image_x_offset: -> 0
 
 class BrickTerrain extends Terrain
   type: -> "brick"
@@ -447,7 +418,6 @@ class BrickTerrain extends Terrain
     @destroy()
     # return cost of destroy
     1
-  image_x_offset: -> 0
 
 class IronTerrain extends Terrain
   type: -> "iron"
@@ -466,7 +436,6 @@ class IronTerrain extends Terrain
     )
     @destroy()
     2
-  image_x_offset: -> 120
 
 class WaterTerrain extends Terrain
   accept: (map_unit) ->
@@ -482,21 +451,18 @@ class WaterTerrain extends Terrain
         4
       when false
         @map.infinity
-  image_x_offset: -> 240
 
 class IceTerrain extends Terrain
   accept: (map_unit) -> true
   type: -> "ice"
   group: "back"
   weight: (tank) -> 4
-  image_x_offset: -> 60
 
 class GrassTerrain extends Terrain
   accept: (map_unit) -> true
   type: -> "grass"
   group: "front"
   weight: (tank) -> 4
-  image_x_offset: -> 180
 
 class HomeTerrain extends Terrain
   is_defeated: false
@@ -505,16 +471,21 @@ class HomeTerrain extends Terrain
     return true if @is_defeated and map_unit instanceof Missile
     false
   weight: (tank) -> 0
-  current_animation: () ->
-    if @is_defeated then 'defeated' else 'origin'
-  animations: () ->
-    {
-      origin: [{x: 320, y: 240, width: 40, height: 40}],
-      defeated: [{x: 360, y: 240, width: 40, height: 40}]
-    }
+  new_display: () ->
+    @display_object = new Kinetic.Sprite({
+      x: @area.x1,
+      y: @area.y1,
+      image: @map.image,
+      index: 0,
+      animations: {
+        origin: Animations.terrain('home_origin'),
+        defeated: Animations.terrain('home_defeated')
+      },
+      animation: 'origin'
+    })
   defend: (missile, destroy_area) ->
     @is_defeated = true
-    @display_object.setAnimation(@current_animation())
+    @display_object.setAnimation('defeated')
     @max_depend_point
 
   defend_terrains: () ->
@@ -584,8 +555,7 @@ class Tank extends MovableMapUnit2D
         @max_missile = 2
     @update_display()
 
-  hp_up: (lives) ->
-    hp_down(-lives)
+  hp_up: (lives) -> hp_down(-lives)
 
   hp_down: (lives) ->
     @hp -= lives
@@ -604,8 +574,7 @@ class Tank extends MovableMapUnit2D
         @cooling = true
         setTimeout((() => @cooling = false), 200)
 
-  can_fire: () ->
-    (not @cooling) and _.size(@missiles) < @max_missile
+  can_fire: () -> (not @cooling) and _.size(@missiles) < @max_missile
 
   freeze: () ->
     @frozen = true
@@ -631,23 +600,11 @@ class Tank extends MovableMapUnit2D
 
   delete_missile: (missile) -> @missiles = _.without(@missiles, missile)
 
-  new_display: () ->
+  after_new_display: () ->
     super()
-    @display_object.setAnimation('tank_born')
     @display_object.afterFrame 4, () =>
-      @display_object.setAnimation(@current_animation())
       @initializing = false
-
-  animations: () ->
-    _.merge(super(), {
-      tank_born: [
-        {x: 360, y: 340, width: 40, height: 40},
-        {x: 0, y: 340, width: 40, height: 40},
-        {x: 40, y: 340, width: 40, height: 40},
-        {x: 0, y: 340, width: 40, height: 40},
-        {x: 80, y: 340, width: 40, height: 40}
-      ]
-    })
+      @update_display()
 
 class UserTank extends Tank
   constructor: (@map, @area) ->
@@ -668,61 +625,12 @@ class UserTank extends Tank
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
     defend_point
-  current_animation: () ->
-    if @guard
-      "lv" + @level + "_with_guard"
-    else if @frozen
-      "lv" + @level + "_frozen"
-    else if @ship
-      "lv" + @level + "_with_ship"
-    else
-      "lv" + @level
-  animations: () ->
-    _.merge(super(), {
-      lv1: [
-        {x: 0, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv1_frozen: [
-        {x: 0, y: @image_y_offset(), width: 40, height: 40},
-        {x: 360, y: 320, width: 40, height: 40}
-      ],
-      lv1_with_ship: [
-        {x: 40, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv1_with_guard: [
-        {x: 0, y: @image_y_offset(), width: 40, height: 40},
-        {x: 80, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv2: [
-        {x: 120, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv2_frozen: [
-        {x: 120, y: @image_y_offset(), width: 40, height: 40},
-        {x: 360, y: 320, width: 40, height: 40}
-      ],
-      lv2_with_ship: [
-        {x: 160, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv2_with_guard: [
-        {x: 120, y: @image_y_offset(), width: 40, height: 40},
-        {x: 200, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv3: [
-        {x: 240, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv3_frozen: [
-        {x: 240, y: @image_y_offset(), width: 40, height: 40},
-        {x: 360, y: 320, width: 40, height: 40}
-      ],
-      lv3_with_ship: [
-        {x: 280, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv3_with_guard: [
-        {x: 240, y: @image_y_offset(), width: 40, height: 40},
-        {x: 320, y: @image_y_offset(), width: 40, height: 40}
-      ]
-    })
-  image_y_offset: -> 0
+  animation_state: () ->
+    return "tank_born" if @initializing
+    return "#{@type()}_lv#{@level}_with_guard" if @guard
+    return "#{@type()}_lv#{@level}_frozen" if @frozen
+    return "#{@type()}_lv#{@level}_with_ship" if @ship
+    "#{@type()}_lv#{@level}"
 
 class UserP1Tank extends UserTank
   constructor: (@map, @area) ->
@@ -731,7 +639,6 @@ class UserP1Tank extends UserTank
       up: 38, down: 40, left: 37, right: 39, fire: 70
     })
   type: -> 'user_p1'
-  image_y_offset: -> 0
 
 class UserP2Tank extends UserTank
   constructor: (@map, @area) ->
@@ -740,7 +647,6 @@ class UserP2Tank extends UserTank
       up: 73, down: 75, left: 74, right: 76, fire: 72
     })
   type: -> 'user_p2'
-  image_y_offset: -> 40
 
 class EnemyTank extends Tank
   constructor: (@map, @area) ->
@@ -762,81 +668,33 @@ class EnemyTank extends Tank
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
     defend_point
-  animations: () ->
-    _.merge(super(), {
-      lv3: [
-        {x: 360, y: 0, width: 40, height: 40}
-      ],
-      lv3_with_ship: [
-        {x: 360, y: 40, width: 40, height: 40}
-      ]
-    })
-  current_animation: () ->
+  animation_state: () ->
+    return "tank_born" if @initializing
     prefix = if @level == 3
-      'lv3'
+      'enemy_lv3'
     else if @gift_counts > 0
-      'with_gift'
+      "#{@type()}_with_gift"
     else
-      'hp' + _.min([@hp, 4])
+      "#{@type()}_hp" + _.min([@hp, 4])
     prefix + (if @ship then "_with_ship" else "")
-  animations: () ->
-    _.merge(super(), {
-      hp1: [
-        {x: 0, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp1_with_ship: [
-        {x: 40, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp2: [
-        {x: 80, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp2_with_ship: [
-        {x: 120, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp3: [
-        {x: 160, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp3_with_ship: [
-        {x: 200, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp4: [
-        {x: 240, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp4_with_ship: [
-        {x: 280, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      with_gift: [
-        {x: 320, y: @image_y_offset(), width: 40, height: 40},
-        {x: 0, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      with_gift_with_ship: [
-        {x: 360, y: @image_y_offset(), width: 40, height: 40},
-        {x: 40, y: @image_y_offset(), width: 40, height: 40}
-      ]
-    })
-  image_y_offset: -> 80
   gift_up: (gifts) -> @gift_counts += gifts
   handle_fire: (cmd) -> super(cmd) unless @frozen
 
 class StupidTank extends EnemyTank
   speed: 0.07
   type: -> 'stupid'
-  image_y_offset: -> 80
 
 class FoolTank extends EnemyTank
   speed: 0.07
   type: -> 'fool'
-  image_y_offset: -> 120
 
 class FishTank extends EnemyTank
   speed: 0.13
   type: -> 'fish'
-  image_y_offset: -> 160
 
 class StrongTank extends EnemyTank
   speed: 0.07
   type: -> 'strong'
-  image_y_offset: -> 200
 
 class Missile extends MovableMapUnit2D
   speed: 0.30
@@ -879,13 +737,7 @@ class Missile extends MovableMapUnit2D
     super()
     @parent.delete_missile(this)
 
-  animations: () ->
-    _.merge(super(), {
-      static: [
-        {x: 250, y: 350, width: 20, height: 20}
-      ]
-    })
-  current_animation: () -> 'static'
+  animation_state: () -> 'missile'
 
   move: (offset) ->
     can_move = super(offset)
@@ -953,18 +805,20 @@ class Gift extends MapUnit2D
     tanks = _.select(@map.units_at(@area), (unit) -> unit instanceof Tank)
     _.each(tanks, (tank) => @apply(tank))
     @destroy() if _.size(tanks) > 0
-
   apply: (tank) ->
-  current_animation: () -> 'blink'
-  current_frame_rate: () -> 4
-  animations: () ->
-    {
-      'blink': [
-        {x: @image_x_offset(), y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
-  image_x_offset: -> 0
+
+  new_display: () ->
+    @display_object = new Kinetic.Sprite({
+      x: @area.x1,
+      y: @area.y1,
+      image: @map.image,
+      animation: @animation_state(),
+      animations: Animations.gifts,
+      frameRate: Animations.rate(@animation_state()),
+      index: 0
+    })
+
+  animation_state: -> @type()
 
 class LandMineGift extends Gift
   apply: (tank) ->
@@ -972,30 +826,29 @@ class LandMineGift extends Gift
       _.each(@map.user_tanks(), (tank) -> tank.destroy())
     else
       _.each(@map.enemy_tanks(), (tank) -> tank.destroy())
-  image_x_offset: -> 0
+  type: () -> 'land_mine'
 
 class GunGift extends Gift
   apply: (tank) -> tank.level_up(2)
-  image_x_offset: -> 80
+  type: -> 'gun'
 
 class ShipGift extends Gift
   apply: (tank) -> tank.on_ship(true)
-  image_x_offset: -> 40
+  type: -> 'ship'
 
 class StarGift extends Gift
   apply: (tank) -> tank.level_up(1)
-  image_x_offset: -> 160
+  type: -> 'star'
 
 class ShovelGift extends Gift
   apply: (tank) ->
     if tank instanceof UserTank
-      # add iron instead
       @map.home().setup_defend_terrains()
     else
       @map.home().delete_defend_terrains()
     # transfer back to brick after 10 seconds
     setTimeout((() => @map.home().restore_defend_terrains()), 10000)
-  image_x_offset: -> 120
+  type: -> 'shovel'
 
 class LifeGift extends Gift
   apply: (tank) ->
@@ -1004,7 +857,7 @@ class LifeGift extends Gift
       tank.gift_up(3)
     else
       # TODO add extra user life
-  image_x_offset: -> 240
+  type: -> 'life'
 
 class HatGift extends Gift
   apply: (tank) ->
@@ -1012,7 +865,7 @@ class HatGift extends Gift
       tank.hp_up(5)
     else
       tank.on_guard(true)
-  image_x_offset: -> 200
+  type: -> 'hat'
 
 class ClockGift extends Gift
   apply: (tank) ->
@@ -1020,7 +873,7 @@ class ClockGift extends Gift
       _.each(@map.user_tanks(), (tank) -> tank.freeze())
     else
       _.each(@map.enemy_tanks(), (tank) -> tank.freeze())
-  image_x_offset: -> 280
+  type: -> 'clock'
 
 class Commander
   constructor: (@map_unit) ->
