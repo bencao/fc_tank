@@ -1,20 +1,35 @@
-class TerrainBuilder
-  constructor: (@map, @default_width, @default_height) ->
-  batch_build: (terrain_cls, array_of_xys) ->
-    for xys in array_of_xys
-      @build_by_range(terrain_cls, xys[0], xys[1], xys[2], xys[3])
-
-  build_by_range: (terrain_cls, x1, y1, x2, y2) ->
-    xs = x1
-    while xs < x2
-      ys = y1
-      while ys < y2
-        area = new MapArea2D(xs, ys,
-          _.min([x2, xs + @default_height]),
-          _.min([y2, ys + @default_width]))
-        @map.add_terrain(terrain_cls, area)
-        ys += @default_width
-      xs += @default_height
+class TiledMapBuilder
+  constructor: (@map, @json) ->
+    @tile_width = parseInt(@json.tilewidth)
+    @tile_height = parseInt(@json.tileheight)
+    @map_width = parseInt(@json.width)
+    @map_height = parseInt(@json.height)
+    @tile_properties = {}
+    _.each @json.tilesets, (tileset) =>
+      for gid, props of tileset.tileproperties
+        @tile_properties[tileset.firstgid + parseInt(gid)] = props
+  setup_stage: (stage) ->
+      home_layer = _.detect(@json.layers, (layer) -> layer.name is "Home")
+      stage_layer = _.detect(@json.layers, (layer) -> layer.name is "Stage #{stage}")
+      _.each [home_layer, stage_layer], (layer) =>
+        h = 0
+        while h < @map_height
+          w = 0
+          while w < @map_width
+            tile_id = layer.data[h * @map_width + w]
+            if tile_id != 0
+              properties = @tile_properties[tile_id]
+              [x1, y1] = [
+                w * @tile_width + parseInt(properties.x_offset),
+                h * @tile_height + parseInt(properties.y_offset)
+              ]
+              area = new MapArea2D(x1, y1,
+                x1 + parseInt(properties.width),
+                y1 + parseInt(properties.height)
+              )
+              @map.add_terrain(eval(properties.type), area)
+            w += 1
+          h += 1
 
 class Game
   constructor: (@fps) ->
@@ -27,62 +42,19 @@ class Game
     window.game = this
 
   init_map: () ->
+    # set as loading
     @map = new Map2D(@game_scene)
+    $.getJSON "/src/terrains.json", (json) =>
+      builder = new TiledMapBuilder(@map, json)
+      # stage 1
+      builder.setup_stage(1)
+      # set as loaded
+      @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
+      @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
 
-    @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
-    @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
-
-    @map.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
-    @map.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
-    @map.add_tank(StrongTank, new MapArea2D(480, 0, 520, 40))
-
-    builder = new TerrainBuilder(@map, @map.default_width, @map.default_height)
-
-    builder.batch_build(IceTerrain, [
-      [40, 0, 240, 40],
-      [280, 0, 480, 40],
-      [0, 40, 80, 280],
-      [440, 40, 520, 280],
-      [80, 240, 440, 280]
-    ])
-    builder.batch_build(BrickTerrain, [
-      [120, 40, 240, 80],
-      [120, 80, 160, 160],
-      [160, 120, 200, 160],
-      [200, 80, 240, 200],
-      [120, 200, 240, 240],
-      [280, 40, 400, 80],
-      [280, 80, 320, 200],
-      [360, 80, 400, 200],
-      [280, 200, 400, 240],
-      [40, 340, 80, 480],
-      [120, 340, 160, 480],
-      [360, 340, 400, 480],
-      [440, 340, 480, 480],
-      [200, 300, 240, 420],
-      [240, 320, 280, 400],
-      [280, 300, 320, 420],
-      [220, 460, 300, 480],
-      [220, 480, 240, 520],
-      [280, 480, 300, 520]
-    ])
-    builder.batch_build(IronTerrain, [
-      [0, 280, 40, 320],
-      [240, 280, 280, 320],
-      [480, 280, 520, 320],
-      [80, 360, 120, 400],
-      [160, 360, 200, 400],
-      [320, 360, 360, 400],
-      [400, 360, 440, 400]
-    ])
-    builder.batch_build(GrassTerrain, [
-      [0, 320, 40, 520],
-      [40, 480, 120, 520],
-      [400, 480, 480, 520],
-      [480, 320, 520, 480]
-    ])
-
-    @map.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520))
+      @map.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
+      @map.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
+      @map.add_tank(StrongTank, new MapArea2D(480, 0, 520, 40))
 
   start: () ->
     $(document).unbind "keyup"
