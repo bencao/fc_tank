@@ -75,7 +75,9 @@ class Map2D
 
     @bindings = {}
 
-  reset: () -> _.each(@map_units, (unit) -> unit.destroy())
+  reset: () ->
+    _.each(@map_units, (unit) -> unit.destroy())
+    @bindings = {}
 
   add_terrain: (terrain_cls, area) ->
     terrain = new terrain_cls(this, area)

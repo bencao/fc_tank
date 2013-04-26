@@ -1,111 +1,150 @@
-class TiledMapBuilder
-  constructor: (@map, @json) ->
-    @tile_width = parseInt(@json.tilewidth)
-    @tile_height = parseInt(@json.tileheight)
-    @map_width = parseInt(@json.width)
-    @map_height = parseInt(@json.height)
-    @tile_properties = {}
-    _.each @json.tilesets, (tileset) =>
-      for gid, props of tileset.tileproperties
-        @tile_properties[tileset.firstgid + parseInt(gid)] = props
-  setup_stage: (stage) ->
-      home_layer = _.detect(@json.layers, (layer) -> layer.name is "Home")
-      stage_layer = _.detect(@json.layers, (layer) -> layer.name is "Stage #{stage}")
-      _.each [home_layer, stage_layer], (layer) =>
-        h = 0
-        while h < @map_height
-          w = 0
-          while w < @map_width
-            tile_id = layer.data[h * @map_width + w]
-            if tile_id != 0
-              properties = @tile_properties[tile_id]
-              [x1, y1] = [
-                w * @tile_width + parseInt(properties.x_offset),
-                h * @tile_height + parseInt(properties.y_offset)
-              ]
-              area = new MapArea2D(x1, y1,
-                x1 + parseInt(properties.width),
-                y1 + parseInt(properties.height)
-              )
-              @map.add_terrain(eval(properties.type), area)
-            w += 1
-          h += 1
-
 class Game
-  constructor: (@fps) ->
+  constructor: () ->
     @canvas = new Kinetic.Stage({container: 'canvas', width: 600, height: 520})
-    @game_scene = new Kinetic.Layer()
-    @canvas.add(@game_scene)
-    @round_start(1)
-    window.game = this
+    @init_default_config()
+    @scenes = {
+      'welcome': new WelcomeScene(this),
+      'stage': new StageScene(this),
+      'game': new GameScene(this),
+      'report': new ReportScene(this),
+      'hi_score': new HiScoreScene(this)
+    }
+    @current_scene = null
 
-  round_start: (stage) ->
-    @remain_enemy_counts = 20
-    @remain_user_p1_lives = 2
-    @remain_user_p2_lives = 2
-    @current_stage = stage
+  set_config: (key, value) -> @configs[key] = value
+  get_config: (key) -> @configs[key]
+  init_default_config: () ->
+    @configs = {
+      fps: 60, players: 1, current_stage: 1,
+      hi_score: 20000, p1_score: 0, p2_score: 0,
+      last_score: 0, player_initial_life: 2, enemies_per_stage: 20,
+    }
 
-    @init_map()
+  kick_off: () -> @switch_scene('game')
+
+  reset: () ->
+    _.each @scenes, (scene) -> scene.stop()
+    @current_scene = null
+    @init_default_config()
+    @kick_off()
+
+  switch_scene: (type) ->
+    target_scene = @scenes[type]
+    @current_scene.stop() unless _.isEmpty(@current_scene)
+    target_scene.start()
+    @current_scene = target_scene
+
+class Scene
+  constructor: (@game) ->
+    @layer = new Kinetic.Layer()
+    @layer.setVisible(false)
+    @game.canvas.add(@layer)
+
+  start: () -> @layer.setVisible(true)
+  stop: () -> @layer.setVisible(false)
+
+class WelcomeScene extends Scene
+  constructor: (@game) ->
+    super(@game)
+    @static_group = new Kinetic.Group()
+    @layer.add(@static_group)
+    @init_statics()
+
+  start: () ->
+    super()
+    # add
+
+  init_statics: () ->
+    # scores
+    @static_group.add(new Kinetic.Text({
+      x: 535,
+      y: 490,
+      fontSize: 20,
+      fontStyle: "bold",
+      text: "I-#{@game.get_config('p1_score')}" +
+        " II-#{@game.get_config('p2_score')}" +
+        " HI-#{@game.get_config('hi_score')}"
+      fill: "#c00"
+    }))
+    # logo
+    # 1/2 user
+    # copy right
+
+
+class StageScene extends Scene
+  constructor: (@game) ->
+    super(@game)
+
+  start: () ->
+    super()
+    # add
+
+class ReportScene extends Scene
+  constructor: (@game) ->
+    super(@game)
+
+  start: () ->
+    super()
+    # add
+
+class HiScoreScene extends Scene
+  constructor: (@game) ->
+    super(@game)
+
+  start: () ->
+    super()
+    # add
+
+class GameScene extends Scene
+  constructor: (@game) ->
+    super(@game)
+    @map = new Map2D(@layer)
+    $.ajax {
+      url: "/data/terrains.json",
+      success: (json) => @builder = new TiledMapBuilder(@map, json),
+      dataType: 'json',
+      async: false
+    }
+    @reset_config_variables()
     @init_status()
-    @start()
+    window.gs = this # for debug
 
-  born_p1_tank: () ->
-    if @remain_user_p1_lives > 0
-      @remain_user_p1_lives -= 1
-      @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
-      @update_status()
-    else
-      @check_enemy_win()
-
-  born_p2_tank: () ->
-    if @remain_user_p2_lives > 0
-      @remain_user_p2_lives -= 1
-      @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
-      @update_status()
-    else
-      @check_enemy_win()
-
-  born_enemy_tank: () ->
-    if @remain_enemy_counts > 0
-      @remain_enemy_counts -= 1
-      enemy_born_areas = [
-        new MapArea2D(0, 0, 40, 40),
-        new MapArea2D(240, 0, 280, 40),
-        new MapArea2D(480, 0, 520, 40)
-      ]
-      enemy_tank_types = [StupidTank, FishTank, FoolTank, StrongTank]
-      randomed = parseInt(Math.random() * 1000) % _.size(enemy_tank_types)
-      @map.add_tank(enemy_tank_types[randomed],
-        enemy_born_areas[@last_enemy_born_area_index])
-      @last_enemy_born_area_index = (@last_enemy_born_area_index + 1) % 3
-      @update_status()
-    else
-      @user_win()
-
-  check_enemy_win: () ->
-    @enemy_win() if @map.home.destroyed
-    @enemy_win() if (@remain_user_p1_lives == 0 and @remain_user_p2_lives == 0)
-
-  user_win: () ->
-    console.log "user win!"
-
-  enemy_win: () ->
-    console.log "enemy win!"
-
-  born_tanks: (tank) ->
-    if tank instanceof UserP1Tank
-      @born_p1_tank()
-    else if tank instanceof UserP2Tank
-      @born_p2_tank
-    else
-      @born_enemy_tank()
-
-  init_map: () ->
-    # set as loading
-    @map = new Map2D(@game_scene)
-
+  reset_config_variables: () ->
+    @fps = 0
+    @remain_enemy_counts = 0
+    @remain_user_p1_lives = 0
+    @remain_user_p2_lives = 0
+    @current_stage = 0
     @last_enemy_born_area_index = 0
 
+  load_config_variables: () ->
+    @fps = @game.get_config('fps')
+    @remain_enemy_counts = @game.get_config('enemies_per_stage')
+    @remain_user_p1_lives = @game.get_config('player_initial_life')
+    if @game.get_config('players') == 2
+      @remain_user_p2_lives = @game.get_config('player_initial_life')
+    else
+      @remain_user_p2_lives = 0
+    @current_stage = @game.get_config('current_stage')
+    @last_enemy_born_area_index = 0
+
+  start: () ->
+    super()
+    @load_config_variables()
+    @start_map()
+    @enable_user_control()
+    @enable_system_control()
+    @start_time_line()
+    @running = true
+
+  stop: () ->
+    super()
+    @update_status()
+    @disable_controls()
+    @map.reset()
+
+  start_map: () ->
+    # wait until builder loaded
     @map.bind('map_ready', @born_p1_tank, this)
     @map.bind('map_ready', @born_p2_tank, this)
     @map.bind('map_ready', @born_enemy_tank, this)
@@ -113,34 +152,46 @@ class Game
     @map.bind('map_ready', @born_enemy_tank, this)
     @map.bind('tank_destroyed', @born_tanks, this)
     @map.bind('home_destroyed', @check_enemy_win, this)
+    @builder.setup_stage(@current_stage)
+    @map.trigger('map_ready')
 
-    $.getJSON "/data/terrains.json", (json) =>
-      builder = new TiledMapBuilder(@map, json)
-      # stage 1
-      builder.setup_stage(@current_stage)
-      # set as loaded
-      @map.trigger('map_ready')
-
-  start: () ->
-    $(document).unbind "keyup"
+  enable_user_control: () ->
     $(document).bind "keyup", (event) =>
       if @map.p1_tank()
         @map.p1_tank().commander.add_key_event("keyup", event.which)
       if @map.p2_tank()
         @map.p2_tank().commander.add_key_event("keyup", event.which)
 
-    $(document).unbind "keydown"
     $(document).bind "keydown", (event) =>
       if @map.p1_tank()
         @map.p1_tank().commander.add_key_event("keydown", event.which)
       if @map.p2_tank()
         @map.p2_tank().commander.add_key_event("keydown", event.which)
-    @start_time_line()
 
-  pause: () ->
+  enable_system_control: () ->
+    $(document).bind "keyup", (event) =>
+      switch event.which
+        when 13
+          # ENTER
+          if @running then @pause() else @rescue()
+        when 27
+          # ESC
+          @game.reset()
+
+  disable_controls: () ->
     $(document).unbind "keyup"
     $(document).unbind "keydown"
+
+  pause: () ->
+    @running = false
     @stop_time_line()
+    @disable_controls()
+    @enable_system_control()
+
+  rescue: () ->
+    @running = true
+    @start_time_line()
+    @enable_user_control()
 
   start_time_line: () ->
     last_time = new Date()
@@ -169,7 +220,7 @@ class Game
 
   init_status: () ->
     @status_panel = new Kinetic.Group()
-    @game_scene.add(@status_panel)
+    @layer.add(@status_panel)
 
     # background
     @status_panel.add(new Kinetic.Rect({
@@ -241,14 +292,14 @@ class Game
 
     # stage status
     @new_symbol(@status_panel, 'stage', 540, 420)
-    stage_label = new Kinetic.Text({
+    @stage_label = new Kinetic.Text({
       x: 560,
       y: 445,
       fontSize: 16,
       text: "#{@current_stage}",
       fill: "#000"
     })
-    @status_panel.add(stage_label)
+    @status_panel.add(@stage_label)
 
   update_status: () ->
     _.each(_.rest(@enemy_symbols, @remain_enemy_counts), (symbol) ->
@@ -256,6 +307,7 @@ class Game
     )
     @user_p1_remain_lives_label.setText(@remain_user_p1_lives)
     @user_p2_remain_lives_label.setText(@remain_user_p2_lives)
+    @stage_label.setText(@current_stage)
 
   new_symbol: (parent, type, tx, ty) ->
     animations = switch type
@@ -280,5 +332,96 @@ class Game
     symbol.start()
     symbol
 
+  born_p1_tank: () ->
+    if @remain_user_p1_lives > 0
+      @remain_user_p1_lives -= 1
+      @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
+      @update_status()
+    else
+      @check_enemy_win()
+
+  born_p2_tank: () ->
+    if @remain_user_p2_lives > 0
+      @remain_user_p2_lives -= 1
+      @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
+      @update_status()
+    else
+      @check_enemy_win()
+
+  born_enemy_tank: () ->
+    if @remain_enemy_counts > 0
+      @remain_enemy_counts -= 1
+      enemy_born_areas = [
+        new MapArea2D(0, 0, 40, 40),
+        new MapArea2D(240, 0, 280, 40),
+        new MapArea2D(480, 0, 520, 40)
+      ]
+      enemy_tank_types = [StupidTank, FishTank, FoolTank, StrongTank]
+      randomed = parseInt(Math.random() * 1000) % _.size(enemy_tank_types)
+      @map.add_tank(enemy_tank_types[randomed],
+        enemy_born_areas[@last_enemy_born_area_index])
+      @last_enemy_born_area_index = (@last_enemy_born_area_index + 1) % 3
+      @update_status()
+    else
+      @user_win()
+
+  check_enemy_win: () ->
+    @enemy_win() if @map.home().destroyed
+    @enemy_win() if (@remain_user_p1_lives == 0 and @remain_user_p2_lives == 0)
+
+  user_win: () ->
+    console.log "user win!"
+    setTimeout(() =>
+      @game.switch_scene('report')
+    , 5000)
+
+  enemy_win: () ->
+    # hi score or
+    # welcome
+    console.log "enemy win!"
+
+  born_tanks: (tank) ->
+    if tank instanceof UserP1Tank
+      @born_p1_tank()
+    else if tank instanceof UserP2Tank
+      @born_p2_tank
+    else
+      @born_enemy_tank()
+
+class TiledMapBuilder
+  constructor: (@map, @json) ->
+    @tile_width = parseInt(@json.tilewidth)
+    @tile_height = parseInt(@json.tileheight)
+    @map_width = parseInt(@json.width)
+    @map_height = parseInt(@json.height)
+    @tile_properties = {}
+    _.each @json.tilesets, (tileset) =>
+      for gid, props of tileset.tileproperties
+        @tile_properties[tileset.firstgid + parseInt(gid)] = props
+  setup_stage: (stage) ->
+      home_layer = _.detect(@json.layers, (layer) -> layer.name is "Home")
+      stage_layer = _.detect(@json.layers, (layer) -> layer.name is "Stage #{stage}")
+      _.each [home_layer, stage_layer], (layer) =>
+        h = 0
+        while h < @map_height
+          w = 0
+          while w < @map_width
+            tile_id = layer.data[h * @map_width + w]
+            if tile_id != 0
+              properties = @tile_properties[tile_id]
+              [x1, y1] = [
+                w * @tile_width + parseInt(properties.x_offset),
+                h * @tile_height + parseInt(properties.y_offset)
+              ]
+              area = new MapArea2D(x1, y1,
+                x1 + parseInt(properties.width),
+                y1 + parseInt(properties.height)
+              )
+              @map.add_terrain(eval(properties.type), area)
+            w += 1
+          h += 1
+
 $ ->
-  new Game(60)
+  game = new Game()
+  window.game = game
+  game.kick_off()
