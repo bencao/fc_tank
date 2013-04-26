@@ -241,16 +241,17 @@ class Map2D
   trigger: (event, params={}) ->
     return if _.isEmpty(@bindings[event])
     for handler in @bindings[event]
-      handler.callback.apply(handler.scope, params)
+      handler.callback.call(handler.scope, params)
 
 class MapUnit2D
   group: 'middle'
-  max_depend_point: 9
+  max_defend_point: 9
 
   constructor: (@map, @area) ->
     @default_width = @map.default_width
     @default_height = @map.default_height
     @bom_on_destroy = false
+    @destroyed = false
     @new_display() # should be overwrite
     @after_new_display()
 
@@ -276,6 +277,8 @@ class MapUnit2D
   height: () -> @area.y2 - @area.y1
 
   destroy: () ->
+    return if @destroyed
+    @destroyed = true
     @destroy_display()
     @map.delete_map_unit(this)
 
@@ -303,7 +306,8 @@ class MovableMapUnit2D extends MapUnit2D
       frameRate: Animations.rate(@animation_state()),
       index: 0,
       offset: {x: @area.width()/2, y: @area.height()/2},
-      rotationDeg: @direction
+      rotationDeg: @direction,
+      map_unit: this
     })
 
   update_display: () ->
@@ -417,7 +421,8 @@ class Terrain extends MapUnit2D
       image: @map.image,
       index: 0,
       animation: 'static',
-      animations: {static: animations}
+      animations: {static: animations},
+      map_unit: this
     })
 
 class BrickTerrain extends Terrain
@@ -443,7 +448,7 @@ class IronTerrain extends Terrain
       when 2
         20
   defend: (missile, destroy_area) ->
-    return @max_depend_point if missile.power < 2
+    return @max_defend_point if missile.power < 2
     double_destroy_area = destroy_area.extend(missile.direction, 1)
     pieces = @area.sub(double_destroy_area)
     _.each(pieces, (piece) =>
@@ -482,7 +487,6 @@ class GrassTerrain extends Terrain
 class HomeTerrain extends Terrain
   constructor: (@map, @area) ->
     super(@map, @area)
-    @destroyed = false
   type: -> "home"
   accept: (map_unit) ->
     return true if @destroyed and map_unit instanceof Missile
@@ -498,13 +502,15 @@ class HomeTerrain extends Terrain
         origin: Animations.terrain('home_origin'),
         destroyed: Animations.terrain('home_destroyed')
       },
-      animation: 'origin'
+      animation: 'origin',
+      map_unit: this
     })
   defend: (missile, destroy_area) ->
+    return @max_defend_point if @destroyed
     @destroyed = true
     @display_object.setAnimation('destroyed')
     @map.trigger('home_destroyed')
-    @max_depend_point
+    @max_defend_point
 
   defend_terrains: () ->
     home_defend_area = new MapArea2D(220, 460, 300, 520)
@@ -544,10 +550,10 @@ class Tank extends MovableMapUnit2D
     @ship = false
     @guard = false
     @initializing = true
-    @cooling = false
     @frozen = false
     super(@map, @area)
     @bom_on_destroy = true
+    @last_milliseconds = false
 
   accept: (map_unit) ->
     (map_unit instanceof Missile) and (map_unit.parent is this)
@@ -573,7 +579,7 @@ class Tank extends MovableMapUnit2D
         @max_missile = 2
     @update_display()
 
-  hp_up: (lives) -> hp_down(-lives)
+  hp_up: (lives) -> @hp_down(-lives)
 
   hp_down: (lives) ->
     @hp -= lives
@@ -586,13 +592,15 @@ class Tank extends MovableMapUnit2D
   on_ship: (@ship) -> @update_display()
 
   fire: () ->
-    if @can_fire()
-      @missiles.push(@map.add_missile(this))
-      if _.size(@missiles) == @max_missile
-        @cooling = true
-        setTimeout((() => @cooling = false), 200)
+    return unless @can_fire()
+    current_milliseconds = (new Date()).getMilliseconds()
+    if @last_milliseconds
+      return if Math.abs(current_milliseconds - @last_milliseconds) < 300
+    @missiles.push(@map.add_missile(this))
+    console.log "set last"
+    @last_milliseconds = current_milliseconds
 
-  can_fire: () -> (not @cooling) and _.size(@missiles) < @max_missile
+  can_fire: () -> _.size(@missiles) < @max_missile
 
   freeze: () ->
     @frozen = true
@@ -639,11 +647,11 @@ class UserTank extends Tank
   defend: (missile, destroy_area) ->
     if missile.parent instanceof UserTank
       @freeze() unless missile.parent is this
-      return @max_depend_point - 1
-    return @max_depend_point - 1 if @guard
+      return @max_defend_point - 1
+    return @max_defend_point - 1 if @guard
     if @ship
       @on_ship(false)
-      return @max_depend_point - 1
+      return @max_defend_point - 1
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
     defend_point
@@ -683,10 +691,10 @@ class EnemyTank extends Tank
     @gift_counts -= lives
     super(lives)
   defend: (missile, destroy_area) ->
-    return @max_depend_point - 1 if missile.parent instanceof EnemyTank
+    return @max_defend_point - 1 if missile.parent instanceof EnemyTank
     if @ship
       @on_ship(false)
-      return @max_depend_point - 1
+      return @max_defend_point - 1
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
     defend_point
@@ -771,12 +779,12 @@ class Missile extends MovableMapUnit2D
 
     if @map.out_of_bound(destroy_area)
       @bom_on_destroy = true
-      @energy -= @max_depend_point
+      @energy -= @max_defend_point
     else
       hit_map_units = @map.units_at(destroy_area)
       _.each(hit_map_units, (unit) =>
         defend_point = unit.defend(this, destroy_area)
-        @bom_on_destroy = (defend_point == @max_depend_point)
+        @bom_on_destroy = (defend_point == @max_defend_point)
         @energy -= defend_point
       )
     @destroy() if @energy <= 0
@@ -812,7 +820,7 @@ class Missile extends MovableMapUnit2D
         )
   defend: (missile, destroy_area) ->
     @destroy()
-    @max_depend_point - 1
+    @max_defend_point - 1
   accept: (map_unit) ->
     map_unit is @parent or
       (map_unit instanceof Missile and map_unit.parent is @parent)
@@ -837,7 +845,8 @@ class Gift extends MapUnit2D
       animation: @animation_state(),
       animations: Animations.gifts,
       frameRate: Animations.rate(@animation_state()),
-      index: 0
+      index: 0,
+      map_unit: this
     })
 
   animation_state: -> @type()
@@ -875,9 +884,11 @@ class ShovelGift extends Gift
 class LifeGift extends Gift
   apply: (tank) ->
     if tank instanceof EnemyTank
-      tank.level_up(5)
-      tank.gift_up(3)
+      _.each @map.enemy_tanks(), (enemy_tank) ->
+        tank.hp_up(5)
+        tank.gift_up(3)
     else
+      @map.trigger('tank_life_up', tank)
       # TODO add extra user life
   type: -> 'life'
 
