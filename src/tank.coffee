@@ -73,6 +73,8 @@ class Map2D
     @vertexes = @init_vertexes()
     @home_vertex = @vertexes[24][48]
 
+    @bindings = {}
+
   reset: () -> _.each(@map_units, (unit) -> unit.destroy())
 
   add_terrain: (terrain_cls, area) ->
@@ -229,6 +231,15 @@ class Map2D
       v = pi[v.vx][v.vy]
     reverse_paths.push(start_vertex)
     reverse_paths.reverse()
+
+  bind: (event, callback, scope=this) ->
+    @bindings[event] = [] if _.isEmpty(@bindings[event])
+    @bindings[event].push({'scope': scope, 'callback': callback})
+
+  trigger: (event, params={}) ->
+    return if _.isEmpty(@bindings[event])
+    for handler in @bindings[event]
+      handler.callback.apply(handler.scope, params)
 
 class MapUnit2D
   group: 'middle'
@@ -467,10 +478,12 @@ class GrassTerrain extends Terrain
   weight: (tank) -> 4
 
 class HomeTerrain extends Terrain
-  is_defeated: false
+  constructor: (@map, @area) ->
+    super(@map, @area)
+    @destroyed = false
   type: -> "home"
   accept: (map_unit) ->
-    return true if @is_defeated and map_unit instanceof Missile
+    return true if @destroyed and map_unit instanceof Missile
     false
   weight: (tank) -> 0
   new_display: () ->
@@ -481,13 +494,14 @@ class HomeTerrain extends Terrain
       index: 0,
       animations: {
         origin: Animations.terrain('home_origin'),
-        defeated: Animations.terrain('home_defeated')
+        destroyed: Animations.terrain('home_destroyed')
       },
       animation: 'origin'
     })
   defend: (missile, destroy_area) ->
-    @is_defeated = true
-    @display_object.setAnimation('defeated')
+    @destroyed = true
+    @display_object.setAnimation('destroyed')
+    @map.trigger('home_destroyed')
     @max_depend_point
 
   defend_terrains: () ->
@@ -607,6 +621,10 @@ class Tank extends MovableMapUnit2D
     @display_object.afterFrame 4, () =>
       @initializing = false
       @update_display()
+
+  destroy: () ->
+    super()
+    @map.trigger('tank_destroyed', this)
 
 class UserTank extends Tank
   constructor: (@map, @area) ->

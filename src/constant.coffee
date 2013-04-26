@@ -391,7 +391,7 @@ class Animations
     ice: [{x: 60, y: 240, width: 40, height: 40}],
     grass: [{x: 180, y: 240, width: 40, height: 40}],
     home_origin: [{x: 320, y: 240, width: 40, height: 40}],
-    home_defeated: [{x: 360, y: 240, width: 40, height: 40}]
+    home_destroyed: [{x: 360, y: 240, width: 40, height: 40}]
   }
   @terrain: (type) -> @terrains[type]
 
