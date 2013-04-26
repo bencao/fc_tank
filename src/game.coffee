@@ -100,7 +100,7 @@ class GameScene extends Scene
     super(@game)
     @map = new Map2D(@layer)
     $.ajax {
-      url: "/data/terrains.json",
+      url: "data/terrains.json",
       success: (json) => @builder = new TiledMapBuilder(@map, json),
       dataType: 'json',
       async: false
@@ -152,6 +152,7 @@ class GameScene extends Scene
     @map.bind('map_ready', @born_enemy_tank, this)
     @map.bind('tank_destroyed', @born_tanks, this)
     @map.bind('home_destroyed', @check_enemy_win, this)
+    @map.bind('tank_life_up', @add_extra_life, this)
     @builder.setup_stage(@current_stage)
     @map.trigger('map_ready')
 
@@ -201,12 +202,10 @@ class GameScene extends Scene
       # assume a frame will never last more than 1 second
       delta_time += 1000 if delta_time < 0
       _.each(@map.tanks.concat(@map.missiles).concat(@map.gifts), (unit) ->
-        unit.integration(delta_time)
+        unit.integration(delta_time) unless unit.destroyed
       )
       last_time = current_time
       @frame_rate += 1
-      # console.log "current_frame=" + @frame_rate
-      # game.pause() if mod == 9
     , parseInt(1000/@fps))
     # show frame rate
     @frame_timeline = setInterval(() =>
@@ -302,9 +301,12 @@ class GameScene extends Scene
     @status_panel.add(@stage_label)
 
   update_status: () ->
-    _.each(_.rest(@enemy_symbols, @remain_enemy_counts), (symbol) ->
-      symbol.destroy()
-    )
+    _.each(@enemy_symbols, (symbol) -> symbol.destroy())
+    for i in [1..@remain_enemy_counts]
+      tx = (if i % 2 == 1 then 540 else 560)
+      ty = parseInt((i - 1) / 2) * 25 + 20
+      symbol = @new_symbol(@status_panel, 'enemy', tx, ty)
+      @enemy_symbols.push(symbol)
     @user_p1_remain_lives_label.setText(@remain_user_p1_lives)
     @user_p2_remain_lives_label.setText(@remain_user_p2_lives)
     @stage_label.setText(@current_stage)
@@ -332,7 +334,15 @@ class GameScene extends Scene
     symbol.start()
     symbol
 
+  add_extra_life: (tank) ->
+    if tank instanceof UserP1Tank
+      @remain_user_p1_lives += 1
+    else
+      @remain_user_p2_lives += 1
+    @update_status()
+
   born_p1_tank: () ->
+    console.log "born p1 tank"
     if @remain_user_p1_lives > 0
       @remain_user_p1_lives -= 1
       @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
@@ -363,7 +373,10 @@ class GameScene extends Scene
       @last_enemy_born_area_index = (@last_enemy_born_area_index + 1) % 3
       @update_status()
     else
-      @user_win()
+      @check_user_win()
+
+  check_user_win: () ->
+    @user_win() if @remain_enemy_counts == 0 and _.size(@map.enemy_tanks()) == 0
 
   check_enemy_win: () ->
     @enemy_win() if @map.home().destroyed
@@ -371,20 +384,21 @@ class GameScene extends Scene
 
   user_win: () ->
     console.log "user win!"
-    setTimeout(() =>
-      @game.switch_scene('report')
-    , 5000)
+    setTimeout((() => @game.switch_scene('report')), 5000)
 
   enemy_win: () ->
     # hi score or
     # welcome
     console.log "enemy win!"
+    # setTimeout(() =>
+    #   @game.switch_scene('welcome')
+    # , 10000)
 
   born_tanks: (tank) ->
     if tank instanceof UserP1Tank
       @born_p1_tank()
     else if tank instanceof UserP2Tank
-      @born_p2_tank
+      @born_p2_tank()
     else
       @born_enemy_tank()
 
