@@ -16,16 +16,16 @@ class MapArea2D
     ], (candidate_area) -> candidate_area.valid())
   collide: (area) ->
     not (@x2 <= area.x1 or @y2 <= area.y1 or @x1 >= area.x2 or @y1 >= area.y2)
-  multiply: (direction, factor) ->
+  extend: (direction, ratio) ->
     switch direction
       when Direction.UP
-        new MapArea2D(@x1, @y1 - factor * @height(), @x2, @y2)
+        new MapArea2D(@x1, @y1 - ratio * @height(), @x2, @y2)
       when Direction.RIGHT
-        new MapArea2D(@x1, @y1, @x2 + factor * @width(), @y2)
+        new MapArea2D(@x1, @y1, @x2 + ratio * @width(), @y2)
       when Direction.DOWN
-        new MapArea2D(@x1, @y1, @x2, @y2 + factor * @height())
+        new MapArea2D(@x1, @y1, @x2, @y2 + ratio * @height())
       when Direction.LEFT
-        new MapArea2D(@x1 - factor * @width(), @y1, @x2, @y2)
+        new MapArea2D(@x1 - ratio * @width(), @y1, @x2, @y2)
   equals: (area) ->
     return false unless area instanceof MapArea2D
     area.x1 == @x1 and area.x2 == @x2 and area.y1 == @y1 and area.y2 == @y2
@@ -429,7 +429,7 @@ class IronTerrain extends Terrain
         20
   defend: (missile, destroy_area) ->
     return @max_depend_point if missile.power < 2
-    double_destroy_area = destroy_area.multiply(missile.direction, 1)
+    double_destroy_area = destroy_area.extend(missile.direction, 1)
     pieces = @area.sub(double_destroy_area)
     _.each(pieces, (piece) =>
       @map.add_terrain(IronTerrain, piece)
