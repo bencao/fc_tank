@@ -44,7 +44,7 @@ class Game
   init_map: () ->
     # set as loading
     @map = new Map2D(@game_scene)
-    $.getJSON "/src/terrains.json", (json) =>
+    $.getJSON "/data/terrains.json", (json) =>
       builder = new TiledMapBuilder(@map, json)
       # stage 1
       builder.setup_stage(1)
