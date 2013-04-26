@@ -73,6 +73,8 @@ class Map2D
     @vertexes = @init_vertexes()
     @home_vertex = @vertexes[24][48]
 
+  reset: () -> _.each(@map_units, (unit) -> unit.destroy())
+
   add_terrain: (terrain_cls, area) ->
     terrain = new terrain_cls(this, area)
     @terrains.push(terrain)
