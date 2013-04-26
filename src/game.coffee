@@ -20,7 +20,7 @@ class Game
       last_score: 0, player_initial_life: 2, enemies_per_stage: 20,
     }
 
-  kick_off: () -> @switch_scene('game')
+  kick_off: () -> @switch_scene('welcome')
 
   reset: () ->
     _.each @scenes, (scene) -> scene.stop()
@@ -52,32 +52,263 @@ class WelcomeScene extends Scene
 
   start: () ->
     super()
-    # add
+    @static_group.move(-300, 0)
+    @static_group.transitionTo({
+      x: 0,
+      duration: 1.5,
+      easing: "linear",
+      callback: () =>
+        @update_players()
+        @enable_selection_control()
+    })
+
+  stop: () ->
+    super()
+    @disable_selection_control()
+
+  enable_selection_control: () ->
+    $(document).bind "keydown", (event) =>
+      switch event.which
+        when 13
+          # ENTER
+          @game.switch_scene('stage')
+        when 32
+          # SPACE
+          @toggle_players()
+
+  disable_selection_control: () ->
+    $(document).unbind "keydown"
+
+  toggle_players: () ->
+    if @game.get_config('players') == 1
+      @game.set_config('players', 2)
+    else
+      @game.set_config('players', 1)
+    @update_players()
+  update_players: () ->
+    players = @game.get_config('players')
+    if players == 1
+      @select_tank.setAbsolutePosition(170, 350)
+    else
+      @select_tank.setAbsolutePosition(170, 390)
 
   init_statics: () ->
     # scores
     @static_group.add(new Kinetic.Text({
-      x: 535,
-      y: 490,
-      fontSize: 20,
+      x: 40,
+      y: 40,
+      fontSize: 22,
       fontStyle: "bold",
-      text: "I-#{@game.get_config('p1_score')}" +
-        " II-#{@game.get_config('p2_score')}" +
-        " HI-#{@game.get_config('hi_score')}"
-      fill: "#c00"
+      fontFamily: "Courier",
+      text: "I- #{@game.get_config('p1_score')}" +
+        "  II- #{@game.get_config('p2_score')}" +
+        "  HI- #{@game.get_config('hi_score')}",
+      fill: "#fff"
     }))
     # logo
+    image = document.getElementById('tank_sprite')
+    for area in [
+      # T
+      new MapArea2D(80, 100, 120, 110),
+      new MapArea2D(120, 100, 140, 110),
+      new MapArea2D(100, 110, 120, 140),
+      new MapArea2D(100, 140, 120, 170),
+      # A
+      new MapArea2D(170, 100, 200, 110),
+      new MapArea2D(160, 110, 180, 120),
+      new MapArea2D(190, 110, 210, 120),
+      new MapArea2D(150, 120, 170, 140),
+      new MapArea2D(150, 140, 170, 170),
+      new MapArea2D(200, 120, 220, 140),
+      new MapArea2D(200, 140, 220, 170),
+      new MapArea2D(170, 140, 200, 150),
+      # N
+      new MapArea2D(230, 100, 250, 140),
+      new MapArea2D(230, 140, 250, 170),
+      new MapArea2D(250, 110, 260, 140),
+      new MapArea2D(260, 120, 270, 150),
+      new MapArea2D(270, 130, 280, 160),
+      new MapArea2D(280, 100, 300, 140),
+      new MapArea2D(280, 140, 300, 170),
+      # K
+      new MapArea2D(310, 100, 330, 140),
+      new MapArea2D(310, 140, 330, 170),
+      new MapArea2D(360, 100, 380, 110),
+      new MapArea2D(350, 110, 370, 120),
+      new MapArea2D(340, 120, 360, 130),
+      new MapArea2D(330, 130, 350, 140),
+      new MapArea2D(330, 140, 360, 150),
+      new MapArea2D(340, 150, 370, 160),
+      new MapArea2D(350, 160, 380, 170),
+      # C - means coffee
+      new MapArea2D(440, 100, 490, 110),
+      new MapArea2D(430, 110, 450, 120),
+      new MapArea2D(480, 110, 500, 120),
+      new MapArea2D(420, 120, 440, 130),
+      new MapArea2D(420, 130, 440, 140),
+      new MapArea2D(420, 140, 440, 150),
+      new MapArea2D(430, 150, 450, 160),
+      new MapArea2D(480, 150, 500, 160),
+      new MapArea2D(440, 160, 490, 170),
+
+      # 1
+      new MapArea2D(180, 210, 200, 220),
+      new MapArea2D(170, 220, 200, 230),
+      new MapArea2D(180, 230, 200, 250),
+      new MapArea2D(180, 250, 200, 270),
+      new MapArea2D(160, 270, 200, 280),
+      new MapArea2D(200, 270, 220, 280),
+      # 9
+      new MapArea2D(240, 210, 260, 220),
+      new MapArea2D(260, 210, 290, 220),
+      new MapArea2D(230, 220, 250, 240),
+      new MapArea2D(280, 220, 300, 240),
+      new MapArea2D(240, 240, 260, 250),
+      new MapArea2D(260, 240, 300, 250),
+      new MapArea2D(280, 250, 300, 260),
+      new MapArea2D(270, 260, 290, 270),
+      new MapArea2D(240, 270, 280, 280),
+      # 9
+      new MapArea2D(320, 210, 340, 220),
+      new MapArea2D(340, 210, 370, 220),
+      new MapArea2D(310, 220, 330, 240),
+      new MapArea2D(360, 220, 380, 240),
+      new MapArea2D(320, 240, 340, 250),
+      new MapArea2D(340, 240, 380, 250),
+      new MapArea2D(360, 250, 380, 260),
+      new MapArea2D(350, 260, 370, 270),
+      new MapArea2D(320, 270, 360, 280),
+      # 0
+      new MapArea2D(410, 210, 440, 220),
+      new MapArea2D(400, 220, 410, 230),
+      new MapArea2D(430, 220, 450, 230),
+      new MapArea2D(390, 230, 410, 260),
+      new MapArea2D(440, 230, 460, 260),
+      new MapArea2D(400, 260, 420, 270),
+      new MapArea2D(440, 260, 450, 270),
+      new MapArea2D(410, 270, 440, 280)
+    ]
+      animations = _.cloneDeep(Animations.terrain('brick'))
+      for animation in animations
+        animation.x += (area.x1 % 40)
+        animation.y += (area.y1 % 40)
+        animation.width = area.width()
+        animation.height = area.height()
+      brick_sprite = new Kinetic.Sprite({
+        x: area.x1,
+        y: area.y1,
+        image: image,
+        index: 0,
+        animation: 'static',
+        animations: {static: animations}
+      })
+      @static_group.add(brick_sprite)
+      brick_sprite.start()
     # 1/2 user
+    @static_group.add(new Kinetic.Text({
+      x: 210,
+      y: 340,
+      fontSize: 22,
+      fontStyle: "bold",
+      fontFamily: "Courier",
+      text: "1 PLAYER",
+      fill: "#fff"
+    }))
+    @static_group.add(new Kinetic.Text({
+      x: 210,
+      y: 380,
+      fontSize: 22,
+      fontStyle: "bold",
+      fontFamily: "Courier",
+      text: "2 PLAYERS",
+      fill: "#fff"
+    }))
     # copy right
+    @static_group.add(new Kinetic.Text({
+      x: 210,
+      y: 460,
+      fontSize: 22,
+      fontStyle: "bold",
+      fontFamily: "Courier",
+      text: "© BEN♥FENG",
+      fill: "#fff"
+    }))
+    # tank
+    @select_tank = new Kinetic.Sprite({
+      x: 170,
+      y: 350,
+      image: image,
+      animation: 'user_p1_lv1',
+      animations: Animations.movables,
+      frameRate: Animations.rate('user_p1_lv1'),
+      index: 0,
+      offset: {x: 20, y: 20},
+      rotationDeg: 90,
+    })
+    @static_group.add(@select_tank)
+    @select_tank.start()
 
 
 class StageScene extends Scene
   constructor: (@game) ->
     super(@game)
+    @init_stage_nodes()
+    window.ss = this
 
   start: () ->
     super()
-    # add
+    @current_stage = @game.get_config('current_stage')
+    @update_stage_label()
+    @enable_stage_control()
+
+  stop: () ->
+    super()
+    @disable_stage_control()
+
+  enable_stage_control: () ->
+    $(document).bind "keydown", (event) =>
+      switch event.which
+        when 37, 38
+          # UP, LEFT
+          @adjust_stage(1)
+        when 39, 40
+          # RIGHT, DOWN
+          @adjust_stage(-1)
+        when 13
+          # ENTER
+          @game.switch_scene('game')
+
+  disable_stage_control: () ->
+    $(document).unbind "keydown"
+
+  adjust_stage: (offset) ->
+    @current_stage += offset
+    @game.set_config('current_stage', @current_stage)
+    @update_stage_label()
+
+  init_stage_nodes: () ->
+    # bg
+    # @layer.add(new Kinetic.Rect({
+    #   x: 0,
+    #   y: 0,
+    #   fill: "#999",
+    #   width: 600,
+    #   height: 520
+    # }))
+    # label text
+    @stage_label = new Kinetic.Text({
+      x: 210,
+      y: 230,
+      fontSize: 22,
+      fontStyle: "bold",
+      fontFamily: "Courier",
+      text: "STAGE #{@current_stage}",
+      fill: "#fff"
+    })
+    @layer.add(@stage_label)
+
+  update_stage_label: () ->
+    @stage_label.setText("STAGE #{@current_stage}")
 
 class ReportScene extends Scene
   constructor: (@game) ->
@@ -170,7 +401,7 @@ class GameScene extends Scene
         @map.p2_tank().commander.add_key_event("keydown", event.which)
 
   enable_system_control: () ->
-    $(document).bind "keyup", (event) =>
+    $(document).bind "keydown", (event) =>
       switch event.which
         when 13
           # ENTER
@@ -233,10 +464,11 @@ class GameScene extends Scene
     # frame rate
     @frame_rate = 0
     @frame_rate_label = new Kinetic.Text({
-      x: 535,
+      x: 526,
       y: 490,
       fontSize: 20,
       fontStyle: "bold",
+      fontFamily: "Courier",
       text: "0 fps"
       fill: "#c00"
     })
@@ -256,6 +488,7 @@ class GameScene extends Scene
       y: 300,
       fontSize: 18,
       fontStyle: "bold",
+      fontFamily: "Courier",
       text: "1P",
       fill: "#000"
     })
@@ -264,6 +497,7 @@ class GameScene extends Scene
       x: 565,
       y: 324,
       fontSize: 16,
+      fontFamily: "Courier",
       text: "#{@remain_user_p1_lives}",
       fill: "#000"
     })
@@ -275,6 +509,7 @@ class GameScene extends Scene
       y: 350,
       fontSize: 18,
       fontStyle: "bold",
+      fontFamily: "Courier",
       text: "2P",
       fill: "#000"
     })
@@ -283,6 +518,7 @@ class GameScene extends Scene
       x: 565,
       y: 374,
       fontSize: 16,
+      fontFamily: "Courier",
       text: "#{@remain_user_p2_lives}",
       fill: "#000"
     })
@@ -295,6 +531,7 @@ class GameScene extends Scene
       x: 560,
       y: 445,
       fontSize: 16,
+      fontFamily: "Courier",
       text: "#{@current_stage}",
       fill: "#000"
     })
