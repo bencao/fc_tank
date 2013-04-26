@@ -597,7 +597,6 @@ class Tank extends MovableMapUnit2D
     if @last_milliseconds
       return if Math.abs(current_milliseconds - @last_milliseconds) < 300
     @missiles.push(@map.add_missile(this))
-    console.log "set last"
     @last_milliseconds = current_milliseconds
 
   can_fire: () -> _.size(@missiles) < @max_missile
