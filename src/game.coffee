@@ -36,25 +36,90 @@ class Game
     @canvas = new Kinetic.Stage({container: 'canvas', width: 600, height: 520})
     @game_scene = new Kinetic.Layer()
     @canvas.add(@game_scene)
+    @round_start(1)
+    window.game = this
+
+  round_start: (stage) ->
+    @remain_enemy_counts = 20
+    @remain_user_p1_lives = 2
+    @remain_user_p2_lives = 2
+    @current_stage = stage
+
     @init_map()
     @init_status()
     @start()
-    window.game = this
+
+  born_p1_tank: () ->
+    if @remain_user_p1_lives > 0
+      @remain_user_p1_lives -= 1
+      @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
+      @update_status()
+    else
+      @check_enemy_win()
+
+  born_p2_tank: () ->
+    if @remain_user_p2_lives > 0
+      @remain_user_p2_lives -= 1
+      @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
+      @update_status()
+    else
+      @check_enemy_win()
+
+  born_enemy_tank: () ->
+    if @remain_enemy_counts > 0
+      @remain_enemy_counts -= 1
+      enemy_born_areas = [
+        new MapArea2D(0, 0, 40, 40),
+        new MapArea2D(240, 0, 280, 40),
+        new MapArea2D(480, 0, 520, 40)
+      ]
+      enemy_tank_types = [StupidTank, FishTank, FoolTank, StrongTank]
+      randomed = parseInt(Math.random() * 1000) % _.size(enemy_tank_types)
+      @map.add_tank(enemy_tank_types[randomed],
+        enemy_born_areas[@last_enemy_born_area_index])
+      @last_enemy_born_area_index = (@last_enemy_born_area_index + 1) % 3
+      @update_status()
+    else
+      @user_win()
+
+  check_enemy_win: () ->
+    @enemy_win() if @map.home.destroyed
+    @enemy_win() if (@remain_user_p1_lives == 0 and @remain_user_p2_lives == 0)
+
+  user_win: () ->
+    console.log "user win!"
+
+  enemy_win: () ->
+    console.log "enemy win!"
+
+  born_tanks: (tank) ->
+    if tank instanceof UserP1Tank
+      @born_p1_tank()
+    else if tank instanceof UserP2Tank
+      @born_p2_tank
+    else
+      @born_enemy_tank()
 
   init_map: () ->
     # set as loading
     @map = new Map2D(@game_scene)
+
+    @last_enemy_born_area_index = 0
+
+    @map.bind('map_ready', @born_p1_tank, this)
+    @map.bind('map_ready', @born_p2_tank, this)
+    @map.bind('map_ready', @born_enemy_tank, this)
+    @map.bind('map_ready', @born_enemy_tank, this)
+    @map.bind('map_ready', @born_enemy_tank, this)
+    @map.bind('tank_destroyed', @born_tanks, this)
+    @map.bind('home_destroyed', @check_enemy_win, this)
+
     $.getJSON "/data/terrains.json", (json) =>
       builder = new TiledMapBuilder(@map, json)
       # stage 1
-      builder.setup_stage(1)
+      builder.setup_stage(@current_stage)
       # set as loaded
-      @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
-      @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
-
-      @map.add_tank(StupidTank, new MapArea2D(0, 0, 40, 40))
-      @map.add_tank(FishTank, new MapArea2D(240, 0, 280, 40))
-      @map.add_tank(StrongTank, new MapArea2D(480, 0, 520, 40))
+      @map.trigger('map_ready')
 
   start: () ->
     $(document).unbind "keyup"
@@ -127,7 +192,6 @@ class Game
     })
     @status_panel.add(@frame_rate_label)
 
-    @remain_enemy_counts = 20
     @enemy_symbols = []
     # enemy tanks
     for i in [1..@remain_enemy_counts]
@@ -137,7 +201,6 @@ class Game
       @enemy_symbols.push(symbol)
 
     # user tank status
-    @remain_user_p1_lives = 2
     user_p1_label = new Kinetic.Text({
       x: 540,
       y: 300,
@@ -147,7 +210,7 @@ class Game
       fill: "#000"
     })
     user_p1_symbol = @new_symbol(@status_panel, 'user', 540, 320)
-    user_p1_remain_lives_label = new Kinetic.Text({
+    @user_p1_remain_lives_label = new Kinetic.Text({
       x: 565,
       y: 324,
       fontSize: 16,
@@ -155,9 +218,8 @@ class Game
       fill: "#000"
     })
     @status_panel.add(user_p1_label)
-    @status_panel.add(user_p1_remain_lives_label)
+    @status_panel.add(@user_p1_remain_lives_label)
 
-    @remain_user_p2_lives = 2
     user_p2_label = new Kinetic.Text({
       x: 540,
       y: 350,
@@ -167,7 +229,7 @@ class Game
       fill: "#000"
     })
     user_p2_symbol = @new_symbol(@status_panel, 'user', 540, 370)
-    user_p2_remain_lives_label = new Kinetic.Text({
+    @user_p2_remain_lives_label = new Kinetic.Text({
       x: 565,
       y: 374,
       fontSize: 16,
@@ -175,10 +237,9 @@ class Game
       fill: "#000"
     })
     @status_panel.add(user_p2_label)
-    @status_panel.add(user_p2_remain_lives_label)
+    @status_panel.add(@user_p2_remain_lives_label)
 
     # stage status
-    @current_stage = 1
     @new_symbol(@status_panel, 'stage', 540, 420)
     stage_label = new Kinetic.Text({
       x: 560,
@@ -188,6 +249,13 @@ class Game
       fill: "#000"
     })
     @status_panel.add(stage_label)
+
+  update_status: () ->
+    _.each(_.rest(@enemy_symbols, @remain_enemy_counts), (symbol) ->
+      symbol.destroy()
+    )
+    @user_p1_remain_lives_label.setText(@remain_user_p1_lives)
+    @user_p2_remain_lives_label.setText(@remain_user_p2_lives)
 
   new_symbol: (parent, type, tx, ty) ->
     animations = switch type
