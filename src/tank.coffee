@@ -76,8 +76,8 @@ class Map2D
     @bindings = {}
 
   reset: () ->
-    _.each(@map_units, (unit) -> unit.destroy())
     @bindings = {}
+    _.each(@map_units, (unit) -> unit.destroy())
 
   add_terrain: (terrain_cls, area) ->
     terrain = new terrain_cls(this, area)
@@ -277,8 +277,8 @@ class MapUnit2D
   height: () -> @area.y2 - @area.y1
 
   destroy: () ->
-    return if @destroyed
-    @destroyed = true
+    unless @destroyed
+      @destroyed = true
     @destroy_display()
     @map.delete_map_unit(this)
 
