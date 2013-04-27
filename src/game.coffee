@@ -15,7 +15,7 @@ class Game
   get_config: (key) -> @configs[key]
   init_default_config: () ->
     @configs = {
-      fps: 60, players: 1, current_stage: 1,
+      fps: 60, players: 1, current_stage: 1, stages: 5,
       hi_score: 20000, p1_score: 0, p2_score: 0,
       last_score: 0, player_initial_life: 2, enemies_per_stage: 20,
     }
@@ -37,11 +37,24 @@ class Game
 class Scene
   constructor: (@game) ->
     @layer = new Kinetic.Layer()
-    @layer.setVisible(false)
     @game.canvas.add(@layer)
+    # Kinetic bug fix start
+    sprite = (new Kinetic.Sprite({
+      x: -99,
+      y: -99,
+      image: document.getElementById('tank_sprite'),
+      animation: 'brick',
+      animations: Animations.terrains,
+      frameRate: Animations.rate('brick'),
+      index: 0
+    }))
+    @layer.add(sprite)
+    sprite.start()
+    # Kinetic bug fix end
+    @layer.hide()
 
-  start: () -> @layer.setVisible(true)
-  stop: () -> @layer.setVisible(false)
+  start: () -> @layer.show()
+  stop: () -> @layer.hide()
 
 class WelcomeScene extends Scene
   constructor: (@game) ->
@@ -252,8 +265,8 @@ class WelcomeScene extends Scene
 class StageScene extends Scene
   constructor: (@game) ->
     super(@game)
+    @max_stage = @game.get_config('stages')
     @init_stage_nodes()
-    window.ss = this
 
   start: () ->
     super()
@@ -282,28 +295,29 @@ class StageScene extends Scene
     $(document).unbind "keydown"
 
   adjust_stage: (offset) ->
-    @current_stage += offset
+    @current_stage = (@current_stage + offset + @max_stage) % @max_stage
+    @current_stage = @max_stage if @current_stage == 0
     @game.set_config('current_stage', @current_stage)
     @update_stage_label()
 
   init_stage_nodes: () ->
     # bg
-    # @layer.add(new Kinetic.Rect({
-    #   x: 0,
-    #   y: 0,
-    #   fill: "#999",
-    #   width: 600,
-    #   height: 520
-    # }))
+    @layer.add(new Kinetic.Rect({
+      x: 0,
+      y: 0,
+      fill: "#999",
+      width: 600,
+      height: 520
+    }))
     # label text
     @stage_label = new Kinetic.Text({
-      x: 210,
+      x: 250,
       y: 230,
       fontSize: 22,
       fontStyle: "bold",
       fontFamily: "Courier",
       text: "STAGE #{@current_stage}",
-      fill: "#fff"
+      fill: "#333"
     })
     @layer.add(@stage_label)
 
