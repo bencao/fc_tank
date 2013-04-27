@@ -22,6 +22,13 @@ class Game
 
   kick_off: () -> @switch_scene('welcome')
 
+  next_stage: () ->
+    @configs['current_stage'] = (@configs['current_stage'] + 1
+      + @configs['stages']) % @configs['stages']
+    if @configs['current_stage'] == 0
+      @configs['current_stage'] = @configs['stages']
+    @configs['current_stage']
+
   reset: () ->
     _.each @scenes, (scene) -> scene.stop()
     @current_scene = null
@@ -265,7 +272,6 @@ class WelcomeScene extends Scene
 class StageScene extends Scene
   constructor: (@game) ->
     super(@game)
-    @max_stage = @game.get_config('stages')
     @init_stage_nodes()
 
   start: () ->
@@ -283,22 +289,18 @@ class StageScene extends Scene
       switch event.which
         when 37, 38
           # UP, LEFT
-          @adjust_stage(1)
+          @current_stage = @game.prev_stage()
+          @update_stage_label()
         when 39, 40
           # RIGHT, DOWN
-          @adjust_stage(-1)
+          @current_stage = @game.next_stage()
+          @update_stage_label()
         when 13
           # ENTER
           @game.switch_scene('game')
 
   disable_stage_control: () ->
     $(document).unbind "keydown"
-
-  adjust_stage: (offset) ->
-    @current_stage = (@current_stage + offset + @max_stage) % @max_stage
-    @current_stage = @max_stage if @current_stage == 0
-    @game.set_config('current_stage', @current_stage)
-    @update_stage_label()
 
   init_stage_nodes: () ->
     # bg
@@ -634,16 +636,18 @@ class GameScene extends Scene
     @enemy_win() if (@remain_user_p1_lives == 0 and @remain_user_p2_lives == 0)
 
   user_win: () ->
-    console.log "user win!"
-    setTimeout((() => @game.switch_scene('report')), 5000)
+    # report
+    setTimeout((() =>
+      @game.next_stage()
+      @game.switch_scene('report')
+    ), 5000)
 
   enemy_win: () ->
     # hi score or
     # welcome
-    console.log "enemy win!"
-    # setTimeout(() =>
-    #   @game.switch_scene('welcome')
-    # , 10000)
+    setTimeout(() =>
+      @game.switch_scene('welcome')
+    , 10000)
 
   born_tanks: (tank) ->
     if tank instanceof UserP1Tank
