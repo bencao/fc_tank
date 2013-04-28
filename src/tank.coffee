@@ -238,10 +238,10 @@ class Map2D
     @bindings[event] = [] if _.isEmpty(@bindings[event])
     @bindings[event].push({'scope': scope, 'callback': callback})
 
-  trigger: (event, params={}) ->
+  trigger: (event, params...) ->
     return if _.isEmpty(@bindings[event])
     for handler in @bindings[event]
-      handler.callback.call(handler.scope, params)
+      handler.callback.apply(handler.scope, params)
 
 class MapUnit2D
   group: 'middle'
@@ -311,6 +311,7 @@ class MovableMapUnit2D extends MapUnit2D
     })
 
   update_display: () ->
+    return if @destroyed
     @display_object.setAnimation(@animation_state())
     @display_object.setFrameRate(Animations.rate(@animation_state()))
     @display_object.setRotationDeg(@direction)
@@ -553,7 +554,6 @@ class Tank extends MovableMapUnit2D
     @frozen = false
     super(@map, @area)
     @bom_on_destroy = true
-    @last_milliseconds = false
 
   accept: (map_unit) ->
     (map_unit instanceof Missile) and (map_unit.parent is this)
@@ -593,11 +593,7 @@ class Tank extends MovableMapUnit2D
 
   fire: () ->
     return unless @can_fire()
-    current_milliseconds = (new Date()).getMilliseconds()
-    if @last_milliseconds
-      return if Math.abs(current_milliseconds - @last_milliseconds) < 300
     @missiles.push(@map.add_missile(this))
-    @last_milliseconds = current_milliseconds
 
   can_fire: () -> _.size(@missiles) < @max_missile
 
@@ -633,7 +629,6 @@ class Tank extends MovableMapUnit2D
 
   destroy: () ->
     super()
-    @map.trigger('tank_destroyed', this)
 
 class UserTank extends Tank
   constructor: (@map, @area) ->
@@ -653,6 +648,7 @@ class UserTank extends Tank
       return @max_defend_point - 1
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
+    @map.trigger('tank_destroyed', this, missile.parent) if @dead()
     defend_point
   animation_state: () ->
     return "tank_born" if @initializing
@@ -696,6 +692,7 @@ class EnemyTank extends Tank
       return @max_defend_point - 1
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
+    @map.trigger('tank_destroyed', this, missile.parent) if @dead()
     defend_point
   animation_state: () ->
     return "tank_born" if @initializing
@@ -726,7 +723,7 @@ class StrongTank extends EnemyTank
   type: -> 'strong'
 
 class Missile extends MovableMapUnit2D
-  speed: 0.30
+  speed: 0.40
   constructor: (@map, @parent) ->
     @area = @born_area(@parent)
     super(@map, @area)
