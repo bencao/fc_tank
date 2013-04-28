@@ -288,8 +288,8 @@ class Animations
   }
 
   @rates: {
-    bom: 6,
-    tank_born: 6,
+    bom: 12,
+    tank_born: 7,
 
     user_p1_lv1: 1,
     user_p1_lv1_frozen: 0.5,

@@ -21,9 +21,10 @@ class Game
       score_for_stupid: 100, score_for_fish: 200,
       score_for_fool: 300, score_for_strong: 400,
       last_score: 0, player_initial_life: 2, enemies_per_stage: 20,
+      game_over: false
     }
 
-  kick_off: () -> @switch_scene('report')
+  kick_off: () -> @switch_scene('welcome')
 
   prev_stage: () ->
     @mod_stage(@configs['current_stage'] - 1 + @configs['stages'])
@@ -90,10 +91,24 @@ class WelcomeScene extends Scene
         @update_players()
         @enable_selection_control()
     })
+    @update_numbers()
 
   stop: () ->
     super()
     @disable_selection_control()
+    @prepare_for_game_scene()
+
+  update_numbers: () ->
+    @numbers_label.setText("I- #{@game.get_config('p1_score')}" +
+        "  II- #{@game.get_config('p2_score')}" +
+        "  HI- #{@game.get_config('hi_score')}")
+
+  prepare_for_game_scene: () ->
+    @game.set_config('game_over', false)
+    @game.set_config('p1_score', 0)
+    @game.set_config('p2_score', 0)
+    @game.set_config('p1_killed_enemies', [])
+    @game.set_config('p2_killed_enemies', [])
 
   enable_selection_control: () ->
     $(document).bind "keydown", (event) =>
@@ -123,7 +138,7 @@ class WelcomeScene extends Scene
 
   init_statics: () ->
     # scores
-    @static_group.add(new Kinetic.Text({
+    @numbers_label = new Kinetic.Text({
       x: 40,
       y: 40,
       fontSize: 22,
@@ -133,7 +148,8 @@ class WelcomeScene extends Scene
         "  II- #{@game.get_config('p2_score')}" +
         "  HI- #{@game.get_config('hi_score')}",
       fill: "#fff"
-    }))
+    })
+    @static_group.add(@numbers_label)
     # logo
     image = document.getElementById('tank_sprite')
     for area in [
@@ -344,22 +360,54 @@ class ReportScene extends Scene
 
   start: () ->
     super()
-    @load_numbers()
-    # add
+    @update_numbers()
+    setTimeout(() =>
+      if @game.get_config('game_over')
+        @game.switch_scene('welcome')
+      else
+        @game.switch_scene('stage')
+    , 5000)
 
   stop: () ->
     super()
-    # add
 
-  load_numbers: () ->
-    @p1_score_label.setText(@game.get_config('p1_score'))
-    @p2_score_label.setText(@game.get_config('p2_score'))
+  update_numbers: () ->
+    @p2_group.show() if @game.get_config('players') == 1
     p1_kills = @game.get_config('p1_killed_enemies')
-    p1_numbers = {stupid: 0, fish: 0, fool: 0, strong: 0}
-    _.each(p1_kills, (type) -> p1_numbers[type] += 1)
+    p1_numbers = {
+      stupid: 0, stupid_pts: 0,
+      fish: 0, fish_pts: 0,
+      fool: 0, fool_pts: 0,
+      strong: 0, strong_pts: 0,
+      total: 0, total_pts: 0
+    }
+    p2_numbers = _.cloneDeep(p1_numbers)
+    _.each(p1_kills, (type) =>
+      p1_numbers[type] += 1
+      p1_numbers["#{type}_pts"] += @game.get_config("score_for_#{type}")
+      p1_numbers['total'] += 1
+      p1_numbers['total_pts'] += @game.get_config("score_for_#{type}")
+    )
     p2_kills = @game.get_config('p2_killed_enemies')
-    p2_numbers = {stupid: 0, fish: 0, fool: 0, strong: 0}
-    _.each(p2_kills, (type) -> p2_numbers[type] += 1)
+
+    _.each(p2_kills, (type) ->
+      p2_numbers[type] += 1
+      p2_numbers["#{type}_pts"] += @game.get_config("score_for_#{type}")
+      p2_numbers['total'] += 1
+      p2_numbers['total_pts'] += @game.get_config("score_for_#{type}")
+    )
+    for tank, number of p1_numbers
+      @p1_number_labels[tank].setText(number) unless tank == 'total_pts'
+    for tank, number of p2_numbers
+      @p2_number_labels[tank].setText(number) unless tank == 'total_pts'
+    p1_final_score = @game.get_config('p1_score') + p1_numbers.total_pts
+    p2_final_score = @game.get_config('p2_score') + p2_numbers.total_pts
+    @game.set_config('p1_score', p1_final_score)
+    @game.set_config('p2_score', p2_final_score)
+    @p1_score_label.setText(p1_final_score)
+    @p2_score_label.setText(p2_final_score)
+    @game.set_config('hi_score', _.max([
+      p1_final_score, p2_final_score, @game.get_config('hi_score')]))
 
   init_scene: () ->
     # Hi score texts
@@ -497,6 +545,8 @@ class ReportScene extends Scene
     @p1_number_labels['strong_pts'] = p1_number_pts.clone({y: 390})
     @p1_group.add(@p1_number_labels['strong'])
     @p1_group.add(@p1_number_labels['strong_pts'])
+    @p1_number_labels['total'] = p1_number.clone({y: 430})
+    @p1_group.add(@p1_number_labels['total'])
 
     @p2_group = new Kinetic.Group()
     @layer.add(@p2_group)
@@ -569,6 +619,8 @@ class ReportScene extends Scene
     @p2_number_labels['strong_pts'] = p2_number_pts.clone({y: 390})
     @p2_group.add(@p2_number_labels['strong'])
     @p2_group.add(@p2_number_labels['strong_pts'])
+    @p2_number_labels['total'] = p2_number.clone({y: 430})
+    @p2_group.add(@p2_number_labels['total'])
 
     @p2_group.hide()
 
@@ -868,7 +920,8 @@ class GameScene extends Scene
       @check_user_win()
 
   check_user_win: () ->
-    @user_win() if @remain_enemy_counts == 0 and _.size(@map.enemy_tanks()) == 0
+    if @remain_enemy_counts == 0 and _.size(@map.enemy_tanks()) == 0
+      @user_win()
 
   check_enemy_win: () ->
     @enemy_win() if @map.home().destroyed
@@ -879,6 +932,7 @@ class GameScene extends Scene
     @winner = 'user'
     # report
     setTimeout((() =>
+      @game.set_config('game_over', false)
       @game.next_stage()
       @game.switch_scene('report')
     ), 5000)
@@ -889,15 +943,22 @@ class GameScene extends Scene
     # hi score or
     # welcome
     setTimeout(() =>
-      @game.switch_scene('welcome')
+      @game.set_config('game_over', true)
+      @game.switch_scene('report')
     , 5000)
 
-  born_tanks: (tank) ->
+  born_tanks: (tank, killed_by_tank) ->
     if tank instanceof UserP1Tank
       @born_p1_tank()
     else if tank instanceof UserP2Tank
       @born_p2_tank()
     else
+      if killed_by_tank instanceof UserP1Tank
+        p1_kills = @game.get_config('p1_killed_enemies')
+        p1_kills.push(tank.type())
+      else
+        p2_kills = @game.get_config('p2_killed_enemies')
+        p2_kills.push(tank.type())
       @born_enemy_tank()
 
 class TiledMapBuilder
@@ -912,7 +973,9 @@ class TiledMapBuilder
         @tile_properties[tileset.firstgid + parseInt(gid)] = props
   setup_stage: (stage) ->
       home_layer = _.detect(@json.layers, (layer) -> layer.name is "Home")
-      stage_layer = _.detect(@json.layers, (layer) -> layer.name is "Stage #{stage}")
+      stage_layer = _.detect(@json.layers, (layer) ->
+        layer.name is "Stage #{stage}"
+      )
       _.each [home_layer, stage_layer], (layer) =>
         h = 0
         while h < @map_height
