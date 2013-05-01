@@ -16,12 +16,11 @@ class Game
   init_default_config: () ->
     @configs = {
       fps: 60, players: 1, current_stage: 1, stages: 5,
-      hi_score: 20000, p1_score: 0, p2_score: 0,
+      game_over: false, hi_score: 20000, p1_score: 0, p2_score: 0,
       p1_killed_enemies: [], p2_killed_enemies: [],
       score_for_stupid: 100, score_for_fish: 200,
       score_for_fool: 300, score_for_strong: 400,
-      last_score: 0, player_initial_life: 2, enemies_per_stage: 20,
-      game_over: false
+      last_score: 0, player_initial_life: 2, enemies_per_stage: 20
     }
 
   kick_off: () -> @switch_scene('welcome')
