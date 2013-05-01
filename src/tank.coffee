@@ -170,6 +170,13 @@ class Map2D
     vy = parseInt(area.y1 * 4 / @default_height)
     @vertexes[vx][vy]
 
+  random_vertex: () ->
+    vx = parseInt(Math.random() * @vertexes_rows)
+    vx = (vx - 1) if vx % 2 == 1
+    vy = parseInt(Math.random() * @vertexes_columns)
+    vy = (vy - 1) if vy % 2 == 1
+    @vertexes[vx][vy]
+
   weight: (tank, from, to) ->
     sub_area = _.first(to.sub(from))
     terrain_units = _.select(@units_at(sub_area), (unit) ->
@@ -676,8 +683,9 @@ class UserP2Tank extends UserTank
 class EnemyTank extends Tank
   constructor: (@map, @area) ->
     super(@map, @area)
-    @max_hp = 10
+    @max_hp = 5
     @hp = 1 + parseInt(Math.random() * (@max_hp - 1))
+    @iq = 20 #parseInt(Math.random() * 60)
     @gift_counts = parseInt(Math.random() * @max_hp / 2)
     @direction = 180
     @commander = new EnemyAICommander(this)
@@ -1023,19 +1031,30 @@ class EnemyAICommander extends Commander
   next: ->
     # move towards home
     if _.size(@path) == 0
-      @path = @map.shortest_path(@map_unit, @current_vertex(), @map.home_vertex)
+      end_vertex = if (Math.random() * 100) <= @map_unit.iq
+        @map.home_vertex
+      else
+        @map.random_vertex()
+      start_date = (new Date()).getMilliseconds()
+      @path = @map.shortest_path(@map_unit, @current_vertex(), end_vertex)
+      end_date = (new Date()).getMilliseconds()
+      console.log "path calc start=#{@current_vertex().to_s()}"
+      console.log "path calc end=#{end_vertex.to_s()}"
+      console.log "path calc take=#{(1000 + end_date - start_date) % 1000}"
       @next_move()
-      setTimeout((() => @reset_path()), 3000 + Math.random()*1000)
+      setTimeout((() => @reset_path()), 4000 + Math.random()*2000)
     else
       @next_move() if @current_vertex().equals(@target_vertex)
 
     # fire if can't move
     if @map_unit.can_fire() and @last_area and @last_area.equals(@map_unit.area)
-      @fire()
-    # fire if user or home in front of me
-    targets = _.compact([@map.p1_tank(), @map.p2_tank(), @map.home()])
-    for target in targets
-      @fire() if @in_attack_range(target.area)
+      @fire() if Math.random() < 0.08
+    else
+      @fire() if Math.random() < 0.01
+    # # fire if user or home in front of me
+    # targets = _.compact([@map.p1_tank(), @map.p2_tank(), @map.home()])
+    # for target in targets
+    #   @fire() if @in_attack_range(target.area)
 
     @last_area = @map_unit.area
 
