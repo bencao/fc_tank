@@ -4,27 +4,35 @@
   <meta charset="utf-8">
   <title>QUnit Test for Tank</title>
   <link rel="stylesheet" href="lib/qunit-v1.11.0.css">
+  <style>
+    #tank_sprite, #canvas { display: none;}
+  </style>
   <script type='text/javascript' src="lib/qunit-v1.11.0.js"></script>
   <script type="text/javascript" src="../js/coffeescript-v1.6.2.min.js"></script>
   <script type='text/javascript' src='../js/jquery-v1.9.1.min.js'></script>
   <script type='text/javascript' src='../js/lodash-v1.1.1.min.js'></script>
-  <script type='text/javascript' src="../js/ocanvas-v2.3.1.min.js"></script>
+  <script type='text/javascript' src="../js/kinetic-v4.4.1.min.js"></script>
   <script type="text/coffeescript">
-    scriptsToTest = ["../src/constant.coffee", "../src/tank.coffee"]
+    scriptsToTest = [
+      "../src/binary_heap.coffee",
+      "../src/constant.coffee",
+      "../src/tank.coffee",
+      "../src/game.coffee"
+    ]
     tests = ["test.coffee"]
     loadCoffee = (files) ->
-        $head = $ "head"
-        compile_and_add = (content) ->
-          compiled = CoffeeScript.compile content, {bare: on}
-          $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
-        load = (file) ->
-          $.ajax {
-            url: file,
-            success: compile_and_add,
-            dataType: 'text'
-            async: false
-          }
-        load file for file in files
+      $head = $("head")
+      compile_and_add = (content) ->
+        compiled = CoffeeScript.compile content, {bare: on}
+        $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
+      load = (file) ->
+        $.ajax {
+          url: file,
+          success: compile_and_add,
+          dataType: 'text'
+          async: false
+        }
+      load file for file in files
     loadCoffee scriptsToTest
     loadCoffee tests
   </script>
@@ -32,6 +40,7 @@
 <body>
   <div id="qunit"></div>
   <div id="qunit-fixture"></div>
-
+  <img id="tank_sprite" alt="tanks" width="400" height="360" src="../image/tanks.png" />
+  <div id="canvas"></div>
 </body>
 </html>
