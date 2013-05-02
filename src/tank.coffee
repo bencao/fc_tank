@@ -228,8 +228,8 @@ class Map2D
 
   extract_min: (vertexes, d) ->
     _.min(vertexes, (vertex) =>
-      d[vertex.vx][vertex.vy] +
-        (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
+      d[vertex.vx][vertex.vy]
+        # + (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
     )
 
   calculate_shortest_path_from_pi: (pi, d, start_vertex, end_vertex) ->
