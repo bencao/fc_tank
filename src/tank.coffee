@@ -191,19 +191,21 @@ class Map2D
 
   shortest_path: (tank, start_vertex, end_vertex) ->
     [d, pi] = @intialize_single_source()
-    d[start_vertex.vx][start_vertex.vy] = 0
+    d[start_vertex.vx][start_vertex.vy].key = 0
     # dijkstra shortest path
     # searched_vertexes = []
-    remain_vertexes = _.flatten(@vertexes)
-    while _.size(remain_vertexes) > 0
-      u = @extract_min(remain_vertexes, d)
-      remain_vertexes = _.without(remain_vertexes, u)
+    heap = new BinomialHeap()
+    for x in _.range(0, @vertexes_columns)
+      for y in _.range(0, @vertexes_rows)
+        heap.insert(d[x][y])
+    until heap.empty()
+      u = heap.extract_min().satellite
       # searched_vertexes.push u
       _.each(u.siblings, (v) =>
-        @relax(d, pi, u, v, @weight(tank, u, v))
+        @relax(heap, d, pi, u, v, @weight(tank, u, v))
       )
       break if u is end_vertex
-    @calculate_shortest_path_from_pi(pi, d, start_vertex, end_vertex)
+    @calculate_shortest_path_from_pi(pi, start_vertex, end_vertex)
 
   intialize_single_source: () ->
     d = []
@@ -212,27 +214,27 @@ class Map2D
       column_ds = []
       column_pi = []
       for y in _.range(0, @vertexes_rows)
-        column_ds.push(@infinity)
+        column_ds.push(new BinomialHeapNode(@vertexes[x][y], @infinity))
         column_pi.push(null)
       d.push(column_ds)
       pi.push(column_pi)
     [d, pi]
 
-  relax: (d, pi, u, v, w) ->
-    # a area like [30, 50, 70, 90] is not movable, so do not relax here
+  relax: (heap, d, pi, u, v, w) ->
+    # an area like [30, 50, 70, 90] is not movable, so do not relax here
     return if v.vx % 2 == 1 and u.vx % 2 == 1
     return if v.vy % 2 == 1 and u.vy % 2 == 1
-    if d[v.vx][v.vy] > d[u.vx][u.vy] + w
-      d[v.vx][v.vy] = d[u.vx][u.vy] + w
+    if d[v.vx][v.vy].key > d[u.vx][u.vy].key + w
+      heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w)
       pi[v.vx][v.vy] = u
 
-  extract_min: (vertexes, d) ->
+  extract_min: (heap, d) ->
     _.min(vertexes, (vertex) =>
       d[vertex.vx][vertex.vy]
         # + (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
     )
 
-  calculate_shortest_path_from_pi: (pi, d, start_vertex, end_vertex) ->
+  calculate_shortest_path_from_pi: (pi, start_vertex, end_vertex) ->
     reverse_paths = []
     v = end_vertex
     until pi[v.vx][v.vy] is null
