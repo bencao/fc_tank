@@ -1,10 +1,3 @@
-class Direction
-  @UP: 0
-  @DOWN: 180
-  @LEFT: 270
-  @RIGHT: 90
-  @all: () -> [@UP, @DOWN, @LEFT, @RIGHT]
-
 class Point
   constructor: (@x, @y) ->
 
@@ -23,16 +16,16 @@ class MapArea2D
     ], (candidate_area) -> candidate_area.valid())
   collide: (area) ->
     not (@x2 <= area.x1 or @y2 <= area.y1 or @x1 >= area.x2 or @y1 >= area.y2)
-  multiply: (direction, factor) ->
+  extend: (direction, ratio) ->
     switch direction
       when Direction.UP
-        new MapArea2D(@x1, @y1 - factor * @height(), @x2, @y2)
+        new MapArea2D(@x1, @y1 - ratio * @height(), @x2, @y2)
       when Direction.RIGHT
-        new MapArea2D(@x1, @y1, @x2 + factor * @width(), @y2)
+        new MapArea2D(@x1, @y1, @x2 + ratio * @width(), @y2)
       when Direction.DOWN
-        new MapArea2D(@x1, @y1, @x2, @y2 + factor * @height())
+        new MapArea2D(@x1, @y1, @x2, @y2 + ratio * @height())
       when Direction.LEFT
-        new MapArea2D(@x1 - factor * @width(), @y1, @x2, @y2)
+        new MapArea2D(@x1 - ratio * @width(), @y1, @x2, @y2)
   equals: (area) ->
     return false unless area instanceof MapArea2D
     area.x1 == @x1 and area.x2 == @x2 and area.y1 == @y1 and area.y2 == @y2
@@ -79,6 +72,12 @@ class Map2D
     @vertexes_rows = 4 * @max_y / @default_height - 3
     @vertexes = @init_vertexes()
     @home_vertex = @vertexes[24][48]
+
+    @bindings = {}
+
+  reset: () ->
+    @bindings = {}
+    _.each(@map_units, (unit) -> unit.destroy())
 
   add_terrain: (terrain_cls, area) ->
     terrain = new terrain_cls(this, area)
@@ -171,6 +170,13 @@ class Map2D
     vy = parseInt(area.y1 * 4 / @default_height)
     @vertexes[vx][vy]
 
+  random_vertex: () ->
+    vx = parseInt(Math.random() * @vertexes_rows)
+    vx = (vx - 1) if vx % 2 == 1
+    vy = parseInt(Math.random() * @vertexes_columns)
+    vy = (vy - 1) if vy % 2 == 1
+    @vertexes[vx][vy]
+
   weight: (tank, from, to) ->
     sub_area = _.first(to.sub(from))
     terrain_units = _.select(@units_at(sub_area), (unit) ->
@@ -185,19 +191,21 @@ class Map2D
 
   shortest_path: (tank, start_vertex, end_vertex) ->
     [d, pi] = @intialize_single_source()
-    d[start_vertex.vx][start_vertex.vy] = 0
+    d[start_vertex.vx][start_vertex.vy].key = 0
     # dijkstra shortest path
     # searched_vertexes = []
-    remain_vertexes = _.flatten(@vertexes)
-    while _.size(remain_vertexes) > 0
-      u = @extract_min(remain_vertexes, d)
-      remain_vertexes = _.without(remain_vertexes, u)
+    heap = new BinomialHeap()
+    for x in _.range(0, @vertexes_columns)
+      for y in _.range(0, @vertexes_rows)
+        heap.insert(d[x][y])
+    until heap.is_empty()
+      u = heap.extract_min().satellite
       # searched_vertexes.push u
       _.each(u.siblings, (v) =>
-        @relax(d, pi, u, v, @weight(tank, u, v))
+        @relax(heap, d, pi, u, v, @weight(tank, u, v))
       )
       break if u is end_vertex
-    @calculate_shortest_path_from_pi(pi, d, start_vertex, end_vertex)
+    @calculate_shortest_path_from_pi(pi, start_vertex, end_vertex)
 
   intialize_single_source: () ->
     d = []
@@ -206,27 +214,22 @@ class Map2D
       column_ds = []
       column_pi = []
       for y in _.range(0, @vertexes_rows)
-        column_ds.push(@infinity)
+        column_ds.push(new BinomialHeapNode(@vertexes[x][y], @infinity))
         column_pi.push(null)
       d.push(column_ds)
       pi.push(column_pi)
     [d, pi]
 
-  relax: (d, pi, u, v, w) ->
-    # a area like [30, 50, 70, 90] is not movable, so do not relax here
+  # A start = (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
+  relax: (heap, d, pi, u, v, w) ->
+    # an area like [30, 50, 70, 90] is not movable, so do not relax here
     return if v.vx % 2 == 1 and u.vx % 2 == 1
     return if v.vy % 2 == 1 and u.vy % 2 == 1
-    if d[v.vx][v.vy] > d[u.vx][u.vy] + w
-      d[v.vx][v.vy] = d[u.vx][u.vy] + w
+    if d[v.vx][v.vy].key > d[u.vx][u.vy].key + w
+      heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w)
       pi[v.vx][v.vy] = u
 
-  extract_min: (vertexes, d) ->
-    _.min(vertexes, (vertex) =>
-      d[vertex.vx][vertex.vy] +
-        (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
-    )
-
-  calculate_shortest_path_from_pi: (pi, d, start_vertex, end_vertex) ->
+  calculate_shortest_path_from_pi: (pi, start_vertex, end_vertex) ->
     reverse_paths = []
     v = end_vertex
     until pi[v.vx][v.vy] is null
@@ -235,45 +238,37 @@ class Map2D
     reverse_paths.push(start_vertex)
     reverse_paths.reverse()
 
+  bind: (event, callback, scope=this) ->
+    @bindings[event] = [] if _.isEmpty(@bindings[event])
+    @bindings[event].push({'scope': scope, 'callback': callback})
+
+  trigger: (event, params...) ->
+    return if _.isEmpty(@bindings[event])
+    for handler in @bindings[event]
+      handler.callback.apply(handler.scope, params)
+
 class MapUnit2D
   group: 'middle'
-
-  max_depend_point: 9
-  type: null
+  max_defend_point: 9
 
   constructor: (@map, @area) ->
     @default_width = @map.default_width
     @default_height = @map.default_height
     @bom_on_destroy = false
-    @new_display()
+    @destroyed = false
+    @new_display() # should be overwrite
+    @after_new_display()
 
-  new_display: () ->
-    @display_object = new Kinetic.Sprite({
-      x: @area.x1,
-      y: @area.y1,
-      image: @map.image,
-      animation: @current_animation(),
-      animations: @animations(),
-      frameRate: @current_frame_rate(),
-      index: 0
-    })
+  after_new_display: () ->
     @map.groups[@group].add(@display_object)
     @display_object.start()
 
-  animations: () -> {
-    bom: [
-      {x: 360, y: 340, width: 40, height: 40},
-      {x: 120, y: 340, width: 40, height: 40},
-      {x: 160, y: 340, width: 40, height: 40},
-      {x: 200, y: 340, width: 40, height: 40}
-    ]
-  }
-  current_frame_rate: () -> 1
-  current_animation: () -> null
   destroy_display: () ->
     if @bom_on_destroy
       @display_object.setOffset(20, 20)
+      @display_object.setAnimations(Animations.movables)
       @display_object.setAnimation('bom')
+      @display_object.setFrameRate(Animations.rate('bom'))
       @display_object.start()
       @display_object.afterFrame 3, () =>
         @display_object.stop()
@@ -286,6 +281,8 @@ class MapUnit2D
   height: () -> @area.y2 - @area.y1
 
   destroy: () ->
+    unless @destroyed
+      @destroyed = true
     @destroy_display()
     @map.delete_map_unit(this)
 
@@ -302,29 +299,25 @@ class MovableMapUnit2D extends MapUnit2D
     @commander = new Commander(this)
     super(@map, @area)
 
-  current_frame_rate: () -> 6
-
   new_display: () ->
     center = @area.center()
     @display_object = new Kinetic.Sprite({
       x: center.x,
       y: center.y,
       image: @map.image,
-      animation: @current_animation(),
-      animations: @animations(),
-      frameRate: @current_frame_rate(),
+      animation: @animation_state(),
+      animations: Animations.movables,
+      frameRate: Animations.rate(@animation_state()),
       index: 0,
-      offset: {
-        x: @area.width()/2,
-        y: @area.height()/2
-      },
-      rotationDeg: @direction
+      offset: {x: @area.width()/2, y: @area.height()/2},
+      rotationDeg: @direction,
+      map_unit: this
     })
-    @map.groups[@group].add(@display_object)
-    @display_object.start()
 
   update_display: () ->
-    @display_object.setAnimation(@current_animation())
+    return if @destroyed
+    @display_object.setAnimation(@animation_state())
+    @display_object.setFrameRate(Animations.rate(@animation_state()))
     @display_object.setRotationDeg(@direction)
     center = @area.center()
     @display_object.setAbsolutePosition(center.x, center.y)
@@ -420,19 +413,22 @@ class MovableMapUnit2D extends MapUnit2D
 
 class Terrain extends MapUnit2D
   accept: (map_unit) -> false
-  animations: () ->
-    _.merge(super(), {
-      static: [
-        {
-          x: @image_x_offset() + @area.x1 % 40,
-          y: 240 + @area.y1 % 40,
-          width: @area.width(),
-          height: @area.height()
-        }
-      ]
+  new_display: () ->
+    animations = _.cloneDeep(Animations.terrain(@type()))
+    for animation in animations
+      animation.x += (@area.x1 % 40)
+      animation.y += (@area.y1 % 40)
+      animation.width = @area.width()
+      animation.height = @area.height()
+    @display_object = new Kinetic.Sprite({
+      x: @area.x1,
+      y: @area.y1,
+      image: @map.image,
+      index: 0,
+      animation: 'static',
+      animations: {static: animations},
+      map_unit: this
     })
-  current_animation: () -> 'static'
-  image_x_offset: -> 0
 
 class BrickTerrain extends Terrain
   type: -> "brick"
@@ -447,7 +443,6 @@ class BrickTerrain extends Terrain
     @destroy()
     # return cost of destroy
     1
-  image_x_offset: -> 0
 
 class IronTerrain extends Terrain
   type: -> "iron"
@@ -458,15 +453,14 @@ class IronTerrain extends Terrain
       when 2
         20
   defend: (missile, destroy_area) ->
-    return @max_depend_point if missile.power < 2
-    double_destroy_area = destroy_area.multiply(missile.direction, 1)
+    return @max_defend_point if missile.power < 2
+    double_destroy_area = destroy_area.extend(missile.direction, 1)
     pieces = @area.sub(double_destroy_area)
     _.each(pieces, (piece) =>
       @map.add_terrain(IronTerrain, piece)
     )
     @destroy()
     2
-  image_x_offset: -> 120
 
 class WaterTerrain extends Terrain
   accept: (map_unit) ->
@@ -482,40 +476,46 @@ class WaterTerrain extends Terrain
         4
       when false
         @map.infinity
-  image_x_offset: -> 240
 
 class IceTerrain extends Terrain
   accept: (map_unit) -> true
   type: -> "ice"
   group: "back"
   weight: (tank) -> 4
-  image_x_offset: -> 60
 
 class GrassTerrain extends Terrain
   accept: (map_unit) -> true
   type: -> "grass"
   group: "front"
   weight: (tank) -> 4
-  image_x_offset: -> 180
 
 class HomeTerrain extends Terrain
-  is_defeated: false
+  constructor: (@map, @area) ->
+    super(@map, @area)
   type: -> "home"
   accept: (map_unit) ->
-    return true if @is_defeated and map_unit instanceof Missile
+    return true if @destroyed and map_unit instanceof Missile
     false
   weight: (tank) -> 0
-  current_animation: () ->
-    if @is_defeated then 'defeated' else 'origin'
-  animations: () ->
-    {
-      origin: [{x: 320, y: 240, width: 40, height: 40}],
-      defeated: [{x: 360, y: 240, width: 40, height: 40}]
-    }
+  new_display: () ->
+    @display_object = new Kinetic.Sprite({
+      x: @area.x1,
+      y: @area.y1,
+      image: @map.image,
+      index: 0,
+      animations: {
+        origin: Animations.terrain('home_origin'),
+        destroyed: Animations.terrain('home_destroyed')
+      },
+      animation: 'origin',
+      map_unit: this
+    })
   defend: (missile, destroy_area) ->
-    @is_defeated = true
-    @display_object.setAnimation(@current_animation())
-    @max_depend_point
+    return @max_defend_point if @destroyed
+    @destroyed = true
+    @display_object.setAnimation('destroyed')
+    @map.trigger('home_destroyed')
+    @max_defend_point
 
   defend_terrains: () ->
     home_defend_area = new MapArea2D(220, 460, 300, 520)
@@ -555,7 +555,6 @@ class Tank extends MovableMapUnit2D
     @ship = false
     @guard = false
     @initializing = true
-    @cooling = false
     @frozen = false
     super(@map, @area)
     @bom_on_destroy = true
@@ -584,8 +583,7 @@ class Tank extends MovableMapUnit2D
         @max_missile = 2
     @update_display()
 
-  hp_up: (lives) ->
-    hp_down(-lives)
+  hp_up: (lives) -> @hp_down(-lives)
 
   hp_down: (lives) ->
     @hp -= lives
@@ -598,14 +596,10 @@ class Tank extends MovableMapUnit2D
   on_ship: (@ship) -> @update_display()
 
   fire: () ->
-    if @can_fire()
-      @missiles.push(@map.add_missile(this))
-      if _.size(@missiles) == @max_missile
-        @cooling = true
-        setTimeout((() => @cooling = false), 200)
+    return unless @can_fire()
+    @missiles.push(@map.add_missile(this))
 
-  can_fire: () ->
-    (not @cooling) and _.size(@missiles) < @max_missile
+  can_fire: () -> _.size(@missiles) < @max_missile
 
   freeze: () ->
     @frozen = true
@@ -631,23 +625,14 @@ class Tank extends MovableMapUnit2D
 
   delete_missile: (missile) -> @missiles = _.without(@missiles, missile)
 
-  new_display: () ->
+  after_new_display: () ->
     super()
-    @display_object.setAnimation('tank_born')
     @display_object.afterFrame 4, () =>
-      @display_object.setAnimation(@current_animation())
       @initializing = false
+      @update_display()
 
-  animations: () ->
-    _.merge(super(), {
-      tank_born: [
-        {x: 360, y: 340, width: 40, height: 40},
-        {x: 0, y: 340, width: 40, height: 40},
-        {x: 40, y: 340, width: 40, height: 40},
-        {x: 0, y: 340, width: 40, height: 40},
-        {x: 80, y: 340, width: 40, height: 40}
-      ]
-    })
+  destroy: () ->
+    super()
 
 class UserTank extends Tank
   constructor: (@map, @area) ->
@@ -660,69 +645,21 @@ class UserTank extends Tank
   defend: (missile, destroy_area) ->
     if missile.parent instanceof UserTank
       @freeze() unless missile.parent is this
-      return @max_depend_point - 1
-    return @max_depend_point - 1 if @guard
+      return @max_defend_point - 1
+    return @max_defend_point - 1 if @guard
     if @ship
       @on_ship(false)
-      return @max_depend_point - 1
+      return @max_defend_point - 1
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
+    @map.trigger('tank_destroyed', this, missile.parent) if @dead()
     defend_point
-  current_animation: () ->
-    if @guard
-      "lv" + @level + "_with_guard"
-    else if @frozen
-      "lv" + @level + "_frozen"
-    else if @ship
-      "lv" + @level + "_with_ship"
-    else
-      "lv" + @level
-  animations: () ->
-    _.merge(super(), {
-      lv1: [
-        {x: 0, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv1_frozen: [
-        {x: 0, y: @image_y_offset(), width: 40, height: 40},
-        {x: 360, y: 320, width: 40, height: 40}
-      ],
-      lv1_with_ship: [
-        {x: 40, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv1_with_guard: [
-        {x: 0, y: @image_y_offset(), width: 40, height: 40},
-        {x: 80, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv2: [
-        {x: 120, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv2_frozen: [
-        {x: 120, y: @image_y_offset(), width: 40, height: 40},
-        {x: 360, y: 320, width: 40, height: 40}
-      ],
-      lv2_with_ship: [
-        {x: 160, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv2_with_guard: [
-        {x: 120, y: @image_y_offset(), width: 40, height: 40},
-        {x: 200, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv3: [
-        {x: 240, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv3_frozen: [
-        {x: 240, y: @image_y_offset(), width: 40, height: 40},
-        {x: 360, y: 320, width: 40, height: 40}
-      ],
-      lv3_with_ship: [
-        {x: 280, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      lv3_with_guard: [
-        {x: 240, y: @image_y_offset(), width: 40, height: 40},
-        {x: 320, y: @image_y_offset(), width: 40, height: 40}
-      ]
-    })
-  image_y_offset: -> 0
+  animation_state: () ->
+    return "tank_born" if @initializing
+    return "#{@type()}_lv#{@level}_with_guard" if @guard
+    return "#{@type()}_lv#{@level}_frozen" if @frozen
+    return "#{@type()}_lv#{@level}_with_ship" if @ship
+    "#{@type()}_lv#{@level}"
 
 class UserP1Tank extends UserTank
   constructor: (@map, @area) ->
@@ -731,7 +668,6 @@ class UserP1Tank extends UserTank
       up: 38, down: 40, left: 37, right: 39, fire: 70
     })
   type: -> 'user_p1'
-  image_y_offset: -> 0
 
 class UserP2Tank extends UserTank
   constructor: (@map, @area) ->
@@ -740,13 +676,13 @@ class UserP2Tank extends UserTank
       up: 73, down: 75, left: 74, right: 76, fire: 72
     })
   type: -> 'user_p2'
-  image_y_offset: -> 40
 
 class EnemyTank extends Tank
   constructor: (@map, @area) ->
     super(@map, @area)
-    @max_hp = 10
+    @max_hp = 5
     @hp = 1 + parseInt(Math.random() * (@max_hp - 1))
+    @iq = 20 #parseInt(Math.random() * 60)
     @gift_counts = parseInt(Math.random() * @max_hp / 2)
     @direction = 180
     @commander = new EnemyAICommander(this)
@@ -755,91 +691,44 @@ class EnemyTank extends Tank
     @gift_counts -= lives
     super(lives)
   defend: (missile, destroy_area) ->
-    return @max_depend_point - 1 if missile.parent instanceof EnemyTank
+    return @max_defend_point - 1 if missile.parent instanceof EnemyTank
     if @ship
       @on_ship(false)
-      return @max_depend_point - 1
+      return @max_defend_point - 1
     defend_point = _.min(@hp, missile.power)
     @hp_down(missile.power)
+    @map.trigger('tank_destroyed', this, missile.parent) if @dead()
     defend_point
-  animations: () ->
-    _.merge(super(), {
-      lv3: [
-        {x: 360, y: 0, width: 40, height: 40}
-      ],
-      lv3_with_ship: [
-        {x: 360, y: 40, width: 40, height: 40}
-      ]
-    })
-  current_animation: () ->
+  animation_state: () ->
+    return "tank_born" if @initializing
     prefix = if @level == 3
-      'lv3'
+      'enemy_lv3'
     else if @gift_counts > 0
-      'with_gift'
+      "#{@type()}_with_gift"
     else
-      'hp' + _.min([@hp, 4])
+      "#{@type()}_hp" + _.min([@hp, 4])
     prefix + (if @ship then "_with_ship" else "")
-  animations: () ->
-    _.merge(super(), {
-      hp1: [
-        {x: 0, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp1_with_ship: [
-        {x: 40, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp2: [
-        {x: 80, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp2_with_ship: [
-        {x: 120, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp3: [
-        {x: 160, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp3_with_ship: [
-        {x: 200, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp4: [
-        {x: 240, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      hp4_with_ship: [
-        {x: 280, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      with_gift: [
-        {x: 320, y: @image_y_offset(), width: 40, height: 40},
-        {x: 0, y: @image_y_offset(), width: 40, height: 40}
-      ],
-      with_gift_with_ship: [
-        {x: 360, y: @image_y_offset(), width: 40, height: 40},
-        {x: 40, y: @image_y_offset(), width: 40, height: 40}
-      ]
-    })
-  image_y_offset: -> 80
   gift_up: (gifts) -> @gift_counts += gifts
   handle_fire: (cmd) -> super(cmd) unless @frozen
 
 class StupidTank extends EnemyTank
   speed: 0.07
   type: -> 'stupid'
-  image_y_offset: -> 80
 
 class FoolTank extends EnemyTank
   speed: 0.07
   type: -> 'fool'
-  image_y_offset: -> 120
 
 class FishTank extends EnemyTank
   speed: 0.13
   type: -> 'fish'
-  image_y_offset: -> 160
 
 class StrongTank extends EnemyTank
   speed: 0.07
   type: -> 'strong'
-  image_y_offset: -> 200
 
 class Missile extends MovableMapUnit2D
-  speed: 0.30
+  speed: 0.40
   constructor: (@map, @parent) ->
     @area = @born_area(@parent)
     super(@map, @area)
@@ -879,13 +768,7 @@ class Missile extends MovableMapUnit2D
     super()
     @parent.delete_missile(this)
 
-  animations: () ->
-    _.merge(super(), {
-      static: [
-        {x: 250, y: 350, width: 20, height: 20}
-      ]
-    })
-  current_animation: () -> 'static'
+  animation_state: () -> 'missile'
 
   move: (offset) ->
     can_move = super(offset)
@@ -897,12 +780,12 @@ class Missile extends MovableMapUnit2D
 
     if @map.out_of_bound(destroy_area)
       @bom_on_destroy = true
-      @energy -= @max_depend_point
+      @energy -= @max_defend_point
     else
       hit_map_units = @map.units_at(destroy_area)
       _.each(hit_map_units, (unit) =>
         defend_point = unit.defend(this, destroy_area)
-        @bom_on_destroy = (defend_point == @max_depend_point)
+        @bom_on_destroy = (defend_point == @max_defend_point)
         @energy -= defend_point
       )
     @destroy() if @energy <= 0
@@ -938,7 +821,7 @@ class Missile extends MovableMapUnit2D
         )
   defend: (missile, destroy_area) ->
     @destroy()
-    @max_depend_point - 1
+    @max_defend_point - 1
   accept: (map_unit) ->
     map_unit is @parent or
       (map_unit instanceof Missile and map_unit.parent is @parent)
@@ -953,58 +836,68 @@ class Gift extends MapUnit2D
     tanks = _.select(@map.units_at(@area), (unit) -> unit instanceof Tank)
     _.each(tanks, (tank) => @apply(tank))
     @destroy() if _.size(tanks) > 0
-
   apply: (tank) ->
-  current_animation: () -> 'blink'
-  current_frame_rate: () -> 4
-  animations: () ->
-    {
-      'blink': [
-        {x: @image_x_offset(), y: 300, width: 40, height: 40},
-        {x: 360, y: 300, width: 40, height: 40}
-      ]
-    }
-  image_x_offset: -> 0
+
+  new_display: () ->
+    @display_object = new Kinetic.Sprite({
+      x: @area.x1,
+      y: @area.y1,
+      image: @map.image,
+      animation: @animation_state(),
+      animations: Animations.gifts,
+      frameRate: Animations.rate(@animation_state()),
+      index: 0,
+      map_unit: this
+    })
+
+  animation_state: -> @type()
 
 class LandMineGift extends Gift
   apply: (tank) ->
     if tank instanceof EnemyTank
-      _.each(@map.user_tanks(), (tank) -> tank.destroy())
+      _.each(@map.user_tanks(), (tank) =>
+        tank.destroy()
+        @map.trigger('tank_destroyed', tank, null)
+      )
     else
-      _.each(@map.enemy_tanks(), (tank) -> tank.destroy())
-  image_x_offset: -> 0
+      _.each(@map.enemy_tanks(), (tank) ->
+        @map.trigger('tank_destroyed', tank, null)
+        tank.destroy()
+      )
+  type: () -> 'land_mine'
 
 class GunGift extends Gift
   apply: (tank) -> tank.level_up(2)
-  image_x_offset: -> 80
+  type: -> 'gun'
 
 class ShipGift extends Gift
   apply: (tank) -> tank.on_ship(true)
-  image_x_offset: -> 40
+  type: -> 'ship'
 
 class StarGift extends Gift
   apply: (tank) -> tank.level_up(1)
-  image_x_offset: -> 160
+  type: -> 'star'
 
 class ShovelGift extends Gift
   apply: (tank) ->
     if tank instanceof UserTank
-      # add iron instead
       @map.home().setup_defend_terrains()
     else
       @map.home().delete_defend_terrains()
     # transfer back to brick after 10 seconds
     setTimeout((() => @map.home().restore_defend_terrains()), 10000)
-  image_x_offset: -> 120
+  type: -> 'shovel'
 
 class LifeGift extends Gift
   apply: (tank) ->
     if tank instanceof EnemyTank
-      tank.level_up(5)
-      tank.gift_up(3)
+      _.each @map.enemy_tanks(), (enemy_tank) ->
+        tank.hp_up(5)
+        tank.gift_up(3)
     else
+      @map.trigger('tank_life_up', tank)
       # TODO add extra user life
-  image_x_offset: -> 240
+  type: -> 'life'
 
 class HatGift extends Gift
   apply: (tank) ->
@@ -1012,7 +905,7 @@ class HatGift extends Gift
       tank.hp_up(5)
     else
       tank.on_guard(true)
-  image_x_offset: -> 200
+  type: -> 'hat'
 
 class ClockGift extends Gift
   apply: (tank) ->
@@ -1020,7 +913,7 @@ class ClockGift extends Gift
       _.each(@map.user_tanks(), (tank) -> tank.freeze())
     else
       _.each(@map.enemy_tanks(), (tank) -> tank.freeze())
-  image_x_offset: -> 280
+  type: -> 'clock'
 
 class Commander
   constructor: (@map_unit) ->
@@ -1141,19 +1034,25 @@ class EnemyAICommander extends Commander
   next: ->
     # move towards home
     if _.size(@path) == 0
-      @path = @map.shortest_path(@map_unit, @current_vertex(), @map.home_vertex)
+      end_vertex = if (Math.random() * 100) <= @map_unit.iq
+        @map.home_vertex
+      else
+        @map.random_vertex()
+      @path = @map.shortest_path(@map_unit, @current_vertex(), end_vertex)
       @next_move()
-      setTimeout((() => @reset_path()), 3000 + Math.random()*1000)
+      setTimeout((() => @reset_path()), 2000 + Math.random()*2000)
     else
       @next_move() if @current_vertex().equals(@target_vertex)
 
-    # fire if can't move
+    # more chance to fire if can't move
     if @map_unit.can_fire() and @last_area and @last_area.equals(@map_unit.area)
-      @fire()
-    # fire if user or home in front of me
-    targets = _.compact([@map.p1_tank(), @map.p2_tank(), @map.home()])
-    for target in targets
-      @fire() if @in_attack_range(target.area)
+      @fire() if Math.random() < 0.08
+    else
+      @fire() if Math.random() < 0.01
+    # # fire if user or home in front of me
+    # targets = _.compact([@map.p1_tank(), @map.p2_tank(), @map.home()])
+    # for target in targets
+    #   @fire() if @in_attack_range(target.area)
 
     @last_area = @map_unit.area
 
