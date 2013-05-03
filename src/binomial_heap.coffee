@@ -19,7 +19,7 @@ class BinomialHeapNode
 
 class BinomialHeap
   constructor: (@head = null) ->
-  empty: () -> @head == null
+  is_empty: () -> @head == null
   insert: (node) -> @union(new BinomialHeap(node))
   min: () ->
     y = null
@@ -46,7 +46,7 @@ class BinomialHeap
     [min.sibling, min.prev_sibling] = [null, null]
     min
   extract_min: () ->
-    return null if @empty()
+    return null if @is_empty()
     min = @_extract_min_root_node()
     curr = min.child
     if curr != null
@@ -61,7 +61,7 @@ class BinomialHeap
     min
   union: (heap) ->
     @merge(heap)
-    return if @empty()
+    return if @is_empty()
     prev_x = null
     x = @head
     next_x = x.sibling
@@ -120,8 +120,8 @@ class BinomialHeap
     @decrease_key(node, -Infinity)
     @extract_min()
   merge: (heap) ->
-    return if heap.empty()
-    if @empty()
+    return if heap.is_empty()
+    if @is_empty()
       @head = heap.head
       return
 

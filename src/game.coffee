@@ -739,7 +739,7 @@ class GameScene extends Scene
       delta_time = current_time.getMilliseconds() - last_time.getMilliseconds()
       # assume a frame will never last more than 1 second
       delta_time += 1000 if delta_time < 0
-      _.each(@map.tanks.concat(@map.missiles).concat(@map.gifts), (unit) ->
+      _.each(@map.missiles.concat(@map.gifts).concat(@map.tanks), (unit) ->
         unit.integration(delta_time) unless unit.destroyed
       )
       last_time = current_time
@@ -955,7 +955,7 @@ class GameScene extends Scene
       if killed_by_tank instanceof UserP1Tank
         p1_kills = @game.get_config('p1_killed_enemies')
         p1_kills.push(tank.type())
-      else
+      else if killed_by_tank instanceof UserP2Tank
         p2_kills = @game.get_config('p2_killed_enemies')
         p2_kills.push(tank.type())
       @born_enemy_tank()

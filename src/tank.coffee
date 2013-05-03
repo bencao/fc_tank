@@ -198,7 +198,7 @@ class Map2D
     for x in _.range(0, @vertexes_columns)
       for y in _.range(0, @vertexes_rows)
         heap.insert(d[x][y])
-    until heap.empty()
+    until heap.is_empty()
       u = heap.extract_min().satellite
       # searched_vertexes.push u
       _.each(u.siblings, (v) =>
@@ -220,6 +220,7 @@ class Map2D
       pi.push(column_pi)
     [d, pi]
 
+  # A start = (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
   relax: (heap, d, pi, u, v, w) ->
     # an area like [30, 50, 70, 90] is not movable, so do not relax here
     return if v.vx % 2 == 1 and u.vx % 2 == 1
@@ -227,12 +228,6 @@ class Map2D
     if d[v.vx][v.vy].key > d[u.vx][u.vy].key + w
       heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w)
       pi[v.vx][v.vy] = u
-
-  extract_min: (heap, d) ->
-    _.min(vertexes, (vertex) =>
-      d[vertex.vx][vertex.vy]
-        # + (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
-    )
 
   calculate_shortest_path_from_pi: (pi, start_vertex, end_vertex) ->
     reverse_paths = []
@@ -860,9 +855,15 @@ class Gift extends MapUnit2D
 class LandMineGift extends Gift
   apply: (tank) ->
     if tank instanceof EnemyTank
-      _.each(@map.user_tanks(), (tank) -> tank.destroy())
+      _.each(@map.user_tanks(), (tank) =>
+        tank.destroy()
+        @map.trigger('tank_destroyed', tank, null)
+      )
     else
-      _.each(@map.enemy_tanks(), (tank) -> tank.destroy())
+      _.each(@map.enemy_tanks(), (tank) ->
+        @map.trigger('tank_destroyed', tank, null)
+        tank.destroy()
+      )
   type: () -> 'land_mine'
 
 class GunGift extends Gift
@@ -1037,18 +1038,13 @@ class EnemyAICommander extends Commander
         @map.home_vertex
       else
         @map.random_vertex()
-      start_date = (new Date()).getMilliseconds()
       @path = @map.shortest_path(@map_unit, @current_vertex(), end_vertex)
-      end_date = (new Date()).getMilliseconds()
-      console.log "path calc start=#{@current_vertex().to_s()}"
-      console.log "path calc end=#{end_vertex.to_s()}"
-      console.log "path calc take=#{(1000 + end_date - start_date) % 1000}"
       @next_move()
-      setTimeout((() => @reset_path()), 4000 + Math.random()*2000)
+      setTimeout((() => @reset_path()), 2000 + Math.random()*2000)
     else
       @next_move() if @current_vertex().equals(@target_vertex)
 
-    # fire if can't move
+    # more chance to fire if can't move
     if @map_unit.can_fire() and @last_area and @last_area.equals(@map_unit.area)
       @fire() if Math.random() < 0.08
     else
