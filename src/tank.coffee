@@ -710,6 +710,9 @@ class EnemyTank extends Tank
     prefix + (if @ship then "_with_ship" else "")
   gift_up: (gifts) -> @gift_counts += gifts
   handle_fire: (cmd) -> super(cmd) unless @frozen
+  accept: (map_unit) ->
+    ((map_unit instanceof Missile) and (map_unit.parent is this)) or
+      map_unit instanceof EnemyTank
 
 class StupidTank extends EnemyTank
   speed: 0.07
@@ -728,7 +731,7 @@ class StrongTank extends EnemyTank
   type: -> 'strong'
 
 class Missile extends MovableMapUnit2D
-  speed: 0.40
+  speed: 0.20
   constructor: (@map, @parent) ->
     @area = @born_area(@parent)
     super(@map, @area)
@@ -860,7 +863,7 @@ class LandMineGift extends Gift
         @map.trigger('tank_destroyed', tank, null)
       )
     else
-      _.each(@map.enemy_tanks(), (tank) ->
+      _.each(@map.enemy_tanks(), (tank) =>
         @map.trigger('tank_destroyed', tank, null)
         tank.destroy()
       )
@@ -885,7 +888,9 @@ class ShovelGift extends Gift
     else
       @map.home().delete_defend_terrains()
     # transfer back to brick after 10 seconds
-    setTimeout((() => @map.home().restore_defend_terrains()), 10000)
+    setTimeout((() =>
+      @map.home().restore_defend_terrains() unless _.isEmpty(@map.home())
+    ), 10000)
   type: -> 'shovel'
 
 class LifeGift extends Gift
