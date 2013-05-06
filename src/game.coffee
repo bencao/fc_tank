@@ -15,13 +15,14 @@ class Game
   get_config: (key) -> @configs[key]
   init_default_config: () ->
     @configs = {
-      fps: 60, players: 1, current_stage: 1, stages: 5,
+      fps: 60, players: 1,
+      current_stage: 1, stages: 5, stage_autostart: false,
       game_over: false, hi_score: 20000, p1_score: 0, p2_score: 0,
       p1_level: 1, p2_level: 1, p1_lives: 2, p2_lives: 2,
       p1_killed_enemies: [], p2_killed_enemies: [],
       score_for_stupid: 100, score_for_fish: 200,
       score_for_fool: 300, score_for_strong: 400,
-      last_score: 0, enemies_per_stage: 20
+      last_score: 0, enemies_per_stage: 4
     }
 
   kick_off: () -> @switch_scene('welcome')
@@ -105,6 +106,7 @@ class WelcomeScene extends Scene
 
   prepare_for_game_scene: () ->
     @game.set_config('game_over', false)
+    @game.set_config('stage_autostart', false)
     @game.set_config('current_stage', 1)
     @game.set_config('p1_score', 0)
     @game.set_config('p2_score', 0)
@@ -306,7 +308,10 @@ class StageScene extends Scene
     super()
     @current_stage = @game.get_config('current_stage')
     @update_stage_label()
-    @enable_stage_control()
+    if @game.get_config('stage_autostart')
+      setTimeout((() => @game.switch_scene('game')), 2000)
+    else
+      @enable_stage_control()
 
   stop: () ->
     super()
@@ -373,6 +378,7 @@ class ReportScene extends Scene
       if @game.get_config('game_over')
         @game.switch_scene('welcome')
       else
+        @game.set_config('stage_autostart', true)
         @game.switch_scene('stage')
     , 5000)
 
@@ -690,7 +696,18 @@ class GameScene extends Scene
     @update_status()
     @disable_controls()
     @stop_time_line()
+    @save_user_status() if @winner == 'user'
     @map.reset()
+
+  save_user_status: () ->
+    @game.set_config('p1_lives', @remain_user_p1_lives + 1)
+    @game.set_config('p2_lives', @remain_user_p2_lives + 1)
+    if @map.p1_tank() != undefined
+      @game.set_config('p1_level', @map.p1_tank().level)
+      @game.set_config('p1_ship', @map.p1_tank().ship)
+    if @map.p2_tank() != undefined
+      @game.set_config('p2_level', @map.p2_tank().level)
+      @game.set_config('p2_ship', @map.p2_tank().ship)
 
   start_map: () ->
     # wait until builder loaded
@@ -956,17 +973,6 @@ class GameScene extends Scene
     @winner = 'user'
     # report
     setTimeout((() =>
-      @game.set_config('game_over', false)
-      if @map.p1_tank() != undefined
-        @game.set_config('p1_level', @map.p1_tank().level)
-      else
-        @game.set_config('p1_level', 1)
-      if @map.p2_tank() != undefined
-        @game.set_config('p2_level', @map.p2_tank().level)
-      else
-        @game.set_config('p2_level', 1)
-      @game.set_config('p1_lives', @remain_user_p1_lives)
-      @game.set_config('p2_lives', @remain_user_p2_lives)
       @game.next_stage()
       @game.switch_scene('report')
     ), 5000)
