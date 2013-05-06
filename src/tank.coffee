@@ -258,6 +258,7 @@ class MapUnit2D
     @destroyed = false
     @new_display() # should be overwrite
     @after_new_display()
+    @attached_timeout_handlers = []
 
   after_new_display: () ->
     @map.groups[@group].add(@display_object)
@@ -284,10 +285,18 @@ class MapUnit2D
     unless @destroyed
       @destroyed = true
     @destroy_display()
+    @detach_timeout_events()
     @map.delete_map_unit(this)
 
   defend: (missile, destroy_area) -> 0
   accept: (map_unit) -> true
+
+  attach_timeout_event: (func, delay) ->
+    handle = setTimeout(func, delay)
+    @attached_timeout_handlers.push(handle)
+
+  detach_timeout_events: () ->
+    _.each(@attached_timeout_handlers, (handle) -> clearTimeout(handle))
 
 class MovableMapUnit2D extends MapUnit2D
   speed: 0.08
@@ -465,7 +474,7 @@ class IronTerrain extends Terrain
 class WaterTerrain extends Terrain
   accept: (map_unit) ->
     if map_unit instanceof Tank
-      map_unit.on_ship
+      map_unit.ship
     else
       map_unit instanceof Missile
   type: -> "water"
@@ -604,7 +613,7 @@ class Tank extends MovableMapUnit2D
   freeze: () ->
     @frozen = true
     @update_display()
-    setTimeout(() =>
+    @attach_timeout_event(() =>
       @frozen = false
       @update_display()
     , 6000)
@@ -639,7 +648,7 @@ class UserTank extends Tank
     super(@map, @area)
     @guard = false
   on_guard: (@guard) ->
-    setTimeout((() => @on_guard(false)), 10000) if @guard
+    @attach_timeout_event((() => @on_guard(false)), 10000) if @guard
     @update_display()
   speed: 0.13
   defend: (missile, destroy_area) ->
@@ -864,8 +873,8 @@ class LandMineGift extends Gift
       )
     else
       _.each(@map.enemy_tanks(), (tank) =>
-        @map.trigger('tank_destroyed', tank, null)
         tank.destroy()
+        @map.trigger('tank_destroyed', tank, null)
       )
   type: () -> 'land_mine'
 
@@ -888,9 +897,9 @@ class ShovelGift extends Gift
     else
       @map.home().delete_defend_terrains()
     # transfer back to brick after 10 seconds
-    setTimeout((() =>
-      @map.home().restore_defend_terrains() unless _.isEmpty(@map.home())
-    ), 10000)
+    @attach_timeout_event(() =>
+      @map.home().restore_defend_terrains()
+    , 10000)
   type: -> 'shovel'
 
 class LifeGift extends Gift
