@@ -337,6 +337,7 @@ class MovableMapUnit2D extends MapUnit2D
   add_delayed_command: (command) -> @delayed_commands.push(command)
 
   integration: (delta_time) ->
+    return if @destroyed
     @commands = _.union(@commander.next_commands(), @queued_delayed_commands())
     @handle_turn(cmd) for cmd in @commands
     @handle_move(cmd, delta_time) for cmd in @commands
@@ -628,7 +629,7 @@ class Tank extends MovableMapUnit2D
         @fire()
 
   integration: (delta_time) ->
-    return if @initializing
+    return if @initializing or @destroyed
     super(delta_time)
     @handle_fire(cmd) for cmd in @commands
 
@@ -845,6 +846,7 @@ class Gift extends MapUnit2D
   defend: (missile, destroy_area) -> 0
 
   integration: (delta_time) ->
+    return if @destroyed
     tanks = _.select(@map.units_at(@area), (unit) -> unit instanceof Tank)
     _.each(tanks, (tank) => @apply(tank))
     @destroy() if _.size(tanks) > 0

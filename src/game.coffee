@@ -280,7 +280,7 @@ class WelcomeScene extends Scene
       fontSize: 22,
       fontStyle: "bold",
       fontFamily: "Courier",
-      text: "© BEN♥FENG",
+      text: "© Maple Studio China",
       fill: "#fff"
     }))
     # tank
@@ -767,15 +767,10 @@ class GameScene extends Scene
       delta_time = current_time.getMilliseconds() - last_time.getMilliseconds()
       # assume a frame will never last more than 1 second
       delta_time += 1000 if delta_time < 0
-      _.each(@map.missiles, (unit) ->
-        unit.integration(delta_time) unless unit.destroyed
-      )
-      _.each(@map.gifts.concat(@map.tanks), (unit) ->
-        unit.integration(delta_time) unless unit.destroyed
-      )
-      _.each(@map.missiles, (unit) ->
-        unit.integration(delta_time) unless unit.destroyed
-      )
+      unit.integration(delta_time) for unit in @map.missiles
+      unit.integration(delta_time) for unit in @map.gifts
+      unit.integration(delta_time) for unit in @map.tanks
+      unit.integration(delta_time) for unit in @map.missiles
       last_time = current_time
       @frame_rate += 1
     , parseInt(1000/@fps))
