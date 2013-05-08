@@ -22,7 +22,7 @@ class Game
       p1_killed_enemies: [], p2_killed_enemies: [],
       score_for_stupid: 100, score_for_fish: 200,
       score_for_fool: 300, score_for_strong: 400,
-      last_score: 0, enemies_per_stage: 4
+      last_score: 0, enemies_per_stage: 20
     }
 
   kick_off: () -> @switch_scene('welcome')
@@ -280,7 +280,7 @@ class WelcomeScene extends Scene
       fontSize: 22,
       fontStyle: "bold",
       fontFamily: "Courier",
-      text: "© Maple Studio China",
+      text: "© BEN",
       fill: "#fff"
     }))
     # tank
