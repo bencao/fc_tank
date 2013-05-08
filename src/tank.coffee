@@ -676,7 +676,7 @@ class UserP1Tank extends UserTank
   constructor: (@map, @area) ->
     super(@map, @area)
     @commander = new UserCommander(this, {
-      up: 38, down: 40, left: 37, right: 39, fire: 70
+      up: 38, down: 40, left: 37, right: 39, fire: 32
     })
   type: -> 'user_p1'
 
@@ -684,7 +684,7 @@ class UserP2Tank extends UserTank
   constructor: (@map, @area) ->
     super(@map, @area)
     @commander = new UserCommander(this, {
-      up: 73, down: 75, left: 74, right: 76, fire: 72
+      up: 87, down: 83, left: 65, right: 68, fire: 74
     })
   type: -> 'user_p2'
 
