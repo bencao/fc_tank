@@ -40,6 +40,9 @@ class MapArea2DVertex extends MapArea2D
   constructor: (@x1, @y1, @x2, @y2) -> @siblings = []
   init_vxy: (@vx, @vy) ->
   add_sibling: (sibling) -> @siblings.push(sibling)
+  a_star_weight: (target_vertex) ->
+    (Math.pow(@vx - target_vertex.vx, 2) +
+      Math.pow(@vy - target_vertex.vy, 2)) / 2
 
 class Map2D
   max_x: 520
@@ -190,43 +193,41 @@ class Map2D
       sub_area.width() * sub_area.height()
 
   shortest_path: (tank, start_vertex, end_vertex) ->
-    [d, pi] = @intialize_single_source()
+    [d, pi] = @intialize_single_source(end_vertex)
     d[start_vertex.vx][start_vertex.vy].key = 0
-    # dijkstra shortest path
-    # searched_vertexes = []
     heap = new BinomialHeap()
     for x in _.range(0, @vertexes_columns)
       for y in _.range(0, @vertexes_rows)
         heap.insert(d[x][y])
     until heap.is_empty()
       u = heap.extract_min().satellite
-      # searched_vertexes.push u
-      _.each(u.siblings, (v) =>
-        @relax(heap, d, pi, u, v, @weight(tank, u, v))
-      )
+      for v in u.siblings
+        @relax(heap, d, pi, u, v, @weight(tank, u, v), end_vertex)
       break if u is end_vertex
     @calculate_shortest_path_from_pi(pi, start_vertex, end_vertex)
 
-  intialize_single_source: () ->
+  intialize_single_source: (target_vertex) ->
     d = []
     pi = []
     for x in _.range(0, @vertexes_columns)
       column_ds = []
       column_pi = []
       for y in _.range(0, @vertexes_rows)
-        column_ds.push(new BinomialHeapNode(@vertexes[x][y], @infinity))
+        node = new BinomialHeapNode(@vertexes[x][y],
+          @infinity - @vertexes[x][y].a_star_weight(target_vertex))
+        column_ds.push(node)
         column_pi.push(null)
       d.push(column_ds)
       pi.push(column_pi)
     [d, pi]
 
-  # A start = (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
-  relax: (heap, d, pi, u, v, w) ->
+  relax: (heap, d, pi, u, v, w, target_vertex) ->
     # an area like [30, 50, 70, 90] is not movable, so do not relax here
     return if v.vx % 2 == 1 and u.vx % 2 == 1
     return if v.vy % 2 == 1 and u.vy % 2 == 1
-    if d[v.vx][v.vy].key > d[u.vx][u.vy].key + w
-      heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w)
+    aw = v.a_star_weight(target_vertex) - u.a_star_weight(target_vertex)
+    if d[v.vx][v.vy].key > d[u.vx][u.vy].key + w + aw
+      heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w + aw)
       pi[v.vx][v.vy] = u
 
   calculate_shortest_path_from_pi: (pi, start_vertex, end_vertex) ->
