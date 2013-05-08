@@ -15,6 +15,15 @@
       width: 600px;
       height: 520px;
     }
+    #instructions {
+      color: #a13;
+    }
+    #instructions dl {
+      float:left;
+    }
+    #instructions dt {
+      font-weight:bold;
+    }
     body { background: #999; }
   </style>
   <script type="text/coffeescript">
@@ -43,5 +52,17 @@
 <body>
   <img id="tank_sprite" alt="tanks" width="400" height="360" src="image/tanks.png" />
   <div id="canvas"></div>
+  <div id="instructions">
+    <dl class="p1">
+      <dt>P1 Control</dt>
+      <dd>Press keyboard UP, DOWN, LEFT, RIGHT to move</dd>
+      <dd>Press keyboard spacebar to fire</dd>
+    </dl>
+    <dl class="p2">
+      <dt>P2 Control</dt>
+      <dd>Press keyboard W, S, A, D to move</dd>
+      <dd>Press keyboard J to fire</dd>
+    </dl>
+  </div>
 </body>
 </html>

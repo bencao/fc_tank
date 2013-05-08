@@ -40,6 +40,9 @@ class MapArea2DVertex extends MapArea2D
   constructor: (@x1, @y1, @x2, @y2) -> @siblings = []
   init_vxy: (@vx, @vy) ->
   add_sibling: (sibling) -> @siblings.push(sibling)
+  a_star_weight: (target_vertex) ->
+    (Math.pow(@vx - target_vertex.vx, 2) +
+      Math.pow(@vy - target_vertex.vy, 2)) / 2
 
 class Map2D
   max_x: 520
@@ -190,43 +193,41 @@ class Map2D
       sub_area.width() * sub_area.height()
 
   shortest_path: (tank, start_vertex, end_vertex) ->
-    [d, pi] = @intialize_single_source()
+    [d, pi] = @intialize_single_source(end_vertex)
     d[start_vertex.vx][start_vertex.vy].key = 0
-    # dijkstra shortest path
-    # searched_vertexes = []
     heap = new BinomialHeap()
     for x in _.range(0, @vertexes_columns)
       for y in _.range(0, @vertexes_rows)
         heap.insert(d[x][y])
     until heap.is_empty()
       u = heap.extract_min().satellite
-      # searched_vertexes.push u
-      _.each(u.siblings, (v) =>
-        @relax(heap, d, pi, u, v, @weight(tank, u, v))
-      )
+      for v in u.siblings
+        @relax(heap, d, pi, u, v, @weight(tank, u, v), end_vertex)
       break if u is end_vertex
     @calculate_shortest_path_from_pi(pi, start_vertex, end_vertex)
 
-  intialize_single_source: () ->
+  intialize_single_source: (target_vertex) ->
     d = []
     pi = []
     for x in _.range(0, @vertexes_columns)
       column_ds = []
       column_pi = []
       for y in _.range(0, @vertexes_rows)
-        column_ds.push(new BinomialHeapNode(@vertexes[x][y], @infinity))
+        node = new BinomialHeapNode(@vertexes[x][y],
+          @infinity - @vertexes[x][y].a_star_weight(target_vertex))
+        column_ds.push(node)
         column_pi.push(null)
       d.push(column_ds)
       pi.push(column_pi)
     [d, pi]
 
-  # A start = (Math.pow(vertex.vx - 24, 2) + Math.pow(vertex.vy - 48, 2))
-  relax: (heap, d, pi, u, v, w) ->
+  relax: (heap, d, pi, u, v, w, target_vertex) ->
     # an area like [30, 50, 70, 90] is not movable, so do not relax here
     return if v.vx % 2 == 1 and u.vx % 2 == 1
     return if v.vy % 2 == 1 and u.vy % 2 == 1
-    if d[v.vx][v.vy].key > d[u.vx][u.vy].key + w
-      heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w)
+    aw = v.a_star_weight(target_vertex) - u.a_star_weight(target_vertex)
+    if d[v.vx][v.vy].key > d[u.vx][u.vy].key + w + aw
+      heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w + aw)
       pi[v.vx][v.vy] = u
 
   calculate_shortest_path_from_pi: (pi, start_vertex, end_vertex) ->
@@ -258,6 +259,7 @@ class MapUnit2D
     @destroyed = false
     @new_display() # should be overwrite
     @after_new_display()
+    @attached_timeout_handlers = []
 
   after_new_display: () ->
     @map.groups[@group].add(@display_object)
@@ -284,10 +286,18 @@ class MapUnit2D
     unless @destroyed
       @destroyed = true
     @destroy_display()
+    @detach_timeout_events()
     @map.delete_map_unit(this)
 
   defend: (missile, destroy_area) -> 0
   accept: (map_unit) -> true
+
+  attach_timeout_event: (func, delay) ->
+    handle = setTimeout(func, delay)
+    @attached_timeout_handlers.push(handle)
+
+  detach_timeout_events: () ->
+    _.each(@attached_timeout_handlers, (handle) -> clearTimeout(handle))
 
 class MovableMapUnit2D extends MapUnit2D
   speed: 0.08
@@ -328,6 +338,7 @@ class MovableMapUnit2D extends MapUnit2D
   add_delayed_command: (command) -> @delayed_commands.push(command)
 
   integration: (delta_time) ->
+    return if @destroyed
     @commands = _.union(@commander.next_commands(), @queued_delayed_commands())
     @handle_turn(cmd) for cmd in @commands
     @handle_move(cmd, delta_time) for cmd in @commands
@@ -465,7 +476,7 @@ class IronTerrain extends Terrain
 class WaterTerrain extends Terrain
   accept: (map_unit) ->
     if map_unit instanceof Tank
-      map_unit.on_ship
+      map_unit.ship
     else
       map_unit instanceof Missile
   type: -> "water"
@@ -604,7 +615,7 @@ class Tank extends MovableMapUnit2D
   freeze: () ->
     @frozen = true
     @update_display()
-    setTimeout(() =>
+    @attach_timeout_event(() =>
       @frozen = false
       @update_display()
     , 6000)
@@ -619,7 +630,7 @@ class Tank extends MovableMapUnit2D
         @fire()
 
   integration: (delta_time) ->
-    return if @initializing
+    return if @initializing or @destroyed
     super(delta_time)
     @handle_fire(cmd) for cmd in @commands
 
@@ -639,7 +650,7 @@ class UserTank extends Tank
     super(@map, @area)
     @guard = false
   on_guard: (@guard) ->
-    setTimeout((() => @on_guard(false)), 10000) if @guard
+    @attach_timeout_event((() => @on_guard(false)), 10000) if @guard
     @update_display()
   speed: 0.13
   defend: (missile, destroy_area) ->
@@ -665,7 +676,7 @@ class UserP1Tank extends UserTank
   constructor: (@map, @area) ->
     super(@map, @area)
     @commander = new UserCommander(this, {
-      up: 38, down: 40, left: 37, right: 39, fire: 70
+      up: 38, down: 40, left: 37, right: 39, fire: 32
     })
   type: -> 'user_p1'
 
@@ -673,7 +684,7 @@ class UserP2Tank extends UserTank
   constructor: (@map, @area) ->
     super(@map, @area)
     @commander = new UserCommander(this, {
-      up: 73, down: 75, left: 74, right: 76, fire: 72
+      up: 87, down: 83, left: 65, right: 68, fire: 74
     })
   type: -> 'user_p2'
 
@@ -710,6 +721,9 @@ class EnemyTank extends Tank
     prefix + (if @ship then "_with_ship" else "")
   gift_up: (gifts) -> @gift_counts += gifts
   handle_fire: (cmd) -> super(cmd) unless @frozen
+  accept: (map_unit) ->
+    ((map_unit instanceof Missile) and (map_unit.parent is this)) or
+      map_unit instanceof EnemyTank
 
 class StupidTank extends EnemyTank
   speed: 0.07
@@ -728,7 +742,7 @@ class StrongTank extends EnemyTank
   type: -> 'strong'
 
 class Missile extends MovableMapUnit2D
-  speed: 0.40
+  speed: 0.20
   constructor: (@map, @parent) ->
     @area = @born_area(@parent)
     super(@map, @area)
@@ -833,6 +847,7 @@ class Gift extends MapUnit2D
   defend: (missile, destroy_area) -> 0
 
   integration: (delta_time) ->
+    return if @destroyed
     tanks = _.select(@map.units_at(@area), (unit) -> unit instanceof Tank)
     _.each(tanks, (tank) => @apply(tank))
     @destroy() if _.size(tanks) > 0
@@ -860,9 +875,9 @@ class LandMineGift extends Gift
         @map.trigger('tank_destroyed', tank, null)
       )
     else
-      _.each(@map.enemy_tanks(), (tank) ->
-        @map.trigger('tank_destroyed', tank, null)
+      _.each(@map.enemy_tanks(), (tank) =>
         tank.destroy()
+        @map.trigger('tank_destroyed', tank, null)
       )
   type: () -> 'land_mine'
 
@@ -885,7 +900,9 @@ class ShovelGift extends Gift
     else
       @map.home().delete_defend_terrains()
     # transfer back to brick after 10 seconds
-    setTimeout((() => @map.home().restore_defend_terrains()), 10000)
+    @attach_timeout_event(() =>
+      @map.home().restore_defend_terrains()
+    , 10000)
   type: -> 'shovel'
 
 class LifeGift extends Gift

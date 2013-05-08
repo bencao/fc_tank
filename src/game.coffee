@@ -15,12 +15,14 @@ class Game
   get_config: (key) -> @configs[key]
   init_default_config: () ->
     @configs = {
-      fps: 60, players: 1, current_stage: 1, stages: 5,
+      fps: 60, players: 1,
+      current_stage: 1, stages: 5, stage_autostart: false,
       game_over: false, hi_score: 20000, p1_score: 0, p2_score: 0,
+      p1_level: 1, p2_level: 1, p1_lives: 2, p2_lives: 2,
       p1_killed_enemies: [], p2_killed_enemies: [],
       score_for_stupid: 100, score_for_fish: 200,
       score_for_fool: 300, score_for_strong: 400,
-      last_score: 0, player_initial_life: 2, enemies_per_stage: 20
+      last_score: 0, enemies_per_stage: 20
     }
 
   kick_off: () -> @switch_scene('welcome')
@@ -104,10 +106,14 @@ class WelcomeScene extends Scene
 
   prepare_for_game_scene: () ->
     @game.set_config('game_over', false)
+    @game.set_config('stage_autostart', false)
+    @game.set_config('current_stage', 1)
     @game.set_config('p1_score', 0)
     @game.set_config('p2_score', 0)
-    @game.set_config('p1_killed_enemies', [])
-    @game.set_config('p2_killed_enemies', [])
+    @game.set_config('p1_lives', 2)
+    @game.set_config('p2_lives', 2)
+    @game.set_config('p1_level', 1)
+    @game.set_config('p2_level', 1)
 
   enable_selection_control: () ->
     $(document).bind "keydown", (event) =>
@@ -274,7 +280,7 @@ class WelcomeScene extends Scene
       fontSize: 22,
       fontStyle: "bold",
       fontFamily: "Courier",
-      text: "© BEN♥FENG",
+      text: "© BEN",
       fill: "#fff"
     }))
     # tank
@@ -302,11 +308,19 @@ class StageScene extends Scene
     super()
     @current_stage = @game.get_config('current_stage')
     @update_stage_label()
-    @enable_stage_control()
+    if @game.get_config('stage_autostart')
+      setTimeout((() => @game.switch_scene('game')), 2000)
+    else
+      @enable_stage_control()
 
   stop: () ->
     super()
     @disable_stage_control()
+    @prepare_for_game_scene()
+
+  prepare_for_game_scene: () ->
+    @game.set_config('p1_killed_enemies', [])
+    @game.set_config('p2_killed_enemies', [])
 
   enable_stage_control: () ->
     $(document).bind "keydown", (event) =>
@@ -364,6 +378,7 @@ class ReportScene extends Scene
       if @game.get_config('game_over')
         @game.switch_scene('welcome')
       else
+        @game.set_config('stage_autostart', true)
         @game.switch_scene('stage')
     , 5000)
 
@@ -656,9 +671,9 @@ class GameScene extends Scene
   load_config_variables: () ->
     @fps = @game.get_config('fps')
     @remain_enemy_counts = @game.get_config('enemies_per_stage')
-    @remain_user_p1_lives = @game.get_config('player_initial_life')
+    @remain_user_p1_lives = @game.get_config('p1_lives')
     if @game.get_config('players') == 2
-      @remain_user_p2_lives = @game.get_config('player_initial_life')
+      @remain_user_p2_lives = @game.get_config('p2_lives')
     else
       @remain_user_p2_lives = 0
     @current_stage = @game.get_config('current_stage')
@@ -673,13 +688,26 @@ class GameScene extends Scene
     @enable_system_control()
     @start_time_line()
     @running = true
+    @p1_user_initialized = false
+    @p2_user_initialized = false
 
   stop: () ->
     super()
     @update_status()
     @disable_controls()
     @stop_time_line()
+    @save_user_status() if @winner == 'user'
     @map.reset()
+
+  save_user_status: () ->
+    @game.set_config('p1_lives', @remain_user_p1_lives + 1)
+    @game.set_config('p2_lives', @remain_user_p2_lives + 1)
+    if @map.p1_tank() != undefined
+      @game.set_config('p1_level', @map.p1_tank().level)
+      @game.set_config('p1_ship', @map.p1_tank().ship)
+    if @map.p2_tank() != undefined
+      @game.set_config('p2_level', @map.p2_tank().level)
+      @game.set_config('p2_ship', @map.p2_tank().ship)
 
   start_map: () ->
     # wait until builder loaded
@@ -739,9 +767,10 @@ class GameScene extends Scene
       delta_time = current_time.getMilliseconds() - last_time.getMilliseconds()
       # assume a frame will never last more than 1 second
       delta_time += 1000 if delta_time < 0
-      _.each(@map.missiles.concat(@map.gifts).concat(@map.tanks), (unit) ->
-        unit.integration(delta_time) unless unit.destroyed
-      )
+      unit.integration(delta_time) for unit in @map.missiles
+      unit.integration(delta_time) for unit in @map.gifts
+      unit.integration(delta_time) for unit in @map.tanks
+      unit.integration(delta_time) for unit in @map.missiles
       last_time = current_time
       @frame_rate += 1
     , parseInt(1000/@fps))
@@ -846,11 +875,13 @@ class GameScene extends Scene
 
   update_status: () ->
     _.each(@enemy_symbols, (symbol) -> symbol.destroy())
-    for i in [1..@remain_enemy_counts]
-      tx = (if i % 2 == 1 then 540 else 560)
-      ty = parseInt((i - 1) / 2) * 25 + 20
-      symbol = @new_symbol(@status_panel, 'enemy', tx, ty)
-      @enemy_symbols.push(symbol)
+    @enemy_symbols = []
+    if @remain_enemy_counts > 0
+      for i in [1..@remain_enemy_counts]
+        tx = (if i % 2 == 1 then 540 else 560)
+        ty = parseInt((i - 1) / 2) * 25 + 20
+        symbol = @new_symbol(@status_panel, 'enemy', tx, ty)
+        @enemy_symbols.push(symbol)
     @user_p1_remain_lives_label.setText(@remain_user_p1_lives)
     @user_p2_remain_lives_label.setText(@remain_user_p2_lives)
     @stage_label.setText(@current_stage)
@@ -889,6 +920,9 @@ class GameScene extends Scene
     if @remain_user_p1_lives > 0
       @remain_user_p1_lives -= 1
       @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
+      unless @p1_user_initialized
+        inherited_level = @game.get_config('p1_level')
+        @map.p1_tank().level_up(inherited_level - 1)
       @update_status()
     else
       @check_enemy_win()
@@ -897,6 +931,9 @@ class GameScene extends Scene
     if @remain_user_p2_lives > 0
       @remain_user_p2_lives -= 1
       @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
+      unless @p2_user_initialized
+        inherited_level = @game.get_config('p2_level')
+        @map.p2_tank().level_up(inherited_level - 1)
       @update_status()
     else
       @check_enemy_win()
@@ -931,7 +968,6 @@ class GameScene extends Scene
     @winner = 'user'
     # report
     setTimeout((() =>
-      @game.set_config('game_over', false)
       @game.next_stage()
       @game.switch_scene('report')
     ), 5000)
