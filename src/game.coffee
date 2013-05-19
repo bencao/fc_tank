@@ -80,6 +80,7 @@ class WelcomeScene extends Scene
     @static_group = new Kinetic.Group()
     @layer.add(@static_group)
     @init_statics()
+    @sound = new Howl({urls: ['data/intro.ogg', 'data/intro.mp3']})
 
   start: () ->
     super()
@@ -91,6 +92,7 @@ class WelcomeScene extends Scene
       callback: () =>
         @update_players()
         @enable_selection_control()
+        @sound.play()
     })
     @update_numbers()
 
@@ -98,6 +100,7 @@ class WelcomeScene extends Scene
     super()
     @disable_selection_control()
     @prepare_for_game_scene()
+    @sound.stop()
 
   update_numbers: () ->
     @numbers_label.setText("I- #{@game.get_config('p1_score')}" +
@@ -658,7 +661,20 @@ class GameScene extends Scene
     }
     @reset_config_variables()
     @init_status()
+    @bgms = [
+      new Howl({urls: ['data/s1.ogg', 'data/s1.mp3'], loop: true}),
+      new Howl({urls: ['data/s2.ogg', 'data/s2.mp3'], loop: true}),
+      new Howl({urls: ['data/s3.ogg', 'data/s3.mp3'], loop: true}),
+      new Howl({urls: ['data/s2.ogg', 'data/s2.mp3'], loop: true}),
+      new Howl({urls: ['data/s5.ogg', 'data/s5.mp3'], loop: true}),
+      new Howl({urls: ['data/s6.ogg', 'data/s6.mp3'], loop: true}),
+      new Howl({urls: ['data/s7.ogg', 'data/s7.mp3'], loop: true}),
+      new Howl({urls: ['data/win.ogg', 'data/win.mp3'], loop: true})
+    ]
     window.gs = this # for debug
+
+  current_bgm: () ->
+    @bgms[(@current_stage - 1) % 7]
 
   reset_config_variables: () ->
     @fps = 0
@@ -690,6 +706,7 @@ class GameScene extends Scene
     @running = true
     @p1_user_initialized = false
     @p2_user_initialized = false
+    @current_bgm().play()
 
   stop: () ->
     super()
@@ -698,6 +715,7 @@ class GameScene extends Scene
     @stop_time_line()
     @save_user_status() if @winner == 'user'
     @map.reset()
+    @current_bgm().stop()
 
   save_user_status: () ->
     @game.set_config('p1_lives', @remain_user_p1_lives + 1)
@@ -728,12 +746,14 @@ class GameScene extends Scene
         @map.p1_tank().commander.add_key_event("keyup", event.which)
       if @map.p2_tank()
         @map.p2_tank().commander.add_key_event("keyup", event.which)
+      false
 
     $(document).bind "keydown", (event) =>
       if @map.p1_tank()
         @map.p1_tank().commander.add_key_event("keydown", event.which)
       if @map.p2_tank()
         @map.p2_tank().commander.add_key_event("keydown", event.which)
+      false
 
   enable_system_control: () ->
     $(document).bind "keydown", (event) =>
@@ -754,11 +774,13 @@ class GameScene extends Scene
     @stop_time_line()
     @disable_controls()
     @enable_system_control()
+    @current_bgm().pause()
 
   rescue: () ->
     @running = true
     @start_time_line()
     @enable_user_control()
+    @current_bgm().play()
 
   start_time_line: () ->
     last_time = new Date()
