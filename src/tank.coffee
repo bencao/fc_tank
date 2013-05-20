@@ -570,9 +570,6 @@ class Tank extends MovableMapUnit2D
     super(@map, @area)
     @bom_on_destroy = true
 
-  accept: (map_unit) ->
-    (map_unit instanceof Missile) and (map_unit.parent is this)
-
   dead: () -> @hp <= 0
 
   level_up: (levels) ->
@@ -671,6 +668,8 @@ class UserTank extends Tank
     return "#{@type()}_lv#{@level}_frozen" if @frozen
     return "#{@type()}_lv#{@level}_with_ship" if @ship
     "#{@type()}_lv#{@level}"
+  accept: (map_unit) ->
+    (map_unit instanceof Missile) and (map_unit.parent is this)
 
 class UserP1Tank extends UserTank
   constructor: (@map, @area) ->
@@ -722,8 +721,8 @@ class EnemyTank extends Tank
   gift_up: (gifts) -> @gift_counts += gifts
   handle_fire: (cmd) -> super(cmd) unless @frozen
   accept: (map_unit) ->
-    ((map_unit instanceof Missile) and (map_unit.parent is this)) or
-      map_unit instanceof EnemyTank
+    map_unit instanceof EnemyTank or ((map_unit instanceof Missile) and
+      (map_unit.parent instanceof EnemyTank))
 
 class StupidTank extends EnemyTank
   speed: 0.07
@@ -850,7 +849,9 @@ class Gift extends MapUnit2D
     return if @destroyed
     tanks = _.select(@map.units_at(@area), (unit) -> unit instanceof Tank)
     _.each(tanks, (tank) => @apply(tank))
-    @destroy() if _.size(tanks) > 0
+    if _.size(tanks) > 0
+      @destroy()
+      @map.trigger('gift_consumed', this, tanks)
   apply: (tank) ->
 
   new_display: () ->
@@ -985,15 +986,11 @@ class UserCommander extends Commander
     @key_map = {}
     for key, code of key_setting
       @key_map[code] = key
+    @reset()
+  reset: () ->
     @key_status = {
-      up: false,
-      down: false,
-      left: false,
-      right: false,
-      fire: false
+      up: false, down: false, left: false, right: false, fire: false
     }
-    @reset_input()
-  reset_input: () ->
     @inputs = { up: [], down: [], left: [], right: [], fire: [] }
 
   is_pressed: (key) ->
@@ -1021,7 +1018,7 @@ class UserCommander extends Commander
             @start_move()
           else
             @stop_move() if keyup
-    @reset_input()
+    @inputs = { up: [], down: [], left: [], right: [], fire: [] }
 
   handle_key_press: () ->
     for key in ["up", "down", "left", "right"]
