@@ -5,8 +5,8 @@
   <title>FC Tank - a coffeescript rewritten of classic 90 tank on Nintendo Family Computer</title>
   <script type="text/javascript" src="js/coffeescript-v1.6.2.min.js"></script>
   <script type='text/javascript' src='js/jquery-v1.9.1.min.js'></script>
-  <script type='text/javascript' src='js/lodash-v1.1.1.min.js'></script>
-  <script type='text/javascript' src="js/kinetic-v4.4.1.min.js"></script>
+  <script type='text/javascript' src='js/lodash-v1.2.1.min.js'></script>
+  <script type='text/javascript' src="js/kinetic-v4.5.1.min.js"></script>
   <script type='text/javascript' src="js/howler-v1.1.5.min.js"></script>
   <style type='text/css'>
     #tank_sprite { display: none; }
@@ -15,15 +15,6 @@
       background: #000;
       width: 600px;
       height: 520px;
-    }
-    #instructions {
-      color: #a13;
-    }
-    #instructions dl {
-      float:left;
-    }
-    #instructions dt {
-      font-weight:bold;
     }
     body { background: #999; }
   </style>
@@ -53,7 +44,18 @@
 <body>
   <img id="tank_sprite" alt="tanks" width="400" height="360" src="image/tanks.png" />
   <div id="canvas"></div>
-  <div id="instructions">
+  <div id="game_instructions">
+    <dl class="p1">
+      <dt>Index Control</dt>
+      <dd>Press keyboard SPACE to switch users</dd>
+      <dd>Press keyboard ENTER to start game</dd>
+    </dl>
+  </div>
+  <div id="game_instructions">
+    <dl class="p1">
+      <dt>In Game Control</dt>
+      <dd>Press keyboard ENTER to toggle start/pause</dd>
+    </dl>
     <dl class="p1">
       <dt>P1 Control</dt>
       <dd>Press keyboard UP, DOWN, LEFT, RIGHT to move</dd>
