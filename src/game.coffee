@@ -16,13 +16,13 @@ class Game
   init_default_config: () ->
     @configs = {
       fps: 60, players: 1,
-      current_stage: 1, stages: 5, stage_autostart: false,
+      current_stage: 1, stages: 30, stage_autostart: false,
       game_over: false, hi_score: 20000, p1_score: 0, p2_score: 0,
       p1_level: 1, p2_level: 1, p1_lives: 2, p2_lives: 2,
       p1_killed_enemies: [], p2_killed_enemies: [],
       score_for_stupid: 100, score_for_fish: 200,
       score_for_fool: 300, score_for_strong: 400,
-      last_score: 0, enemies_per_stage: 20
+      score_for_gift: 500, last_score: 0, enemies_per_stage: 20
     }
 
   kick_off: () -> @switch_scene('welcome')
@@ -56,22 +56,11 @@ class Scene
   constructor: (@game) ->
     @layer = new Kinetic.Layer()
     @game.canvas.add(@layer)
-    # Kinetic bug fix start
-    sprite = (new Kinetic.Sprite({
-      x: -99,
-      y: -99,
-      image: document.getElementById('tank_sprite'),
-      animation: 'brick',
-      animations: Animations.terrains,
-      frameRate: Animations.rate('brick'),
-      index: 0
-    }))
-    @layer.add(sprite)
-    sprite.start()
-    # Kinetic bug fix end
     @layer.hide()
 
-  start: () -> @layer.show()
+  start: () ->
+    @layer.show()
+    @layer.draw()
   stop: () -> @layer.hide()
 
 class WelcomeScene extends Scene
@@ -80,21 +69,24 @@ class WelcomeScene extends Scene
     @static_group = new Kinetic.Group()
     @layer.add(@static_group)
     @init_statics()
+    @init_logo()
+    @init_user_selection()
     @sound = new Howl({urls: ['data/intro.ogg', 'data/intro.mp3']})
 
   start: () ->
     super()
     @static_group.move(-300, 0)
-    @static_group.transitionTo({
-      x: 0,
+    new Kinetic.Tween({
+      node: @static_group,
       duration: 1.5,
-      easing: "linear",
-      callback: () =>
+      x: 0,
+      easing: Kinetic.Easings.Linear,
+      onFinish: () =>
         @update_players()
         @enable_selection_control()
-        @sound.play()
-    })
+    }).play()
     @update_numbers()
+    @sound.play()
 
   stop: () ->
     super()
@@ -158,6 +150,8 @@ class WelcomeScene extends Scene
       fill: "#fff"
     })
     @static_group.add(@numbers_label)
+
+  init_logo: () ->
     # logo
     image = document.getElementById('tank_sprite')
     for area in [
@@ -256,7 +250,8 @@ class WelcomeScene extends Scene
         animations: {static: animations}
       })
       @static_group.add(brick_sprite)
-      brick_sprite.start()
+
+  init_user_selection: () ->
     # 1/2 user
     @static_group.add(new Kinetic.Text({
       x: 210,
@@ -283,10 +278,11 @@ class WelcomeScene extends Scene
       fontSize: 22,
       fontStyle: "bold",
       fontFamily: "Courier",
-      text: "© BEN",
+      text: "© BEN♥FENG",
       fill: "#fff"
     }))
     # tank
+    image = document.getElementById('tank_sprite')
     @select_tank = new Kinetic.Sprite({
       x: 170,
       y: 350,
@@ -308,18 +304,18 @@ class StageScene extends Scene
     @init_stage_nodes()
 
   start: () ->
-    super()
     @current_stage = @game.get_config('current_stage')
     @update_stage_label()
     if @game.get_config('stage_autostart')
       setTimeout((() => @game.switch_scene('game')), 2000)
     else
       @enable_stage_control()
+    super()
 
   stop: () ->
-    super()
     @disable_stage_control()
     @prepare_for_game_scene()
+    super()
 
   prepare_for_game_scene: () ->
     @game.set_config('p1_killed_enemies', [])
@@ -339,6 +335,7 @@ class StageScene extends Scene
         when 13
           # ENTER
           @game.switch_scene('game')
+      false
 
   disable_stage_control: () ->
     $(document).unbind "keydown"
@@ -360,12 +357,13 @@ class StageScene extends Scene
       fontStyle: "bold",
       fontFamily: "Courier",
       text: "STAGE #{@current_stage}",
-      fill: "#333"
+      fill: "#333",
     })
     @layer.add(@stage_label)
 
   update_stage_label: () ->
     @stage_label.setText("STAGE #{@current_stage}")
+    @layer.draw()
 
 class ReportScene extends Scene
   constructor: (@game) ->
@@ -425,6 +423,9 @@ class ReportScene extends Scene
     @p2_score_label.setText(p2_final_score)
     @game.set_config('hi_score', _.max([
       p1_final_score, p2_final_score, @game.get_config('hi_score')]))
+
+    @stage_label.setText("STAGE #{@game.get_config('current_stage')}")
+    @layer.draw()
 
   init_scene: () ->
     # Hi score texts
@@ -674,7 +675,7 @@ class GameScene extends Scene
     window.gs = this # for debug
 
   current_bgm: () ->
-    @bgms[(@current_stage - 1) % 7]
+    @bgms[(@current_stage - 1) % 8]
 
   reset_config_variables: () ->
     @fps = 0
@@ -735,6 +736,8 @@ class GameScene extends Scene
     @map.bind('map_ready', @born_enemy_tank, this)
     @map.bind('map_ready', @born_enemy_tank, this)
     @map.bind('tank_destroyed', @born_tanks, this)
+    @map.bind('tank_destroyed', @draw_tank_points, this)
+    @map.bind('gift_consumed', @draw_gift_points, this)
     @map.bind('home_destroyed', @check_enemy_win, this)
     @map.bind('tank_life_up', @add_extra_life, this)
     @builder.setup_stage(@current_stage)
@@ -766,15 +769,22 @@ class GameScene extends Scene
           @game.reset()
 
   disable_controls: () ->
+    if @map.p1_tank()
+      @map.p1_tank().commander.reset()
+    if @map.p2_tank()
+      @map.p2_tank().commander.reset()
     $(document).unbind "keyup"
     $(document).unbind "keydown"
 
   pause: () ->
     @running = false
     @stop_time_line()
+    @disable_user_controls()
+    @current_bgm().pause()
+
+  disable_user_controls: () ->
     @disable_controls()
     @enable_system_control()
-    @current_bgm().pause()
 
   rescue: () ->
     @running = true
@@ -945,6 +955,7 @@ class GameScene extends Scene
       unless @p1_user_initialized
         inherited_level = @game.get_config('p1_level')
         @map.p1_tank().level_up(inherited_level - 1)
+        @p1_user_initialized = true
       @update_status()
     else
       @check_enemy_win()
@@ -956,6 +967,7 @@ class GameScene extends Scene
       unless @p2_user_initialized
         inherited_level = @game.get_config('p2_level')
         @map.p2_tank().level_up(inherited_level - 1)
+        @p2_user_initialized = true
       @update_status()
     else
       @check_enemy_win()
@@ -998,6 +1010,7 @@ class GameScene extends Scene
     return unless _.isNull(@winner)
     @winner = 'enemy'
     # hi score or
+    @disable_user_controls()
     # welcome
     setTimeout(() =>
       @game.set_config('game_over', true)
@@ -1017,6 +1030,43 @@ class GameScene extends Scene
         p2_kills = @game.get_config('p2_killed_enemies')
         p2_kills.push(tank.type())
       @born_enemy_tank()
+
+  draw_tank_points: (tank, killed_by_tank) ->
+    if tank instanceof EnemyTank
+      point_label = new Kinetic.Text({
+        x: (tank.area.x1 + tank.area.x2) / 2 - 10,
+        y: (tank.area.y1 + tank.area.y2) / 2 - 5,
+        fontSize: 16,
+        fontStyle: "bold",
+        fontFamily: "Courier",
+        text: @game.get_config("score_for_#{tank.type()}")
+        fill: "#fff"
+      })
+      @status_panel.add(point_label)
+      setTimeout(() ->
+        point_label.destroy()
+      , 2000)
+
+  draw_gift_points: (gift, tanks) ->
+    _.detect(tanks, (tank) =>
+      if tank instanceof UserTank
+        point_label = new Kinetic.Text({
+          x: (gift.area.x1 + gift.area.x2) / 2 - 10,
+          y: (gift.area.y1 + gift.area.y2) / 2 - 5,
+          fontSize: 16,
+          fontStyle: "bold",
+          fontFamily: "Courier",
+          text: @game.get_config("score_for_gift"),
+          fill: "#fff"
+        })
+        @status_panel.add(point_label)
+        setTimeout(() ->
+          point_label.destroy()
+        , 2000)
+        true
+      else
+        false
+    )
 
 class TiledMapBuilder
   constructor: (@map, @json) ->
