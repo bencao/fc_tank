@@ -16,7 +16,7 @@ class Game
   init_default_config: () ->
     @configs = {
       fps: 60, players: 1,
-      current_stage: 1, stages: 30, stage_autostart: false,
+      current_stage: 1, stages: 50, stage_autostart: false,
       game_over: false, hi_score: 20000, p1_score: 0, p2_score: 0,
       p1_level: 1, p2_level: 1, p1_lives: 2, p2_lives: 2,
       p1_killed_enemies: [], p2_killed_enemies: [],
