@@ -116,9 +116,11 @@ class WelcomeScene extends Scene
         when 13
           # ENTER
           @game.switch_scene('stage')
+          event.preventDefault()
         when 32
           # SPACE
           @toggle_players()
+          event.preventDefault()
 
   disable_selection_control: () ->
     $(document).unbind "keydown"
@@ -328,13 +330,16 @@ class StageScene extends Scene
           # UP, LEFT
           @current_stage = @game.prev_stage()
           @update_stage_label()
+          event.preventDefault()
         when 39, 40
           # RIGHT, DOWN
           @current_stage = @game.next_stage()
           @update_stage_label()
+          event.preventDefault()
         when 13
           # ENTER
           @game.switch_scene('game')
+          event.preventDefault()
       false
 
   disable_stage_control: () ->
@@ -749,6 +754,7 @@ class GameScene extends Scene
         @map.p1_tank().commander.add_key_event("keyup", event.which)
       if @map.p2_tank()
         @map.p2_tank().commander.add_key_event("keyup", event.which)
+      event.preventDefault()
       false
 
     $(document).bind "keydown", (event) =>
@@ -756,6 +762,7 @@ class GameScene extends Scene
         @map.p1_tank().commander.add_key_event("keydown", event.which)
       if @map.p2_tank()
         @map.p2_tank().commander.add_key_event("keydown", event.which)
+      event.preventDefault()
       false
 
   enable_system_control: () ->
@@ -764,9 +771,11 @@ class GameScene extends Scene
         when 13
           # ENTER
           if @running then @pause() else @rescue()
+          event.preventDefault()
         when 27
           # ESC
           @game.reset()
+          event.preventDefault()
 
   disable_controls: () ->
     if @map.p1_tank()
