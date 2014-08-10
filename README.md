@@ -10,8 +10,8 @@ visit [Project Page](http://blog.bencao.it/fc_tank/) to try this game.
 ##Contribute
 Dear guys, you're highly welcome to contribute to this project~
 
-###Source files
-main logic are written in src/tank.coffee and src/game.coffee.
+###A brief introduction of how this game was developed
+please visit [Ben's Blog](http://blog.bencao.it/2013/05/06/game-develop-in-html5-canvas-and-coffeescript/) to see a blog post about it.
 
 ###Test
 To run test, you need to install [npm](https://npmjs.org/) first. Then
