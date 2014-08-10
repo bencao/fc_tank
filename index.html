@@ -41,6 +41,8 @@
     loadCoffee [
       "src/binomial_heap.coffee",
       "src/constant.coffee",
+      "src/sound.coffee",
+      "src/keyboard.coffee",
       "src/map/point.coffee",
       "src/map/map_area_2d.coffee",
       "src/map/map_area_2d_vertex.coffee",
@@ -52,15 +54,14 @@
       "src/objects/missile.coffee",
       "src/objects/gifts.coffee",
       "src/objects/commanders.coffee",
-      "src/game.coffee",
       "src/scene/scene.coffee",
       "src/scene/welcome_scene.coffee",
       "src/scene/stage_scene.coffee",
       "src/scene/report_scene.coffee",
       "src/scene/game_scene.coffee",
       "src/scene/hi_score_scene.coffee",
-      "src/sound.coffee",
       "src/tiled_map_builder.coffee",
+      "src/scene_manager.coffee",
       "src/bootstrap.coffee"
     ]
   </script>
@@ -72,20 +73,11 @@
   </div>
   <div id="game_instructions">
     <dl class="p1">
-      <dt>Index Control</dt>
-      <dd>Press keyboard <strong>SPACE</strong> to switch users</dd>
-      <dd>Press keyboard <strong>ENTER</strong> to start game</dd>
-    </dl>
-  </div>
-  <div id="game_instructions">
-    <dl class="p1">
-      <dt>In Game Control</dt>
-      <dd>Press keyboard <strong>ENTER</strong> to toggle start/pause</dd>
-    </dl>
-    <dl class="p1">
       <dt>P1 Control</dt>
       <dd>Press keyboard <strong>UP, DOWN, LEFT, RIGHT</strong> to move</dd>
-      <dd>Press keyboard <strong>SPACE</strong> to fire</dd>
+      <dd>Press keyboard <strong>Z</strong> to fire</dd>
+      <dd>Press keyboard <strong>SPACE</strong> to toggle 1 user or 2 users mode</dd>
+      <dd>Press keyboard <strong>ENTER</strong> to start game or toggle game start/pause</dd>
     </dl>
     <dl class="p2">
       <dt>P2 Control</dt>

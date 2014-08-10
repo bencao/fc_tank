@@ -34,13 +34,11 @@ class LandMineGift extends Gift
         tank.destroy()
         @map.trigger('user_tank_destroyed', tank, null)
       )
-      @map.trigger('all_user_tanks_destroyed', @map.user_tanks(), null)
     else
       _.each(@map.enemy_tanks(), (tank) =>
         tank.destroy()
         @map.trigger('enemy_tank_destroyed', tank, null)
       )
-      @map.trigger('all_enemy_tanks_destroyed', @map.enemy_tanks(), null)
   type: () -> 'land_mine'
 
 class GunGift extends Gift

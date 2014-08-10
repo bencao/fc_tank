@@ -125,17 +125,13 @@ class UserTank extends Tank
 class UserP1Tank extends UserTank
   constructor: (@map, @area) ->
     super(@map, @area)
-    @commander = new UserCommander(this, {
-      up: 38, down: 40, left: 37, right: 39, fire: 32
-    })
+    @commander = new UserCommander(this)
   type: -> 'user_p1'
 
 class UserP2Tank extends UserTank
   constructor: (@map, @area) ->
     super(@map, @area)
-    @commander = new UserCommander(this, {
-      up: 87, down: 83, left: 65, right: 68, fire: 74
-    })
+    @commander = new UserCommander(this)
   type: -> 'user_p2'
 
 class EnemyTank extends Tank

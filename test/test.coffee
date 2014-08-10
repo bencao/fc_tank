@@ -49,8 +49,8 @@ test "intersect", () ->
     "intersection is not directional, area.intersect(other_area) is the same as other_area.intersect(area)")
 
 test "sub", () ->
-  area1 = new MapArea2D(40, 40, 80, 80)
-  area2 = new MapArea2D(60, 60, 80, 80)
+  area1     = new MapArea2D(40, 40, 80, 80)
+  area2     = new MapArea2D(60, 60, 80, 80)
   sub_areas = area1.sub(area2)
   equal(_.size(sub_areas), 2,
     "[40, 40, 80, 80] sub [60, 60, 80, 80] is divided to 2 sub areas")
@@ -59,8 +59,8 @@ test "sub", () ->
     new MapArea2D(40, 60, 60, 80)
   ], "[40, 40, 80, 80] sub [60, 60, 80, 80] is divided to [40, 40, 80, 60] and [40, 60, 60, 80]")
 
-  area3 = new MapArea2D(40, 40, 80, 80)
-  area4 = new MapArea2D(40, 50, 80, 90)
+  area3      = new MapArea2D(40, 40, 80, 80)
+  area4      = new MapArea2D(40, 50, 80, 90)
   sub_areas2 = area3.sub(area4)
   equal(_.size(sub_areas2), 1,
     "[40, 40, 80, 80] sub [40, 50, 80, 90] is divided to 1 sub areas")
@@ -94,13 +94,13 @@ window.TestFixtures = {
 }
 
 test "shortest_path is fast enough", () ->
-  map = TestFixtures.map_fixture()
-  start_time = (new Date()).getMilliseconds()
+  map          = TestFixtures.map_fixture()
+  start_time   = (new Date()).getMilliseconds()
   start_vertex = map.vertexes_at(new MapArea2D(0, 0, 40, 40))
-  end_vertex = map.vertexes_at(new MapArea2D(460, 210, 500, 250))
-  path = map.shortest_path(map.tanks[0], start_vertex, end_vertex)
-  end_time = (new Date()).getMilliseconds()
-  taken_time = (end_time + 1000 - start_time) % 1000
+  end_vertex   = map.vertexes_at(new MapArea2D(460, 210, 500, 250))
+  path         = map.shortest_path(map.tanks[0], start_vertex, end_vertex)
+  end_time     = (new Date()).getMilliseconds()
+  taken_time   = (end_time + 1000 - start_time) % 1000
   ok(taken_time < 50, "shortest path should take less than 50 milliseconds")
 
 module "Terrain"

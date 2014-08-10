@@ -13,7 +13,6 @@ class StageScene extends Scene
     super()
 
   stop: () ->
-    @disable_stage_control()
     @prepare_for_game_scene()
     super()
 
@@ -22,26 +21,14 @@ class StageScene extends Scene
     @game.set_config('p2_killed_enemies', [])
 
   enable_stage_control: () ->
-    $(document).bind "keydown", (event) =>
-      switch event.which
-        when 37, 38
-          # UP, LEFT
-          @current_stage = @game.prev_stage()
-          @update_stage_label()
-          event.preventDefault()
-        when 39, 40
-          # RIGHT, DOWN
-          @current_stage = @game.next_stage()
-          @update_stage_label()
-          event.preventDefault()
-        when 13
-          # ENTER
-          @game.switch_scene('game')
-          event.preventDefault()
-      false
-
-  disable_stage_control: () ->
-    $(document).unbind "keydown"
+    @keyboard.on_key_down ["UP", "LEFT"], (event) =>
+      @current_stage = @game.prev_stage()
+      @update_stage_label()
+    @keyboard.on_key_down ["DOWN", "RIGHT"], (event) =>
+      @current_stage = @game.next_stage()
+      @update_stage_label()
+    @keyboard.on_key_down "ENTER", (event) =>
+      @game.switch_scene('game')
 
   init_stage_nodes: () ->
     # bg

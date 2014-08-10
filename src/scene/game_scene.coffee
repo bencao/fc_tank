@@ -1,17 +1,16 @@
 class GameScene extends Scene
   constructor: (@game) ->
     super(@game)
-    @map = new Map2D(@layer)
+    @map   = new Map2D(@layer)
     @sound = new Sound()
     $.ajax {
-      url: "data/terrains.json",
-      success: (json) => @builder = new TiledMapBuilder(@map, json),
+      url     : "data/terrains.json",
+      success : (json) => @builder = new TiledMapBuilder(@map, json),
       dataType: 'json',
-      async: false
+      async   : false
     }
     @reset_config_variables()
     @init_status()
-    window.gs = this # for debug
 
   reset_config_variables: () ->
     @fps = 0
@@ -47,7 +46,6 @@ class GameScene extends Scene
   stop: () ->
     super()
     @update_status()
-    @disable_controls()
     @stop_time_line()
     @save_user_status() if @winner == 'user'
     @map.reset()
@@ -71,14 +69,14 @@ class GameScene extends Scene
     @map.bind('map_ready', @born_enemy_tank, this)
     @map.bind('map_ready', @born_enemy_tank, this)
     @map.bind('user_tank_destroyed', @born_user_tanks, this)
+    @map.bind('user_tank_destroyed', (() -> @sound.play('gift_bomb')), this)
     @map.bind('enemy_tank_destroyed', @born_enemy_tanks, this)
     @map.bind('enemy_tank_destroyed', @draw_tank_points, this)
-    @map.bind('all_user_tanks_destroyed', (() -> @sound.play('gift_bomb')), this)
-    @map.bind('all_enemy_tanks_destroyed', (() -> @sound.play('gift_bomb')), this)
+    @map.bind('enemy_tank_destroyed', (() -> @sound.play('gift_bomb')), this)
     @map.bind('gift_consumed', @draw_gift_points, this)
     @map.bind('gift_consumed', (() -> @sound.play('gift')), this)
     @map.bind('home_destroyed', @check_enemy_win, this)
-    @map.bind('home_destroyed', (() -> @sound.play('lose')), this)
+    @map.bind('home_destroyed', (() -> @sound.play('gift_bomb')), this)
     @map.bind('tank_life_up', @add_extra_life, this)
     @map.bind('tank_life_up', (() -> @sound.play('gift_life')), this)
     @map.bind('user_fired', (() -> @sound.play('fire')), this)
@@ -88,41 +86,41 @@ class GameScene extends Scene
     @map.trigger('map_ready')
 
   enable_user_control: () ->
-    $(document).bind "keyup", (event) =>
-      if @map.p1_tank()
-        @map.p1_tank().commander.add_key_event("keyup", event.which)
-      if @map.p2_tank()
-        @map.p2_tank().commander.add_key_event("keyup", event.which)
-      event.preventDefault()
-      false
+    p1_control_mappings = {
+      "UP"   : "up",
+      "DOWN" : "down",
+      "LEFT" : "left",
+      "RIGHT": "right",
+      "Z"    : "fire"
+    }
 
-    $(document).bind "keydown", (event) =>
-      if @map.p1_tank()
-        @map.p1_tank().commander.add_key_event("keydown", event.which)
-      if @map.p2_tank()
-        @map.p2_tank().commander.add_key_event("keydown", event.which)
-      event.preventDefault()
-      false
+    p2_control_mappings = {
+      "W": "up",
+      "S": "down",
+      "A": "left",
+      "D": "right",
+      "J": "fire"
+    }
+
+    _.forIn p1_control_mappings, (virtual_command, physical_key) =>
+      @keyboard.on_key_down physical_key, (event) =>
+        if @map.p1_tank()
+          @map.p1_tank().commander.on_command_start(virtual_command)
+      @keyboard.on_key_up physical_key, (event) =>
+        if @map.p1_tank()
+          @map.p1_tank().commander.on_command_end(virtual_command)
+
+    _.forIn p2_control_mappings, (virtual_command, physical_key) =>
+      @keyboard.on_key_down physical_key, (event) =>
+        if @map.p2_tank()
+          @map.p2_tank().commander.on_command_start(virtual_command)
+      @keyboard.on_key_up physical_key, (event) =>
+        if @map.p2_tank()
+          @map.p2_tank().commander.on_command_end(virtual_command)
 
   enable_system_control: () ->
-    $(document).bind "keydown", (event) =>
-      switch event.which
-        when 13
-          # ENTER
-          if @running then @pause() else @rescue()
-          event.preventDefault()
-        when 27
-          # ESC
-          @game.reset()
-          event.preventDefault()
-
-  disable_controls: () ->
-    if @map.p1_tank()
-      @map.p1_tank().commander.reset()
-    if @map.p2_tank()
-      @map.p2_tank().commander.reset()
-    $(document).unbind "keyup"
-    $(document).unbind "keydown"
+    @keyboard.on_key_down "ENTER", (event) =>
+      if @running then @pause() else @rescue()
 
   pause: () ->
     @running = false
@@ -130,7 +128,9 @@ class GameScene extends Scene
     @disable_user_controls()
 
   disable_user_controls: () ->
-    @disable_controls()
+    @keyboard.reset()
+    @map.p1_tank().commander.reset() if @map.p1_tank()
+    @map.p2_tank().commander.reset() if @map.p2_tank()
     @enable_system_control()
 
   rescue: () ->
@@ -350,18 +350,17 @@ class GameScene extends Scene
     setTimeout((() =>
       @game.next_stage()
       @game.switch_scene('report')
-    ), 5000)
+    ), 3000)
 
   enemy_win: () ->
     return unless _.isNull(@winner)
     @winner = 'enemy'
-    # hi score or
     @disable_user_controls()
-    # welcome
     setTimeout(() =>
       @game.set_config('game_over', true)
+      @sound.play('lose')
       @game.switch_scene('report')
-    , 5000)
+    , 3000)
 
   born_user_tanks: (tank, killed_by_tank) ->
     if tank instanceof UserP1Tank
@@ -381,35 +380,35 @@ class GameScene extends Scene
   draw_tank_points: (tank, killed_by_tank) ->
     if tank instanceof EnemyTank
       point_label = new Kinetic.Text({
-        x: (tank.area.x1 + tank.area.x2) / 2 - 10,
-        y: (tank.area.y1 + tank.area.y2) / 2 - 5,
-        fontSize: 16,
-        fontStyle: "bold",
+        x         : (tank.area.x1 + tank.area.x2) / 2 - 10,
+        y         : (tank.area.y1 + tank.area.y2) / 2 - 5,
+        fontSize  : 16,
+        fontStyle : "bold",
         fontFamily: "Courier",
-        text: @game.get_config("score_for_#{tank.type()}")
-        fill: "#fff"
+        text      : @game.get_config("score_for_#{tank.type()}")
+        fill      : "#fff"
       })
       @status_panel.add(point_label)
       setTimeout(() ->
         point_label.destroy()
-      , 2000)
+      , 1500)
 
   draw_gift_points: (gift, tanks) ->
     _.detect(tanks, (tank) =>
       if tank instanceof UserTank
         point_label = new Kinetic.Text({
-          x: (gift.area.x1 + gift.area.x2) / 2 - 10,
-          y: (gift.area.y1 + gift.area.y2) / 2 - 5,
-          fontSize: 16,
-          fontStyle: "bold",
+          x         : (gift.area.x1 + gift.area.x2) / 2 - 10,
+          y         : (gift.area.y1 + gift.area.y2) / 2 - 5,
+          fontSize  : 16,
+          fontStyle : "bold",
           fontFamily: "Courier",
-          text: @game.get_config("score_for_gift"),
-          fill: "#fff"
+          text      : @game.get_config("score_for_gift"),
+          fill      : "#fff"
         })
         @status_panel.add(point_label)
         setTimeout(() ->
           point_label.destroy()
-        , 2000)
+        , 1500)
         true
       else
         false

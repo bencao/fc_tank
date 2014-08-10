@@ -1,4 +1,4 @@
-class Game
+class SceneManager
   constructor: () ->
     @canvas = new Kinetic.Stage({container: 'canvas', width: 600, height: 520})
     @init_default_config()
@@ -39,7 +39,7 @@ class Game
       enemies_per_stage: 20
     }
 
-  kick_off: () -> @switch_scene('welcome')
+  kick_off_game: () -> @switch_scene('welcome')
 
   prev_stage: () ->
     @mod_stage(@configs['current_stage'] - 1 + @configs['stages'])
