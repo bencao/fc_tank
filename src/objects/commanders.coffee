@@ -1,26 +1,15 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
 class Commander
   constructor: (@map_unit) ->
     @direction = @map_unit.direction
-    @commands = []
+    @commands  = []
+
   direction_action_map: {
-    up: Direction.UP,
-    down: Direction.DOWN,
-    left: Direction.LEFT,
+    up   : Direction.UP,
+    down : Direction.DOWN,
+    left : Direction.LEFT,
     right: Direction.RIGHT
   }
+
   # calculate next commands
   next: () ->
 
@@ -31,16 +20,21 @@ class Commander
       return command['params']['direction'] if command['type'] == "direction"
       command['type']
     )
+
   direction_changed: (action) ->
     new_direction = @direction_action_map[action]
     @map_unit.direction != new_direction
+
   turn: (action) ->
     new_direction = @direction_action_map[action]
     @commands.push(@_direction_command(new_direction))
+
   start_move: (offset = null) ->
     @commands.push(@_start_move_command(offset))
+
   stop_move: () ->
     @commands.push(@_stop_move_command())
+
   fire: () ->
     @commands.push(@_fire_command())
 
@@ -50,72 +44,85 @@ class Commander
       type: "direction",
       params: { direction: direction }
     }
+
   _start_move_command: (offset = null) ->
     {
       type: "start_move",
       params: { offset: offset }
     }
+
   _stop_move_command: -> { type: "stop_move" }
+
   _fire_command: -> { type: "fire" }
 
 class UserCommander extends Commander
-  constructor: (@map_unit, key_setting) ->
+  constructor: (@map_unit) ->
     super(@map_unit)
-    @key_map = {}
-    for key, code of key_setting
-      @key_map[code] = key
     @reset()
-  reset: () ->
-    @key_status = {
-      up: false, down: false, left: false, right: false, fire: false
-    }
-    @inputs = { up: [], down: [], left: [], right: [], fire: [] }
 
-  is_pressed: (key) ->
-    @key_status[key]
-  set_pressed: (key, bool) ->
-    @key_status[key] = bool
+  reset: () ->
+    @reset_on_going_commands()
+    @reset_command_queue()
+
+  reset_on_going_commands: () ->
+    @command_on_going = {
+      up   : false,
+      down : false,
+      left : false,
+      right: false,
+      fire : false
+    }
+
+  reset_command_queue: () ->
+    @command_queue = {
+      up   : [],
+      down : [],
+      left : [],
+      right: [],
+      fire : []
+    }
+
+  is_on_going: (command) ->
+    @command_on_going[command]
+
+  set_on_going: (command, bool) ->
+    @command_on_going[command] = bool
 
   next: ->
-    @handle_key_up_key_down()
-    @handle_key_press()
+    @handle_finished_commands()
+    @handle_on_going_commands()
 
-  handle_key_up_key_down: () ->
-    for key, types of @inputs
-      continue if _.isEmpty(types)
-      switch (key)
+  handle_finished_commands: () ->
+    for command, sequences of @command_queue
+      continue if _.isEmpty(sequences)
+      switch (command)
         when "fire"
           @fire()
         when "up", "down", "left", "right"
-          if @direction_changed(key)
-            @turn(key)
+          if @direction_changed(command)
+            @turn(command)
             break
-          keyup = _.contains(@inputs[key], "keyup")
-          keydown = _.contains(@inputs[key], "keydown")
-          if keydown
-            @start_move()
-          else
-            @stop_move() if keyup
-    @inputs = { up: [], down: [], left: [], right: [], fire: [] }
+          has_start_command = _.contains(sequences, "start")
+          has_end_command   = _.contains(sequences, "end")
+          @start_move() if has_start_command
+          @stop_move()  if !has_start_command && has_end_command
+    @reset_command_queue()
 
-  handle_key_press: () ->
-    for key in ["up", "down", "left", "right"]
-      if @is_pressed(key)
-        @turn(key)
+  handle_on_going_commands: () ->
+    for command in ["up", "down", "left", "right"]
+      if @is_on_going(command)
+        @turn(command)
         @start_move()
-    if @is_pressed("fire")
+    if @is_on_going("fire")
       @fire()
 
-  add_key_event: (type, key_code) ->
-    return true if _.isUndefined(@key_map[key_code])
-    key = @key_map[key_code]
-    switch type
-      when "keyup"
-        @set_pressed(key, false)
-        @inputs[key].push("keyup")
-      when "keydown"
-        @set_pressed(key, true)
-        @inputs[key].push("keydown")
+  on_command_start: (command) ->
+    @set_on_going(command, true)
+    @command_queue[command].push("start")
+
+  on_command_end: (command) ->
+    @set_on_going(command, false)
+    @command_queue[command].push("end")
 
 class EnemyAICommander extends Commander
   constructor: (@map_unit) ->
@@ -123,6 +130,7 @@ class EnemyAICommander extends Commander
     @map = @map_unit.map
     @reset_path()
     @last_area = null
+
   next: ->
     # move towards home
     if _.size(@path) == 0

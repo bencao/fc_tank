@@ -23,7 +23,6 @@ class WelcomeScene extends Scene
 
   stop: () ->
     super()
-    @disable_selection_control()
     @prepare_for_game_scene()
 
   update_numbers: () ->
@@ -43,19 +42,10 @@ class WelcomeScene extends Scene
     @game.set_config('p2_level', 1)
 
   enable_selection_control: () ->
-    $(document).bind "keydown", (event) =>
-      switch event.which
-        when 13
-          # ENTER
-          @game.switch_scene('stage')
-          event.preventDefault()
-        when 32
-          # SPACE
-          @toggle_players()
-          event.preventDefault()
-
-  disable_selection_control: () ->
-    $(document).unbind "keydown"
+    @keyboard.on_key_down 'ENTER', () =>
+      @game.switch_scene('stage')
+    @keyboard.on_key_down 'SPACE', () =>
+      @toggle_players()
 
   toggle_players: () ->
     if @game.get_config('players') == 1
