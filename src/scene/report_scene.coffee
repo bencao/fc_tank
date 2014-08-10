@@ -20,7 +20,7 @@ class ReportScene extends Scene
     super()
 
   update_numbers: () ->
-    @p2_group.show() if @game.get_config('players') == 1
+    @p2_group.show() if @game.get_config('players') == 2
     p1_kills = @game.get_config('p1_killed_enemies')
     p1_numbers = {
       stupid: 0, stupid_pts: 0,

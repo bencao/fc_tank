@@ -17,8 +17,27 @@
     scriptsToTest = [
       "../src/binomial_heap.coffee",
       "../src/constant.coffee",
-      "../src/tank.coffee",
-      "../src/game.coffee"
+      "../src/sound.coffee",
+      "../src/keyboard.coffee",
+      "../src/map/point.coffee",
+      "../src/map/map_area_2d.coffee",
+      "../src/map/map_area_2d_vertex.coffee",
+      "../src/map/map_2d.coffee",
+      "../src/map/map_unit_2d.coffee",
+      "../src/map/movable_map_unit_2d.coffee",
+      "../src/map/terrains.coffee",
+      "../src/objects/tanks.coffee",
+      "../src/objects/missile.coffee",
+      "../src/objects/gifts.coffee",
+      "../src/objects/commanders.coffee",
+      "../src/scene/scene.coffee",
+      "../src/scene/welcome_scene.coffee",
+      "../src/scene/stage_scene.coffee",
+      "../src/scene/report_scene.coffee",
+      "../src/scene/game_scene.coffee",
+      "../src/scene/hi_score_scene.coffee",
+      "../src/tiled_map_builder.coffee",
+      "../src/scene_manager.coffee"
     ]
     tests = ["test.coffee"]
     loadCoffee = (files) ->
@@ -28,10 +47,10 @@
         $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
       load = (file) ->
         $.ajax {
-          url: file,
-          success: compile_and_add,
+          url     : file,
+          success : compile_and_add,
           dataType: 'text'
-          async: false
+          async   : false
         }
       load file for file in files
     loadCoffee scriptsToTest
