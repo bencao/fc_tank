@@ -1,5 +1,9 @@
 $ ->
-  scene_manager        = new SceneManager()
-  window.scene_manager = scene_manager
-  window.game_scene    = scene_manager.scenes['game']
-  scene_manager.kick_off_game()
+  game                      = new Game()
+  # for debug
+  window.game               = game
+  window.welcome_scene      = game.scenes['welcome']
+  window.stage_scene        = game.scenes['stage']
+  window.battle_field_scene = game.scenes['battle_field']
+  window.report_scene       = game.scenes['report']
+  game.kick_off()

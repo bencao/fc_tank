@@ -4,10 +4,10 @@ class StageScene extends Scene
     @init_stage_nodes()
 
   start: () ->
-    @current_stage = @game.get_config('current_stage')
+    @current_stage = @game.get_status('current_stage')
     @update_stage_label()
-    if @game.get_config('stage_autostart')
-      setTimeout((() => @game.switch_scene('game')), 2000)
+    if @game.get_status('stage_autostart')
+      setTimeout((() => @game.switch_scene('battle_field')), 1500)
     else
       @enable_stage_control()
     super()
@@ -17,8 +17,8 @@ class StageScene extends Scene
     super()
 
   prepare_for_game_scene: () ->
-    @game.set_config('p1_killed_enemies', [])
-    @game.set_config('p2_killed_enemies', [])
+    @game.update_status('p1_killed_enemies', [])
+    @game.update_status('p2_killed_enemies', [])
 
   enable_stage_control: () ->
     @keyboard.on_key_down ["UP", "LEFT"], (event) =>
@@ -28,7 +28,7 @@ class StageScene extends Scene
       @current_stage = @game.next_stage()
       @update_stage_label()
     @keyboard.on_key_down "ENTER", (event) =>
-      @game.switch_scene('game')
+      @game.switch_scene('battle_field')
 
   init_stage_nodes: () ->
     # bg
