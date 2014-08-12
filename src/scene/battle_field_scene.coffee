@@ -1,4 +1,4 @@
-class GameScene extends Scene
+class BattleFieldScene extends Scene
   constructor: (@game) ->
     super(@game)
     @map   = new Map2D(@layer)
@@ -15,22 +15,24 @@ class GameScene extends Scene
   reset_config_variables: () ->
     @fps = 0
     @remain_enemy_counts = 0
-    @remain_user_p1_lives = 0
-    @remain_user_p2_lives = 0
     @current_stage = 0
     @last_enemy_born_area_index = 0
 
   load_config_variables: () ->
-    @fps = @game.get_config('fps')
-    @remain_enemy_counts = @game.get_config('enemies_per_stage')
-    @remain_user_p1_lives = @game.get_config('p1_lives')
-    if @game.get_config('players') == 2
-      @remain_user_p2_lives = @game.get_config('p2_lives')
-    else
-      @remain_user_p2_lives = 0
-    @current_stage = @game.get_config('current_stage')
+    @fps                        = @game.get_config('fps')
+    @remain_enemy_counts        = @game.get_config('enemies_per_stage')
+    @current_stage              = @game.get_status('current_stage')
     @last_enemy_born_area_index = 0
-    @winner = null
+    @winner                     = null
+    @remain_user_p1_lives       = @game.get_status('p1_lives')
+    unless @game.single_player_mode()
+      @remain_user_p2_lives     = @game.get_status('p2_lives')
+    else
+      @remain_user_p2_lives     = 0
+    @p1_level                   = @game.get_status('p1_level')
+    @p1_ship                    = @game.get_status('p1_ship')
+    @p2_level                   = @game.get_status('p2_level')
+    @p2_ship                    = @game.get_status('p2_ship')
 
   start: () ->
     super()
@@ -40,48 +42,57 @@ class GameScene extends Scene
     @enable_system_control()
     @start_time_line()
     @running = true
-    @p1_user_initialized = false
-    @p2_user_initialized = false
 
   stop: () ->
     super()
     @update_status()
     @stop_time_line()
-    @save_user_status() if @winner == 'user'
     @map.reset()
 
   save_user_status: () ->
-    @game.set_config('p1_lives', @remain_user_p1_lives + 1)
-    @game.set_config('p2_lives', @remain_user_p2_lives + 1)
-    if @map.p1_tank() != undefined
-      @game.set_config('p1_level', @map.p1_tank().level)
-      @game.set_config('p1_ship', @map.p1_tank().ship)
-    if @map.p2_tank() != undefined
-      @game.set_config('p2_level', @map.p2_tank().level)
-      @game.set_config('p2_ship', @map.p2_tank().ship)
+    @game.update_status('p1_lives', @remain_user_p1_lives + 1)
+    @game.update_status('p2_lives', @remain_user_p2_lives + 1)
+    if @map.p1_tank()
+      @game.update_status('p1_level', @map.p1_tank().level)
+      @game.update_status('p1_ship', @map.p1_tank().ship)
+    if @map.p2_tank()
+      @game.update_status('p2_level', @map.p2_tank().level)
+      @game.update_status('p2_ship', @map.p2_tank().ship)
 
   start_map: () ->
     # wait until builder loaded
     @map.bind('map_ready', (() -> @sound.play('start_stage')), this)
     @map.bind('map_ready', @born_p1_tank, this)
-    @map.bind('map_ready', @born_p2_tank, this)
+    @map.bind('map_ready', @born_p2_tank, this) unless @game.single_player_mode()
     @map.bind('map_ready', @born_enemy_tank, this)
     @map.bind('map_ready', @born_enemy_tank, this)
     @map.bind('map_ready', @born_enemy_tank, this)
+
+    @map.bind('user_tank_destroyed', @check_enemy_win, this)
     @map.bind('user_tank_destroyed', @born_user_tanks, this)
     @map.bind('user_tank_destroyed', (() -> @sound.play('gift_bomb')), this)
-    @map.bind('enemy_tank_destroyed', @born_enemy_tanks, this)
+
+    @map.bind('enemy_tank_destroyed', @born_enemy_tank, this)
+    @map.bind('enemy_tank_destroyed', @increase_enemy_kills_by_user, this)
     @map.bind('enemy_tank_destroyed', @draw_tank_points, this)
+    @map.bind('enemy_tank_destroyed', @check_user_win, this)
     @map.bind('enemy_tank_destroyed', (() -> @sound.play('gift_bomb')), this)
+
     @map.bind('gift_consumed', @draw_gift_points, this)
     @map.bind('gift_consumed', (() -> @sound.play('gift')), this)
-    @map.bind('home_destroyed', @check_enemy_win, this)
+
+    @map.bind('home_destroyed', @enemy_win, this)
     @map.bind('home_destroyed', (() -> @sound.play('gift_bomb')), this)
+
     @map.bind('tank_life_up', @add_extra_life, this)
     @map.bind('tank_life_up', (() -> @sound.play('gift_life')), this)
+
     @map.bind('user_fired', (() -> @sound.play('fire')), this)
+
     @map.bind('user_moved', (() -> @sound.play('user_move')), this)
+
     @map.bind('enemy_moved', (() -> @sound.play('enemy_move')), this)
+
     @builder.setup_stage(@current_stage)
     @map.trigger('map_ready')
 
@@ -294,29 +305,31 @@ class GameScene extends Scene
       @remain_user_p2_lives += 1
     @update_status()
 
+  born_user_tanks: (tank, killed_by_tank) ->
+    if tank instanceof UserP1Tank
+      @p1_level = @game.get_config('initial_p1_level')
+      @p1_ship  = @game.get_config('initial_p1_ship')
+      @born_p1_tank()
+    else
+      @p2_level = @game.get_config('initial_p2_level')
+      @p2_ship  = @game.get_config('initial_p2_ship')
+      @born_p2_tank()
+
   born_p1_tank: () ->
     if @remain_user_p1_lives > 0
       @remain_user_p1_lives -= 1
-      @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
-      unless @p1_user_initialized
-        inherited_level = @game.get_config('p1_level')
-        @map.p1_tank().level_up(inherited_level - 1)
-        @p1_user_initialized = true
+      p1_tank = @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
+      p1_tank.level_up(@game.get_status('p1_level') - 1)
+      p1_tank.on_ship(@game.get_status('p1_ship'))
       @update_status()
-    else
-      @check_enemy_win()
 
   born_p2_tank: () ->
     if @remain_user_p2_lives > 0
       @remain_user_p2_lives -= 1
-      @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
-      unless @p2_user_initialized
-        inherited_level = @game.get_config('p2_level')
-        @map.p2_tank().level_up(inherited_level - 1)
-        @p2_user_initialized = true
+      p2_tank = @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
+      p2_tank.level_up(@game.get_status('p2_level') - 1)
+      p2_tank.on_ship(@game.get_status('p2_ship'))
       @update_status()
-    else
-      @check_enemy_win()
 
   born_enemy_tank: () ->
     if @remain_enemy_counts > 0
@@ -332,15 +345,12 @@ class GameScene extends Scene
         enemy_born_areas[@last_enemy_born_area_index])
       @last_enemy_born_area_index = (@last_enemy_born_area_index + 1) % 3
       @update_status()
-    else
-      @check_user_win()
 
   check_user_win: () ->
     if @remain_enemy_counts == 0 and _.size(@map.enemy_tanks()) == 0
       @user_win()
 
   check_enemy_win: () ->
-    @enemy_win() if @map.home().destroyed
     @enemy_win() if (@remain_user_p1_lives == 0 and @remain_user_p2_lives == 0)
 
   user_win: () ->
@@ -348,7 +358,7 @@ class GameScene extends Scene
     @winner = 'user'
     # report
     setTimeout((() =>
-      @game.next_stage()
+      @save_user_status()
       @game.switch_scene('report')
     ), 3000)
 
@@ -357,25 +367,18 @@ class GameScene extends Scene
     @winner = 'enemy'
     @disable_user_controls()
     setTimeout(() =>
-      @game.set_config('game_over', true)
+      @game.update_status('game_over', true)
       @sound.play('lose')
       @game.switch_scene('report')
     , 3000)
 
-  born_user_tanks: (tank, killed_by_tank) ->
-    if tank instanceof UserP1Tank
-      @born_p1_tank()
-    else
-      @born_p2_tank()
-
-  born_enemy_tanks: (tank, killed_by_tank) ->
+  increase_enemy_kills_by_user: (tank, killed_by_tank) ->
     if killed_by_tank instanceof UserP1Tank
-      p1_kills = @game.get_config('p1_killed_enemies')
+      p1_kills = @game.get_status('p1_killed_enemies')
       p1_kills.push(tank.type())
     else if killed_by_tank instanceof UserP2Tank
-      p2_kills = @game.get_config('p2_killed_enemies')
+      p2_kills = @game.get_status('p2_killed_enemies')
       p2_kills.push(tank.type())
-    @born_enemy_tank()
 
   draw_tank_points: (tank, killed_by_tank) ->
     if tank instanceof EnemyTank
