@@ -9,10 +9,11 @@ class ReportScene extends Scene
     super()
     @update_numbers()
     setTimeout(() =>
-      if @game.get_config('game_over')
+      if @game.get_status('game_over')
         @game.switch_scene('welcome')
       else
-        @game.set_config('stage_autostart', true)
+        @game.next_stage()
+        @game.update_status('stage_autostart', true)
         @game.switch_scene('stage')
     , 5000)
 
@@ -20,8 +21,8 @@ class ReportScene extends Scene
     super()
 
   update_numbers: () ->
-    @p2_group.show() if @game.get_config('players') == 2
-    p1_kills = @game.get_config('p1_killed_enemies')
+    @p2_group.show() unless @game.single_player_mode()
+    p1_kills = @game.get_status('p1_killed_enemies')
     p1_numbers = {
       stupid: 0, stupid_pts: 0,
       fish: 0, fish_pts: 0,
@@ -36,7 +37,7 @@ class ReportScene extends Scene
       p1_numbers['total'] += 1
       p1_numbers['total_pts'] += @game.get_config("score_for_#{type}")
     )
-    p2_kills = @game.get_config('p2_killed_enemies')
+    p2_kills = @game.get_status('p2_killed_enemies')
 
     _.each(p2_kills, (type) ->
       p2_numbers[type] += 1
@@ -48,16 +49,19 @@ class ReportScene extends Scene
       @p1_number_labels[tank].setText(number) unless tank == 'total_pts'
     for tank, number of p2_numbers
       @p2_number_labels[tank].setText(number) unless tank == 'total_pts'
-    p1_final_score = @game.get_config('p1_score') + p1_numbers.total_pts
-    p2_final_score = @game.get_config('p2_score') + p2_numbers.total_pts
-    @game.set_config('p1_score', p1_final_score)
-    @game.set_config('p2_score', p2_final_score)
+    p1_final_score = @game.get_status('p1_score') + p1_numbers.total_pts
+    p2_final_score = @game.get_status('p2_score') + p2_numbers.total_pts
+    @game.update_status('p1_score', p1_final_score)
+    @game.update_status('p2_score', p2_final_score)
     @p1_score_label.setText(p1_final_score)
     @p2_score_label.setText(p2_final_score)
-    @game.set_config('hi_score', _.max([
-      p1_final_score, p2_final_score, @game.get_config('hi_score')]))
+    @game.update_status('hi_score', _.max([
+      p1_final_score,
+      p2_final_score,
+      @game.get_config('initial_hi_score')
+    ]))
 
-    @stage_label.setText("STAGE #{@game.get_config('current_stage')}")
+    @stage_label.setText("STAGE #{@game.get_status('current_stage')}")
     @layer.draw()
 
   init_scene: () ->
@@ -79,7 +83,7 @@ class ReportScene extends Scene
       fontSize: 22,
       fontStyle: "bold",
       fontFamily: "Courier",
-      text: "#{@game.get_config('hi_score')}",
+      text: "#{@game.get_status('hi_score')}",
       fill: "#FF9B3B"
     })
     @layer.add(@hi_score_label)
@@ -90,7 +94,7 @@ class ReportScene extends Scene
       fontSize: 22,
       fontStyle: "bold",
       fontFamily: "Courier",
-      text: "STAGE #{@game.get_config('current_stage')}",
+      text: "STAGE #{@game.get_status('current_stage')}",
       fill: "#fff"
     })
     @layer.add(@stage_label)

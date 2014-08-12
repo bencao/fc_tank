@@ -26,20 +26,21 @@ class WelcomeScene extends Scene
     @prepare_for_game_scene()
 
   update_numbers: () ->
-    @numbers_label.setText("I- #{@game.get_config('p1_score')}" +
-        "  II- #{@game.get_config('p2_score')}" +
-        "  HI- #{@game.get_config('hi_score')}")
+    @numbers_label.setText("I- #{@game.get_status('p1_score')}" +
+        "  II- #{@game.get_status('p2_score')}" +
+        "  HI- #{@game.get_status('hi_score')}")
 
   prepare_for_game_scene: () ->
-    @game.set_config('game_over', false)
-    @game.set_config('stage_autostart', false)
-    @game.set_config('current_stage', 1)
-    @game.set_config('p1_score', 0)
-    @game.set_config('p2_score', 0)
-    @game.set_config('p1_lives', 2)
-    @game.set_config('p2_lives', 2)
-    @game.set_config('p1_level', 1)
-    @game.set_config('p2_level', 1)
+    @game.update_status('game_over', false)
+    @game.update_status('stage_autostart', false)
+    @game.update_status('players', @game.get_config('initial_players'))
+    @game.update_status('current_stage', @game.get_config('initial_stage'))
+    @game.update_status('p1_score', @game.get_config('initial_p1_score'))
+    @game.update_status('p2_score', @game.get_config('initial_p2_score'))
+    @game.update_status('p1_lives', @game.get_config('initial_p1_lives'))
+    @game.update_status('p2_lives', @game.get_config('initial_p2_lives'))
+    @game.update_status('p1_level', @game.get_config('initial_p1_level'))
+    @game.update_status('p2_level', @game.get_config('initial_p2_level'))
 
   enable_selection_control: () ->
     @keyboard.on_key_down 'ENTER', () =>
@@ -48,14 +49,14 @@ class WelcomeScene extends Scene
       @toggle_players()
 
   toggle_players: () ->
-    if @game.get_config('players') == 1
-      @game.set_config('players', 2)
+    if @game.single_player_mode()
+      @game.update_status('players', 2)
     else
-      @game.set_config('players', 1)
+      @game.update_status('players', 1)
     @update_players()
+
   update_players: () ->
-    players = @game.get_config('players')
-    if players == 1
+    if @game.single_player_mode()
       @select_tank.setAbsolutePosition(170, 350)
     else
       @select_tank.setAbsolutePosition(170, 390)
@@ -68,9 +69,9 @@ class WelcomeScene extends Scene
       fontSize: 22,
       fontStyle: "bold",
       fontFamily: "Courier",
-      text: "I- #{@game.get_config('p1_score')}" +
-        "  II- #{@game.get_config('p2_score')}" +
-        "  HI- #{@game.get_config('hi_score')}",
+      text: "I- #{@game.get_status('p1_score')}" +
+        "  II- #{@game.get_status('p2_score')}" +
+        "  HI- #{@game.get_status('hi_score')}",
       fill: "#fff"
     })
     @static_group.add(@numbers_label)
