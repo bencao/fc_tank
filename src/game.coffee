@@ -4,11 +4,10 @@ class Game
     @configs  = @init_default_config()
     @statuses = @init_statuses()
     @scenes   = {
-      'welcome'     : new WelcomeScene(this),
-      'stage'       : new StageScene(this),
-      'battle_field': new BattleFieldScene(this),
-      'report'      : new ReportScene(this),
-      'hi_score'    : new HiScoreScene(this)
+      'welcome'     : new WelcomeScene(this, new WelcomeView(@canvas)),
+      'stage'       : new StageScene(this, new StageView(@canvas)),
+      'battle_field': new BattleFieldScene(this, new BattleFieldView(@canvas)),
+      'report'      : new ReportScene(this, new ReportView(@canvas))
     }
     @current_scene = null
 
@@ -77,6 +76,12 @@ class Game
 
   single_player_mode: () ->
     @statuses['players'] == 1
+
+  increase_p1_score: (score) ->
+    @statuses['p1_score'] += score
+
+  increase_p2_score: (score) ->
+    @statuses['p2_score'] += score
 
   reset: () ->
     _.each @scenes, (scene) -> scene.stop()
