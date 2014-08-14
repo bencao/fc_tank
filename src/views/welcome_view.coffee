@@ -1,83 +1,45 @@
-class WelcomeScene extends Scene
-  constructor: (@game) ->
-    super(@game)
+class WelcomeView extends View
+  init_view: () ->
     @static_group = new Kinetic.Group()
     @layer.add(@static_group)
-    @init_statics()
-    @init_logo()
-    @init_user_selection()
+    @init_score_label()
+    @init_tank_90_logo()
+    @init_player_mode_selection_text()
+    @init_player_mode_selection_tank()
+    @init_copy_right_text()
 
-  start: () ->
-    super()
+  update_scores: (p1_score, p2_score, hi_score) ->
+    @score_label.setText("I- #{p1_score}  II- #{p2_score}  HI- #{hi_score}")
+
+  update_player_mode: (single_player_mode) ->
+    if single_player_mode
+      @selection_tank.setAbsolutePosition(170, 350)
+    else
+      @selection_tank.setAbsolutePosition(170, 390)
+
+  play_start_animation: (callback) ->
     @static_group.move(-300, 0)
     new Kinetic.Tween({
-      node: @static_group,
-      duration: 1.5,
-      x: 0,
-      easing: Kinetic.Easings.Linear,
-      onFinish: () =>
-        @update_players()
-        @enable_selection_control()
+      node    : @static_group,
+      duration: 1.2,
+      x       : 0,
+      easing  : Kinetic.Easings.Linear,
+      onFinish: callback
     }).play()
-    @update_numbers()
 
-  stop: () ->
-    super()
-    @prepare_for_game_scene()
-
-  update_numbers: () ->
-    @numbers_label.setText("I- #{@game.get_status('p1_score')}" +
-        "  II- #{@game.get_status('p2_score')}" +
-        "  HI- #{@game.get_status('hi_score')}")
-
-  prepare_for_game_scene: () ->
-    @game.update_status('game_over', false)
-    @game.update_status('stage_autostart', false)
-    @game.update_status('players', @game.get_config('initial_players'))
-    @game.update_status('current_stage', @game.get_config('initial_stage'))
-    @game.update_status('p1_score', @game.get_config('initial_p1_score'))
-    @game.update_status('p2_score', @game.get_config('initial_p2_score'))
-    @game.update_status('p1_lives', @game.get_config('initial_p1_lives'))
-    @game.update_status('p2_lives', @game.get_config('initial_p2_lives'))
-    @game.update_status('p1_level', @game.get_config('initial_p1_level'))
-    @game.update_status('p2_level', @game.get_config('initial_p2_level'))
-
-  enable_selection_control: () ->
-    @keyboard.on_key_down 'ENTER', () =>
-      @game.switch_scene('stage')
-    @keyboard.on_key_down 'SPACE', () =>
-      @toggle_players()
-
-  toggle_players: () ->
-    if @game.single_player_mode()
-      @game.update_status('players', 2)
-    else
-      @game.update_status('players', 1)
-    @update_players()
-
-  update_players: () ->
-    if @game.single_player_mode()
-      @select_tank.setAbsolutePosition(170, 350)
-    else
-      @select_tank.setAbsolutePosition(170, 390)
-
-  init_statics: () ->
-    # scores
-    @numbers_label = new Kinetic.Text({
-      x: 40,
-      y: 40,
-      fontSize: 22,
-      fontStyle: "bold",
+  init_score_label: () ->
+    @score_label = new Kinetic.Text({
+      x         : 40,
+      y         : 40,
+      fontSize  : 22,
+      fontStyle : "bold",
       fontFamily: "Courier",
-      text: "I- #{@game.get_status('p1_score')}" +
-        "  II- #{@game.get_status('p2_score')}" +
-        "  HI- #{@game.get_status('hi_score')}",
-      fill: "#fff"
+      text      : "",
+      fill      : "#fff"
     })
-    @static_group.add(@numbers_label)
+    @static_group.add(@score_label)
 
-  init_logo: () ->
-    # logo
+  init_tank_90_logo: () ->
     image = document.getElementById('tank_sprite')
     for area in [
       # T
@@ -166,49 +128,50 @@ class WelcomeScene extends Scene
         animation.y += (area.y1 % 40)
         animation.width = area.width()
         animation.height = area.height()
-      brick_sprite = new Kinetic.Sprite({
-        x: area.x1,
-        y: area.y1,
-        image: image,
-        index: 0,
-        animation: 'static',
+      @static_group.add(new Kinetic.Sprite({
+        x         : area.x1,
+        y         : area.y1,
+        image     : image,
+        index     : 0,
+        animation : 'static',
         animations: {static: animations}
-      })
-      @static_group.add(brick_sprite)
+      }))
 
-  init_user_selection: () ->
-    # 1/2 user
+  init_player_mode_selection_text: () ->
     @static_group.add(new Kinetic.Text({
-      x: 210,
-      y: 340,
-      fontSize: 22,
-      fontStyle: "bold",
+      x         : 210,
+      y         : 340,
+      fontSize  : 22,
+      fontStyle : "bold",
       fontFamily: "Courier",
-      text: "1 PLAYER",
-      fill: "#fff"
+      text      : "1 PLAYER",
+      fill      : "#fff"
     }))
     @static_group.add(new Kinetic.Text({
-      x: 210,
-      y: 380,
-      fontSize: 22,
-      fontStyle: "bold",
+      x         : 210,
+      y         : 380,
+      fontSize  : 22,
+      fontStyle : "bold",
       fontFamily: "Courier",
-      text: "2 PLAYERS",
-      fill: "#fff"
+      text      : "2 PLAYERS",
+      fill      : "#fff"
     }))
-    # copy right
+
+  init_copy_right_text: () ->
     @static_group.add(new Kinetic.Text({
-      x: 210,
-      y: 460,
-      fontSize: 22,
-      fontStyle: "bold",
+      x         : 210,
+      y         : 460,
+      fontSize  : 22,
+      fontStyle : "bold",
       fontFamily: "Courier",
-      text: "© BEN♥FENG",
-      fill: "#fff"
+      text      : "© BEN♥FENG",
+      fill      : "#fff"
     }))
+
+  init_player_mode_selection_tank: () ->
     # tank
     image = document.getElementById('tank_sprite')
-    @select_tank = new Kinetic.Sprite({
+    @selection_tank = new Kinetic.Sprite({
       x: 170,
       y: 350,
       image: image,
@@ -219,5 +182,5 @@ class WelcomeScene extends Scene
       offset: {x: 20, y: 20},
       rotationDeg: 90
     })
-    @static_group.add(@select_tank)
-    @select_tank.start()
+    @static_group.add(@selection_tank)
+    @selection_tank.start()
