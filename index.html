@@ -39,10 +39,12 @@
         }
       load file for file in files
     loadCoffee [
-      "src/binomial_heap.coffee",
       "src/constant.coffee",
-      "src/sound.coffee",
-      "src/keyboard.coffee",
+      "src/engine/data_structures.coffee",
+      "src/engine/sound.coffee",
+      "src/engine/keyboard.coffee",
+      "src/engine/scene.coffee",
+      "src/engine/view.coffee",
       "src/map/point.coffee",
       "src/map/map_area_2d.coffee",
       "src/map/map_area_2d_vertex.coffee",
@@ -50,18 +52,20 @@
       "src/map/map_unit_2d.coffee",
       "src/map/movable_map_unit_2d.coffee",
       "src/map/terrains.coffee",
+      "src/map/tiled_map_builder.coffee",
       "src/objects/tanks.coffee",
       "src/objects/missile.coffee",
       "src/objects/gifts.coffee",
       "src/objects/commanders.coffee",
-      "src/scene/scene.coffee",
-      "src/scene/welcome_scene.coffee",
-      "src/scene/stage_scene.coffee",
-      "src/scene/report_scene.coffee",
-      "src/scene/battle_field_scene.coffee",
-      "src/scene/hi_score_scene.coffee",
-      "src/tiled_map_builder.coffee",
-      "src/game.coffee",
+      "src/scenes/welcome_scene.coffee",
+      "src/scenes/stage_scene.coffee",
+      "src/scenes/report_scene.coffee",
+      "src/scenes/battle_field_scene.coffee",
+      "src/views/welcome_view.coffee",
+      "src/views/stage_view.coffee",
+      "src/views/battle_field_view.coffee",
+      "src/views/report_view.coffee",
+      "src/game.coffee"
       "src/bootstrap.coffee"
     ]
   </script>

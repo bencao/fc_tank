@@ -1,8 +1,8 @@
 class BattleFieldScene extends Scene
-  constructor: (@game) ->
-    super(@game)
+  constructor: (@game, @view) ->
+    super(@game, @view)
+    @layer = @view.layer
     @map   = new Map2D(@layer)
-    @sound = new Sound()
     $.ajax {
       url     : "data/terrains.json",
       success : (json) => @builder = new TiledMapBuilder(@map, json),
@@ -10,7 +10,6 @@ class BattleFieldScene extends Scene
       async   : false
     }
     @reset_config_variables()
-    @init_status()
 
   reset_config_variables: () ->
     @fps = 0
@@ -25,14 +24,18 @@ class BattleFieldScene extends Scene
     @last_enemy_born_area_index = 0
     @winner                     = null
     @remain_user_p1_lives       = @game.get_status('p1_lives')
-    unless @game.single_player_mode()
-      @remain_user_p2_lives     = @game.get_status('p2_lives')
-    else
+    if @game.single_player_mode()
       @remain_user_p2_lives     = 0
+    else
+      @remain_user_p2_lives     = @game.get_status('p2_lives')
     @p1_level                   = @game.get_status('p1_level')
     @p1_ship                    = @game.get_status('p1_ship')
     @p2_level                   = @game.get_status('p2_level')
     @p2_ship                    = @game.get_status('p2_ship')
+    @view.update_enemy_statuses(@remain_enemy_counts)
+    @view.update_p1_lives(@remain_user_p1_lives)
+    @view.update_p2_lives(@remain_user_p2_lives)
+    @view.update_stage(@current_stage)
 
   start: () ->
     super()
@@ -45,19 +48,22 @@ class BattleFieldScene extends Scene
 
   stop: () ->
     super()
-    @update_status()
     @stop_time_line()
     @map.reset()
 
   save_user_status: () ->
-    @game.update_status('p1_lives', @remain_user_p1_lives + 1)
-    @game.update_status('p2_lives', @remain_user_p2_lives + 1)
     if @map.p1_tank()
+      @game.update_status('p1_lives', @remain_user_p1_lives + 1)
       @game.update_status('p1_level', @map.p1_tank().level)
       @game.update_status('p1_ship', @map.p1_tank().ship)
+    else
+      @game.update_status('p1_lives', @remain_user_p1_lives)
     if @map.p2_tank()
+      @game.update_status('p2_lives', @remain_user_p2_lives + 1)
       @game.update_status('p2_level', @map.p2_tank().level)
       @game.update_status('p2_ship', @map.p2_tank().ship)
+    else
+      @game.update_status('p2_lives', @remain_user_p2_lives)
 
   start_map: () ->
     # wait until builder loaded
@@ -74,11 +80,13 @@ class BattleFieldScene extends Scene
 
     @map.bind('enemy_tank_destroyed', @born_enemy_tank, this)
     @map.bind('enemy_tank_destroyed', @increase_enemy_kills_by_user, this)
+    @map.bind('enemy_tank_destroyed', @increase_kill_score_by_user, this)
     @map.bind('enemy_tank_destroyed', @draw_tank_points, this)
     @map.bind('enemy_tank_destroyed', @check_user_win, this)
     @map.bind('enemy_tank_destroyed', (() -> @sound.play('gift_bomb')), this)
 
     @map.bind('gift_consumed', @draw_gift_points, this)
+    @map.bind('gift_consumed', @increase_gift_score_by_user, this)
     @map.bind('gift_consumed', (() -> @sound.play('gift')), this)
 
     @map.bind('home_destroyed', @enemy_win, this)
@@ -165,7 +173,7 @@ class BattleFieldScene extends Scene
     , parseInt(1000/@fps))
     # show frame rate
     @frame_timeline = setInterval(() =>
-      @frame_rate_label.setText(@frame_rate + " fps")
+      @view.update_frame_rate(@frame_rate)
       @frame_rate = 0
     , 1000)
 
@@ -173,137 +181,13 @@ class BattleFieldScene extends Scene
     clearInterval(@timeline)
     clearInterval(@frame_timeline)
 
-  init_status: () ->
-    @status_panel = new Kinetic.Group()
-    @layer.add(@status_panel)
-
-    # background
-    @status_panel.add(new Kinetic.Rect({
-      x: 520,
-      y: 0,
-      fill: "#999",
-      width: 80,
-      height: 520
-    }))
-
-    # frame rate
-    @frame_rate = 0
-    @frame_rate_label = new Kinetic.Text({
-      x: 526,
-      y: 490,
-      fontSize: 20,
-      fontStyle: "bold",
-      fontFamily: "Courier",
-      text: "0 fps"
-      fill: "#c00"
-    })
-    @status_panel.add(@frame_rate_label)
-
-    @enemy_symbols = []
-    # enemy tanks
-    for i in [1..@remain_enemy_counts]
-      tx = (if i % 2 == 1 then 540 else 560)
-      ty = parseInt((i - 1) / 2) * 25 + 20
-      symbol = @new_symbol(@status_panel, 'enemy', tx, ty)
-      @enemy_symbols.push(symbol)
-
-    # user tank status
-    user_p1_label = new Kinetic.Text({
-      x: 540,
-      y: 300,
-      fontSize: 18,
-      fontStyle: "bold",
-      fontFamily: "Courier",
-      text: "1P",
-      fill: "#000"
-    })
-    user_p1_symbol = @new_symbol(@status_panel, 'user', 540, 320)
-    @user_p1_remain_lives_label = new Kinetic.Text({
-      x: 565,
-      y: 324,
-      fontSize: 16,
-      fontFamily: "Courier",
-      text: "#{@remain_user_p1_lives}",
-      fill: "#000"
-    })
-    @status_panel.add(user_p1_label)
-    @status_panel.add(@user_p1_remain_lives_label)
-
-    user_p2_label = new Kinetic.Text({
-      x: 540,
-      y: 350,
-      fontSize: 18,
-      fontStyle: "bold",
-      fontFamily: "Courier",
-      text: "2P",
-      fill: "#000"
-    })
-    user_p2_symbol = @new_symbol(@status_panel, 'user', 540, 370)
-    @user_p2_remain_lives_label = new Kinetic.Text({
-      x: 565,
-      y: 374,
-      fontSize: 16,
-      fontFamily: "Courier",
-      text: "#{@remain_user_p2_lives}",
-      fill: "#000"
-    })
-    @status_panel.add(user_p2_label)
-    @status_panel.add(@user_p2_remain_lives_label)
-
-    # stage status
-    @new_symbol(@status_panel, 'stage', 540, 420)
-    @stage_label = new Kinetic.Text({
-      x: 560,
-      y: 445,
-      fontSize: 16,
-      fontFamily: "Courier",
-      text: "#{@current_stage}",
-      fill: "#000"
-    })
-    @status_panel.add(@stage_label)
-
-  update_status: () ->
-    _.each(@enemy_symbols, (symbol) -> symbol.destroy())
-    @enemy_symbols = []
-    if @remain_enemy_counts > 0
-      for i in [1..@remain_enemy_counts]
-        tx = (if i % 2 == 1 then 540 else 560)
-        ty = parseInt((i - 1) / 2) * 25 + 20
-        symbol = @new_symbol(@status_panel, 'enemy', tx, ty)
-        @enemy_symbols.push(symbol)
-    @user_p1_remain_lives_label.setText(@remain_user_p1_lives)
-    @user_p2_remain_lives_label.setText(@remain_user_p2_lives)
-    @stage_label.setText(@current_stage)
-
-  new_symbol: (parent, type, tx, ty) ->
-    animations = switch type
-      when 'enemy'
-        [{x: 320, y: 340, width: 20, height: 20}]
-      when 'user'
-        [{x: 340, y: 340, width: 20, height: 20}]
-      when 'stage'
-        [{x: 280, y: 340, width: 40, height: 40}]
-    symbol = new Kinetic.Sprite({
-      x: tx,
-      y: ty,
-      image: @map.image,
-      animation: 'static',
-      animations: {
-        'static': animations
-      },
-      frameRate: 1,
-      index: 0
-    })
-    parent.add(symbol)
-    symbol.start()
-    symbol
-
   add_extra_life: (tank) ->
     if tank instanceof UserP1Tank
       @remain_user_p1_lives += 1
+      @view.update_p1_lives(@remain_user_p1_lives)
     else
       @remain_user_p2_lives += 1
-    @update_status()
+      @view.update_p2_lives(@remain_user_p2_lives)
 
   born_user_tanks: (tank, killed_by_tank) ->
     if tank instanceof UserP1Tank
@@ -321,15 +205,17 @@ class BattleFieldScene extends Scene
       p1_tank = @map.add_tank(UserP1Tank, new MapArea2D(160, 480, 200, 520))
       p1_tank.level_up(@game.get_status('p1_level') - 1)
       p1_tank.on_ship(@game.get_status('p1_ship'))
-      @update_status()
+      @view.update_p1_lives(@remain_user_p1_lives)
 
   born_p2_tank: () ->
+    console.log("born p2 tank")
+    console.log("#{@remain_user_p2_lives}")
     if @remain_user_p2_lives > 0
       @remain_user_p2_lives -= 1
       p2_tank = @map.add_tank(UserP2Tank, new MapArea2D(320, 480, 360, 520))
       p2_tank.level_up(@game.get_status('p2_level') - 1)
       p2_tank.on_ship(@game.get_status('p2_ship'))
-      @update_status()
+      @view.update_p2_lives(@remain_user_p2_lives)
 
   born_enemy_tank: () ->
     if @remain_enemy_counts > 0
@@ -344,7 +230,7 @@ class BattleFieldScene extends Scene
       @map.add_tank(enemy_tank_types[randomed],
         enemy_born_areas[@last_enemy_born_area_index])
       @last_enemy_born_area_index = (@last_enemy_born_area_index + 1) % 3
-      @update_status()
+      @view.update_enemy_statuses(@remain_enemy_counts)
 
   check_user_win: () ->
     if @remain_enemy_counts == 0 and _.size(@map.enemy_tanks()) == 0
@@ -372,46 +258,38 @@ class BattleFieldScene extends Scene
       @game.switch_scene('report')
     , 3000)
 
+  increase_kill_score_by_user: (tank, killed_by_tank) ->
+    tank_score = @game.get_config("score_for_#{tank.type()}")
+    if killed_by_tank instanceof UserP1Tank
+      @game.increase_p1_score(tank_score)
+    else
+      @game.increase_p2_score(tank_score)
+
   increase_enemy_kills_by_user: (tank, killed_by_tank) ->
     if killed_by_tank instanceof UserP1Tank
       p1_kills = @game.get_status('p1_killed_enemies')
       p1_kills.push(tank.type())
-    else if killed_by_tank instanceof UserP2Tank
+    else
       p2_kills = @game.get_status('p2_killed_enemies')
       p2_kills.push(tank.type())
 
   draw_tank_points: (tank, killed_by_tank) ->
     if tank instanceof EnemyTank
-      point_label = new Kinetic.Text({
-        x         : (tank.area.x1 + tank.area.x2) / 2 - 10,
-        y         : (tank.area.y1 + tank.area.y2) / 2 - 5,
-        fontSize  : 16,
-        fontStyle : "bold",
-        fontFamily: "Courier",
-        text      : @game.get_config("score_for_#{tank.type()}")
-        fill      : "#fff"
-      })
-      @status_panel.add(point_label)
-      setTimeout(() ->
-        point_label.destroy()
-      , 1500)
+      @view.draw_point_label(tank, @game.get_config("score_for_#{tank.type()}"))
+
+  increase_gift_score_by_user: (gift, tanks) ->
+    _.each(tanks, (tank) =>
+      gift_score = @game.get_config("score_for_gift")
+      if tank instanceof UserP1Tank
+        @game.increase_p1_score(gift_score)
+      else if tank instanceof UserP2Tank
+        @game.increase_p2_score(gift_score)
+    )
 
   draw_gift_points: (gift, tanks) ->
     _.detect(tanks, (tank) =>
       if tank instanceof UserTank
-        point_label = new Kinetic.Text({
-          x         : (gift.area.x1 + gift.area.x2) / 2 - 10,
-          y         : (gift.area.y1 + gift.area.y2) / 2 - 5,
-          fontSize  : 16,
-          fontStyle : "bold",
-          fontFamily: "Courier",
-          text      : @game.get_config("score_for_gift"),
-          fill      : "#fff"
-        })
-        @status_panel.add(point_label)
-        setTimeout(() ->
-          point_label.destroy()
-        , 1500)
+        @view.draw_point_label(tank, @game.get_config("score_for_gift"))
         true
       else
         false
