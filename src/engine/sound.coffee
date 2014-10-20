@@ -1,15 +1,15 @@
 class Sound
   constructor: () ->
     @bgms_playing = {}
-    @bgms = {}
+    @bgms         = {}
 
     _.each(@supported_events(), (event_name) =>
       @bgms_playing[event_name] = false
-      @bgms[event_name] = new Howl({
-        urls: ['data/sound/' + event_name + '.mp3'],
-        loop: false,
-        onplay: (() => @bgms_playing[event_name] = true)
-        onend: (() => @bgms_playing[event_name] = false)
+      @bgms[event_name]         = new Howl({
+        urls   : ['data/sound/' + event_name + '.mp3'],
+        loop   : false,
+        onplay : (() => @bgms_playing[event_name] = true)
+        onend  : (() => @bgms_playing[event_name] = false)
       })
     )
 
