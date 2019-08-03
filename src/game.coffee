@@ -37,7 +37,7 @@ class Game
       score_for_fool   : 300,
       score_for_strong : 400,
       score_for_gift   : 500,
-      enemies_per_stage: 5
+      enemies_per_stage: 20
     }
 
   init_statuses: () ->
