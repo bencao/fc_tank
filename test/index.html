@@ -1,70 +1,32 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>QUnit Test for Tank</title>
-  <link rel="stylesheet" href="lib/qunit-v1.11.0.css">
-  <style>
-    #tank_sprite, #canvas { display: none;}
-  </style>
-  <script type='text/javascript' src="lib/qunit-v1.11.0.js"></script>
-  <script type="text/javascript" src="../js/coffeescript-v1.6.2.min.js"></script>
-  <script type='text/javascript' src='../js/jquery-v1.9.1.min.js'></script>
-  <script type='text/javascript' src='../js/lodash-v1.2.1.min.js'></script>
-  <script type='text/javascript' src="../js/kinetic-v4.5.1.min.js"></script>
-  <script type='text/javascript' src="../js/howler-v1.1.5.min.js"></script>
-  <script type="text/coffeescript">
-    scriptsToTest = [
-      "../src/constant.coffee",
-      "../src/engine/data_structures.coffee",
-      "../src/engine/sound.coffee",
-      "../src/engine/keyboard.coffee",
-      "../src/engine/scene.coffee",
-      "../src/engine/view.coffee",
-      "../src/map/point.coffee",
-      "../src/map/map_area_2d.coffee",
-      "../src/map/map_area_2d_vertex.coffee",
-      "../src/map/map_2d.coffee",
-      "../src/map/map_unit_2d.coffee",
-      "../src/map/movable_map_unit_2d.coffee",
-      "../src/map/terrains.coffee",
-      "../src/map/tiled_map_builder.coffee",
-      "../src/objects/tanks.coffee",
-      "../src/objects/missile.coffee",
-      "../src/objects/gifts.coffee",
-      "../src/objects/commanders.coffee",
-      "../src/scenes/welcome_scene.coffee",
-      "../src/scenes/stage_scene.coffee",
-      "../src/scenes/report_scene.coffee",
-      "../src/scenes/battle_field_scene.coffee",
-      "../src/views/welcome_view.coffee",
-      "../src/views/stage_view.coffee",
-      "../src/views/report_view.coffee",
-      "../src/views/battle_field_view.coffee",
-      "../src/game.coffee"
-    ]
-    tests = ["test.coffee"]
-    loadCoffee = (files) ->
-      $head = $("head")
-      compile_and_add = (content) ->
-        compiled = CoffeeScript.compile content, {bare: on}
-        $("<script />").attr("type", "text/javascript").html(compiled).appendTo $head
-      load = (file) ->
-        $.ajax {
-          url     : file,
-          success : compile_and_add,
-          dataType: 'text'
-          async   : false
-        }
-      load file for file in files
-    loadCoffee scriptsToTest
-    loadCoffee tests
-  </script>
-</head>
-<body>
-  <div id="qunit"></div>
-  <div id="qunit-fixture"></div>
-  <img id="tank_sprite" alt="tanks" width="400" height="360" src="../image/tanks.png" />
-  <div id="canvas"></div>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>QUnit Test for Tank</title>
+    <link rel="stylesheet" href="lib/qunit-v1.11.0.css" />
+    <style>
+      #tank_sprite,
+      #canvas {
+        display: none;
+      }
+    </style>
+    <script type="text/javascript" src="lib/qunit-v1.11.0.js"></script>
+    <script type="text/javascript" src="../js/jquery-v1.9.1.min.js"></script>
+    <script type="text/javascript" src="../js/lodash-v1.2.1.min.js"></script>
+    <script type="text/javascript" src="../js/kinetic-v4.5.1.min.js"></script>
+    <script type="text/javascript" src="../js/howler-v1.1.5.min.js"></script>
+  </head>
+  <body>
+    <div id="qunit"></div>
+    <div id="qunit-fixture"></div>
+    <img
+      id="tank_sprite"
+      alt="tanks"
+      width="400"
+      height="360"
+      src="../image/tanks.png"
+    />
+    <div id="canvas"></div>
+    <script type="module" src="../src/bootstrap.js"></script>
+  </body>
 </html>
