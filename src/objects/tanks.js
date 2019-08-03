@@ -223,7 +223,7 @@ export class EnemyTank extends Tank {
     super(map, area);
     this.max_hp = 5;
     this.hp = 1 + parseInt(Math.random() * (this.max_hp - 1));
-    this.iq = 20; //parseInt(Math.random() * 60)
+    this.iq = parseInt(Math.random() * 40);
     this.gift_counts = parseInt((Math.random() * this.max_hp) / 2);
     this.direction = 180;
     this.commander = new EnemyAICommander(this);
