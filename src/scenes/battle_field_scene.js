@@ -348,8 +348,6 @@ export class BattleFieldScene extends Scene {
   }
 
   born_p2_tank() {
-    console.log("born p2 tank");
-    console.log(`${this.remain_user_p2_lives}`);
     if (this.remain_user_p2_lives > 0) {
       this.remain_user_p2_lives -= 1;
       const p2_tank = this.map.add_tank(
