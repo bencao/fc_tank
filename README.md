@@ -1,24 +1,26 @@
-#FC Tank
+# FC Tank
 
 [![Build Status](https://travis-ci.org/bencao/fc_tank.png?branch=master)](https://travis-ci.org/bencao/fc_tank)
 
-a rewrite of classic FC game "90 Tank" using coffee script
+A rewrite of classic FC game "90 Tank" using coffee script
 
-##Run the game
-visit [Project Page](http://blog.bencao.it/fc_tank/) to try this game.
+## Play the game
 
-##Contribute
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/bencao/fc_tank) and Play!
+
+## Contribute
+
 Dear guys, you're highly welcome to contribute to this project~
 
-###A brief introduction of how this game was developed
-please visit [Ben's Blog](http://blog.bencao.it/2013/05/06/game-develop-in-html5-canvas-and-coffeescript/) to see a blog post about it.
+### A brief introduction of how this game was developed
 
-###Test
+Please check the [Blog Post](https://medium.com/@benb88/game-develop-in-html5-canvas-and-coffeescript-b68f7e5c0e86) for a story behind the scene.
+
+### Test
+
 To run test, you need to install [npm](https://npmjs.org/) first. Then
+
 ```bash
 npm install
 npm test
 ```
-
-
-
