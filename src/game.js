@@ -29,7 +29,6 @@ export class Game {
 
   init_default_config() {
     return {
-      fps              : 60,
       initial_players  : 1,
       total_stages     : 50,
       initial_stage    : 1,

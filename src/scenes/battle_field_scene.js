@@ -30,14 +30,12 @@ export class BattleFieldScene extends Scene {
   }
 
   reset_config_variables() {
-    this.fps = 0;
     this.remain_enemy_counts = 0;
     this.current_stage = 0;
     return (this.last_enemy_born_area_index = 0);
   }
 
   load_config_variables() {
-    this.fps = this.game.get_config("fps");
     this.remain_enemy_counts = this.game.get_config("enemies_per_stage");
     this.current_stage = this.game.get_status("current_stage");
     this.last_enemy_born_area_index = 0;
@@ -272,40 +270,45 @@ export class BattleFieldScene extends Scene {
     return this.enable_user_control();
   }
 
+  integration(offset) {
+    const delta_time = Math.round(offset - this.startedAt);
+
+    for (let m of this.map.missiles) {
+      m.integration(delta_time);
+    }
+    for (let g of this.map.gifts) {
+      g.integration(delta_time);
+    }
+    for (let t of this.map.tanks) {
+      t.integration(delta_time);
+    }
+    for (let m of this.map.missiles) {
+      m.integration(delta_time);
+    }
+
+    this.frame_rate += 1;
+    this.startedAt = offset;
+
+    if (this.startedAt !== null) {
+      requestAnimationFrame(this.integration.bind(this));
+    }
+  }
+
   start_time_line() {
-    let last_time = new Date();
-    this.timeline = setInterval(() => {
-      const current_time = new Date();
-      let delta_time =
-        current_time.getMilliseconds() - last_time.getMilliseconds();
-      // assume a frame will never last more than 1 second
-      if (delta_time < 0) {
-        delta_time += 1000;
-      }
-      for (let m of this.map.missiles) {
-        m.integration(delta_time);
-      }
-      for (let g of this.map.gifts) {
-        g.integration(delta_time);
-      }
-      for (let t of this.map.tanks) {
-        t.integration(delta_time);
-      }
-      for (let m of this.map.missiles) {
-        m.integration(delta_time);
-      }
-      last_time = current_time;
-      return (this.frame_rate += 1);
-    }, parseInt(1000 / this.fps));
+    this.startedAt = performance.now();
+
+    requestAnimationFrame(this.integration.bind(this));
+
     // show frame rate
-    return (this.frame_timeline = setInterval(() => {
+    this.frame_timeline = setInterval(() => {
       this.view.update_frame_rate(this.frame_rate);
       return (this.frame_rate = 0);
-    }, 1000));
+    }, 1000);
   }
 
   stop_time_line() {
-    clearInterval(this.timeline);
+    this.startedAt = null;
+
     return clearInterval(this.frame_timeline);
   }
 
