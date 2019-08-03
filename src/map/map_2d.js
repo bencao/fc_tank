@@ -46,6 +46,8 @@ export class Map2D {
 
   add_terrain(terrain_cls, area) {
     const terrain = new terrain_cls(this, area);
+    terrain.new_display();
+    terrain.after_new_display();
     this.terrains.push(terrain);
     this.map_units.push(terrain);
     return terrain;
@@ -53,6 +55,8 @@ export class Map2D {
 
   add_tank(tank_cls, area) {
     const tank = new tank_cls(this, area);
+    tank.new_display();
+    tank.after_new_display();
     this.tanks.push(tank);
     this.map_units.push(tank);
     return tank;
@@ -60,6 +64,8 @@ export class Map2D {
 
   add_missile(parent) {
     const missile = new Missile(this, parent);
+    missile.new_display();
+    missile.after_new_display();
     this.missiles.push(missile);
     this.map_units.push(missile);
     return missile;
@@ -76,6 +82,8 @@ export class Map2D {
       this,
       this.vertexes[vx][vy].clone()
     );
+    gift.new_display();
+    gift.after_new_display();
     this.gifts.push(gift);
     this.map_units.push(gift);
     return gift;

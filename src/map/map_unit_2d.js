@@ -13,8 +13,6 @@ export class MapUnit2D {
     this.default_height = this.map.default_height;
     this.bom_on_destroy = false;
     this.destroyed = false;
-    this.new_display(); // should be overwrite
-    this.after_new_display();
     this.attached_timeout_handlers = [];
   }
 
