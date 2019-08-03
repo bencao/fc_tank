@@ -6,7 +6,7 @@
       FC Tank - a coffeescript rewritten of classic 90 tank on Nintendo Family
       Computer
     </title>
-    <script type='text/javascript' src='js/jquery-v1.9.1.min.js'></script>
+    <script type="text/javascript" src="js/jquery-v1.9.1.min.js"></script>
     <script type="text/javascript" src="js/lodash-v1.2.1.min.js"></script>
     <script type="text/javascript" src="js/kinetic-v4.5.1.min.js"></script>
     <script type="text/javascript" src="js/howler-v1.1.5.min.js"></script>
@@ -18,6 +18,12 @@
         background: #000;
         width: 600px;
         height: 520px;
+      }
+      #game_instructions {
+        padding: 2em;
+      }
+      #row {
+        display: flex;
       }
       body {
         background: #999;
@@ -35,25 +41,28 @@
       height="360"
       src="image/tanks.png"
     />
-    <div id="canvas"></div>
-    <div id="game_instructions">
-      <dl class="p1">
-        <dt>P1 Control</dt>
-        <dd>Press keyboard <strong>UP, DOWN, LEFT, RIGHT</strong> to move</dd>
-        <dd>Press keyboard <strong>Z</strong> to fire</dd>
-        <dd>
-          Press keyboard <strong>SPACE</strong> to toggle 1 user or 2 users mode
-        </dd>
-        <dd>
-          Press keyboard <strong>ENTER</strong> to start game or toggle game
-          start/pause
-        </dd>
-      </dl>
-      <dl class="p2">
-        <dt>P2 Control</dt>
-        <dd>Press keyboard <strong>W, S, A, D</strong> to move</dd>
-        <dd>Press keyboard <strong>J</strong> to fire</dd>
-      </dl>
+    <div id="row">
+      <div id="canvas"></div>
+      <div id="game_instructions">
+        <dl class="p1">
+          <dt>P1 Control</dt>
+          <dd>Press keyboard <strong>UP, DOWN, LEFT, RIGHT</strong> to move</dd>
+          <dd>Press keyboard <strong>Z</strong> to fire</dd>
+          <dd>
+            Press keyboard <strong>SPACE</strong> to toggle 1 user or 2 users
+            mode
+          </dd>
+          <dd>
+            Press keyboard <strong>ENTER</strong> to start game or toggle game
+            start/pause
+          </dd>
+        </dl>
+        <dl class="p2">
+          <dt>P2 Control</dt>
+          <dd>Press keyboard <strong>W, S, A, D</strong> to move</dd>
+          <dd>Press keyboard <strong>J</strong> to fire</dd>
+        </dl>
+      </div>
     </div>
     <script type="module" src="src/bootstrap.js"></script>
   </body>
