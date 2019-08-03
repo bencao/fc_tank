@@ -9,13 +9,18 @@ export class Scene {
     this.sound = new Sound();
   }
 
-  start() {
-    this.keyboard.reset;
+  start() {}
+  stop() {}
+
+  on_start() {
+    this.keyboard.reset();
+    this.start();
     return this.view.show();
   }
 
-  stop() {
-    this.keyboard.reset;
+  on_stop() {
+    this.stop();
+    this.keyboard.reset();
     return this.view.hide();
   }
 }

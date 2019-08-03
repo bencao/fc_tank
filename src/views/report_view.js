@@ -11,6 +11,7 @@ export class ReportView extends View {
   }
 
   update_hi_score(score) {
+    console.log("update hi score", score);
     return this.hi_score_label.setText(score);
   }
 
