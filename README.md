@@ -2,11 +2,15 @@
 
 [![Build Status](https://travis-ci.org/bencao/fc_tank.png?branch=master)](https://travis-ci.org/bencao/fc_tank)
 
-A rewrite of classic FC game "90 Tank" using coffee script
+Classic FC game "Battle City", built with web technologies
 
 ## Play the game
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/bencao/fc_tank) and Play!
+Go play at [The Game on Netlify](https://fc-tank.bencao.it)
+
+Or
+
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/bencao/fc_tank)
 
 ## Contribute
 
