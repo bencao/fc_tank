@@ -1,8 +1,8 @@
+import "../vendor/kinetic.min.js";
 import { Game } from "./game.js";
 
 (function() {
   const game = new Game();
-  // for debug
   window.game = game;
   window.welcome_scene = game.scenes["welcome"];
   window.stage_scene = game.scenes["stage"];

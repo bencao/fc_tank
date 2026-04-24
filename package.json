@@ -1,31 +1,27 @@
 {
   "name": "fc_tank",
-  "version": "0.1.0",
-  "description": "rewrite of classic fc 90 tank",
-  "main": "index.html",
-  "directories": {
-    "test": "test"
-  },
+  "version": "1.0.0",
+  "description": "Classic FC game Battle City, built with web technologies",
+  "type": "module",
   "scripts": {
-    "test": "node_modules/grunt-cli/bin/grunt test"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "repository": {
     "type": "git",
-    "url": "github.com:bencao/fc_tank.git"
+    "url": "https://github.com/bencao/fc_tank.git"
   },
-  "keywords": [
-    "fc",
-    "90",
-    "tank"
-  ],
+  "keywords": ["fc", "tank", "battle-city", "game"],
   "author": "Ben Cao",
   "license": "MIT",
-  "gitHead": "f40d76b02d29f6f24f01bda2b729abec458fa957",
-  "readmeFilename": "README.md",
   "devDependencies": {
-    "grunt": "~0.4.0",
-    "grunt-cli": "~0.1.7",
-    "grunt-coffeelint": "~0.0.6",
-    "grunt-contrib-qunit": "~0.2.1"
+    "vite": "^6",
+    "vitest": "^3"
+  },
+  "dependencies": {
+    "howler": "^2.2.4"
   }
 }
