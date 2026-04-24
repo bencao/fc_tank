@@ -129,8 +129,8 @@ export class LifeGift extends Gift {
   apply(tank) {
     if (tank instanceof EnemyTank) {
       return _.each(this.map.enemy_tanks(), function(enemy_tank) {
-        tank.hp_up(5);
-        return tank.gift_up(3);
+        enemy_tank.hp_up(5);
+        return enemy_tank.gift_up(3);
       });
     } else {
       return this.map.trigger("tank_life_up", tank);

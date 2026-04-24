@@ -58,6 +58,8 @@ export class IronTerrain extends Terrain {
         return this.map.infinity;
       case 2:
         return 20;
+      default:
+        return 10;
     }
   }
   defend(missile, destroy_area) {

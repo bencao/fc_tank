@@ -282,9 +282,6 @@ export class BattleFieldScene extends Scene {
     for (let t of this.map.tanks) {
       t.integration(delta_time);
     }
-    for (let m of this.map.missiles) {
-      m.integration(delta_time);
-    }
 
     this.frame_rate += 1;
     this.startedAt = offset;
@@ -369,8 +366,7 @@ export class BattleFieldScene extends Scene {
         new MapArea2D(480, 0, 520, 40)
       ];
       const enemy_tank_types = [StupidTank, FishTank, FoolTank, StrongTank];
-      const randomed =
-        parseInt(Math.random() * 1000) % _.size(enemy_tank_types);
+      const randomed = Math.floor(Math.random() * enemy_tank_types.length);
       this.map.add_tank(
         enemy_tank_types[randomed],
         enemy_born_areas[this.last_enemy_born_area_index]

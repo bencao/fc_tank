@@ -77,7 +77,7 @@ export class Map2D {
     const gift_classes = getGiftClasses();
     const vx = parseInt(Math.random() * this.vertexes_rows);
     const vy = parseInt(Math.random() * this.vertexes_columns);
-    const gift_choice = parseInt(Math.random() * 1000) % _.size(gift_classes);
+    const gift_choice = Math.floor(Math.random() * gift_classes.length);
     const gift = new gift_classes[gift_choice](
       this,
       this.vertexes[vx][vy].clone()
