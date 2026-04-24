@@ -37,7 +37,7 @@ function bornArea(map, parent) {
 }
 
 export class Missile extends MovableMapUnit2D {
-  static speed = 0.2;
+  static speed = 0.4;
 
   constructor(map, parent) {
     super(map, bornArea(map, parent));

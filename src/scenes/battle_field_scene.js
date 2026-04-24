@@ -264,6 +264,7 @@ export class BattleFieldScene extends Scene {
   }
 
   integration(offset) {
+    if (!this.running) return;
     const delta_time = Math.round(offset - this.startedAt);
 
     for (let m of this.map.missiles) {

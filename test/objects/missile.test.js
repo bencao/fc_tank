@@ -4,8 +4,8 @@ import { Direction } from '../../src/constants.js';
 import { MapArea2D } from '../../src/map/map_area_2d.js';
 
 describe('Missile', () => {
-  it('speed is 0.2', () => {
-    expect(Missile.speed).toBe(0.2);
+  it('speed is 0.4', () => {
+    expect(Missile.speed).toBe(0.4);
   });
 
   it('type is missile', () => {

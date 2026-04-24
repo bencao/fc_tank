@@ -1,3 +1,21 @@
+const KEY_MAP = {
+  'Enter': 'ENTER',
+  ' ': 'SPACE',
+  'ArrowLeft': 'LEFT',
+  'ArrowUp': 'UP',
+  'ArrowRight': 'RIGHT',
+  'ArrowDown': 'DOWN',
+};
+
+const LETTER_KEYS = new Set(['A', 'D', 'J', 'S', 'W', 'Z']);
+
+function mapKey(eventKey) {
+  if (KEY_MAP[eventKey]) return KEY_MAP[eventKey];
+  const upper = eventKey.toUpperCase();
+  if (LETTER_KEYS.has(upper)) return upper;
+  return undefined;
+}
+
 export class Keyboard {
   constructor() {
     this.key_up_callbacks   = {};
@@ -19,23 +37,6 @@ export class Keyboard {
     }
   }
 
-  map_key(code) {
-    return ({
-      13: 'ENTER',
-      32: 'SPACE',
-      37: 'LEFT',
-      38: 'UP',
-      39: 'RIGHT',
-      40: 'DOWN',
-      65: 'A',
-      68: 'D',
-      74: 'J',
-      83: 'S',
-      87: 'W',
-      90: 'Z'
-    })[code];
-  }
-
   on_key_up(key_or_keys, callback) {
     if (Array.isArray(key_or_keys)) {
       key_or_keys.forEach(key => { this.key_up_callbacks[key] = callback; });
@@ -46,8 +47,8 @@ export class Keyboard {
       document.removeEventListener("keyup", this._keyup_handler);
     }
     this._keyup_handler = event => {
-      const key = this.map_key(event.which);
-      if (key in this.key_up_callbacks) {
+      const key = mapKey(event.key);
+      if (key && key in this.key_up_callbacks) {
         this.key_up_callbacks[key](event);
         event.preventDefault();
       }
@@ -65,8 +66,8 @@ export class Keyboard {
       document.removeEventListener("keydown", this._keydown_handler);
     }
     this._keydown_handler = event => {
-      const key = this.map_key(event.which);
-      if (key in this.key_down_callbacks) {
+      const key = mapKey(event.key);
+      if (key && key in this.key_down_callbacks) {
         this.key_down_callbacks[key](event);
         event.preventDefault();
       }

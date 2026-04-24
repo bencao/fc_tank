@@ -1,4 +1,3 @@
-import "../vendor/kinetic.min.js";
 import { Game } from "./game.js";
 
 (function() {
