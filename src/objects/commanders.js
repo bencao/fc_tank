@@ -265,6 +265,147 @@ export class EnemyAICommander extends Commander {
   }
 }
 
+export class DemoAICommander extends Commander {
+  constructor(map_unit) {
+    super(map_unit);
+    this.map = this.map_unit.map;
+    this.reset_path();
+    this.last_area = null;
+    this._schedule_repath();
+  }
+
+  next() {
+    const enemies = this.map.enemy_tanks().filter(t => !t.destroyed && !t.initializing);
+    if (enemies.length === 0) {
+      return;
+    }
+
+    // Priority 1: if aligned with any enemy, face it and fire
+    const aligned = this._find_aligned_enemy(enemies);
+    if (aligned) {
+      const dir = this._direction_toward(aligned);
+      this.turn(dir);
+      if (this.map_unit.can_fire()) {
+        this.fire();
+      }
+      this.start_move();
+      return;
+    }
+
+    // Priority 2: pathfind toward nearest enemy
+    const nearest = this._find_nearest_enemy(enemies);
+    if (this.path.length === 0 && nearest) {
+      const end_vertex = this.map.vertexes_at(nearest.area);
+      this.path = this.map.shortest_path(
+        this.map_unit,
+        this.current_vertex(),
+        end_vertex
+      );
+      this.next_move();
+    } else {
+      if (this.target_vertex && this.current_vertex().equals(this.target_vertex)) {
+        this.next_move();
+      }
+    }
+
+    // Fire if stuck
+    if (
+      this.map_unit.can_fire() &&
+      this.last_area &&
+      this.last_area.equals(this.map_unit.area)
+    ) {
+      if (Math.random() < 0.08) {
+        this.fire();
+      }
+    }
+
+    this.last_area = this.map_unit.area;
+  }
+
+  _find_aligned_enemy(enemies) {
+    for (const enemy of enemies) {
+      if (this.map_unit.area.x1 === enemy.area.x1 ||
+          this.map_unit.area.y1 === enemy.area.y1) {
+        return enemy;
+      }
+    }
+    return null;
+  }
+
+  _direction_toward(enemy) {
+    const my = this.map_unit.area;
+    const their = enemy.area;
+    if (my.x1 === their.x1) {
+      return their.y1 < my.y1 ? "up" : "down";
+    } else {
+      return their.x1 < my.x1 ? "left" : "right";
+    }
+  }
+
+  _find_nearest_enemy(enemies) {
+    let nearest = null;
+    let min_dist = Infinity;
+    const my = this.map_unit.area;
+    for (const enemy of enemies) {
+      const dist = Math.abs(my.x1 - enemy.area.x1) + Math.abs(my.y1 - enemy.area.y1);
+      if (dist < min_dist) {
+        min_dist = dist;
+        nearest = enemy;
+      }
+    }
+    return nearest;
+  }
+
+  next_move() {
+    if (this.map_unit.delayed_commands.length > 0) {
+      return;
+    }
+    if (this.path.length === 0) {
+      return;
+    }
+    this.target_vertex = this.path.shift();
+    const [direction, offset] = this.offset_of(this.current_vertex(), this.target_vertex);
+    this.turn(direction);
+    return this.start_move(offset);
+  }
+
+  reset_path() {
+    this.path = [];
+    this.target_vertex = null;
+  }
+
+  _schedule_repath() {
+    this._repath_timer = setTimeout(() => {
+      this.reset_path();
+      this._schedule_repath();
+    }, 1000 + Math.random() * 1000);
+  }
+
+  destroy() {
+    clearTimeout(this._repath_timer);
+  }
+
+  offset_of(current_vertex, target_vertex) {
+    if (target_vertex.y1 < current_vertex.y1) {
+      return ["up", current_vertex.y1 - target_vertex.y1];
+    }
+    if (target_vertex.y1 > current_vertex.y1) {
+      return ["down", target_vertex.y1 - current_vertex.y1];
+    }
+    if (target_vertex.x1 < current_vertex.x1) {
+      return ["left", current_vertex.x1 - target_vertex.x1];
+    }
+    if (target_vertex.x1 > current_vertex.x1) {
+      return ["right", target_vertex.x1 - current_vertex.x1];
+    }
+    return ["down", 0];
+  }
+
+  current_vertex() {
+    return this.map.vertexes_at(this.map_unit.area);
+  }
+}
+
 export class MissileCommander extends Commander {
   next() {
     return this.start_move();

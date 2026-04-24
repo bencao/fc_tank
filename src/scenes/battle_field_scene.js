@@ -13,6 +13,7 @@ import {
   FishTank,
   FoolTank
 } from "../objects/tanks.js";
+import { DemoAICommander } from "../objects/commanders.js";
 
 export class BattleFieldScene extends Scene {
   constructor(game, view) {
@@ -50,11 +51,17 @@ export class BattleFieldScene extends Scene {
     return this.view.update_stage(this.current_stage);
   }
 
+  is_demo_mode() {
+    return this.game.get_status('demo_mode');
+  }
+
   start() {
     super.start();
     this.load_config_variables();
     this.start_map();
-    this.enable_user_control();
+    if (!this.is_demo_mode()) {
+      this.enable_user_control();
+    }
     this.enable_system_control();
     this.start_time_line();
     return (this.running = true);
@@ -231,6 +238,11 @@ export class BattleFieldScene extends Scene {
   }
 
   enable_system_control() {
+    if (this.is_demo_mode()) {
+      return this.keyboard.on_key_down("ENTER", event => {
+        return this.exit_demo();
+      });
+    }
     return this.keyboard.on_key_down("ENTER", event => {
       if (this.running) {
         return this.pause();
@@ -238,6 +250,11 @@ export class BattleFieldScene extends Scene {
         return this.rescue();
       }
     });
+  }
+
+  exit_demo() {
+    this.game.update_status('demo_mode', false);
+    return this.game.switch_scene('welcome');
   }
 
   pause() {
@@ -334,6 +351,9 @@ export class BattleFieldScene extends Scene {
       );
       p1_tank.level_up(this.game.get_status("p1_level") - 1);
       p1_tank.on_ship(this.game.get_status("p1_ship"));
+      if (this.is_demo_mode()) {
+        p1_tank.commander = new DemoAICommander(p1_tank);
+      }
       return this.view.update_p1_lives(this.remain_user_p1_lives);
     }
   }
@@ -347,6 +367,9 @@ export class BattleFieldScene extends Scene {
       );
       p2_tank.level_up(this.game.get_status("p2_level") - 1);
       p2_tank.on_ship(this.game.get_status("p2_ship"));
+      if (this.is_demo_mode()) {
+        p2_tank.commander = new DemoAICommander(p2_tank);
+      }
       return this.view.update_p2_lives(this.remain_user_p2_lives);
     }
   }
@@ -391,6 +414,12 @@ export class BattleFieldScene extends Scene {
       return;
     }
     this.winner = "user";
+    if (this.is_demo_mode()) {
+      return setTimeout(() => {
+        this.game.update_status('demo_mode', false);
+        return this.game.switch_scene("welcome");
+      }, 3000);
+    }
     return setTimeout(() => {
       this.save_user_status();
       return this.game.switch_scene("report");
@@ -402,6 +431,12 @@ export class BattleFieldScene extends Scene {
       return;
     }
     this.winner = "enemy";
+    if (this.is_demo_mode()) {
+      return setTimeout(() => {
+        this.game.update_status('demo_mode', false);
+        return this.game.switch_scene("welcome");
+      }, 3000);
+    }
     this.disable_user_controls();
     return setTimeout(() => {
       this.game.update_status("game_over", true);

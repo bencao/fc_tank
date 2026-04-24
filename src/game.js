@@ -79,7 +79,8 @@ export class Game {
       p1_lives: 2,
       p2_lives: 2,
       p1_killed_enemies: [],
-      p2_killed_enemies: []
+      p2_killed_enemies: [],
+      demo_mode: false
     };
   }
 
