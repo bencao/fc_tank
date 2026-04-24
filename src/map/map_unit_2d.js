@@ -1,10 +1,8 @@
 import { Animations } from "../constants.js";
 
 export class MapUnit2D {
-  static initClass() {
-    this.prototype.group = 'middle';
-    this.prototype.max_defend_point = 9;
-  }
+  static group = 'middle';
+  static max_defend_point = 9;
 
   constructor(map, area) {
     this.map = map;
@@ -15,6 +13,9 @@ export class MapUnit2D {
     this.destroyed = false;
     this.attached_timeout_handlers = [];
   }
+
+  get group() { return this.constructor.group; }
+  get max_defend_point() { return this.constructor.max_defend_point; }
 
   after_new_display() {
     this.map.groups[this.group].add(this.display_object);
@@ -59,7 +60,6 @@ export class MapUnit2D {
   }
 
   detach_timeout_events() {
-    return _.each(this.attached_timeout_handlers, handle => clearTimeout(handle));
+    this.attached_timeout_handlers.forEach(handle => clearTimeout(handle));
   }
 }
-MapUnit2D.initClass();

@@ -4,9 +4,9 @@ import { MapArea2D } from "./map_area_2d.js";
 import { Commander } from "../objects/commanders.js";
 
 export class MovableMapUnit2D extends MapUnit2D {
-  static initClass() {
-    this.prototype.speed = 0.08;
-  }
+  static speed = 0.08;
+
+  get speed() { return this.constructor.speed; }
 
   constructor(map, area) {
     super(map, area);
@@ -42,8 +42,8 @@ export class MovableMapUnit2D extends MapUnit2D {
   }
 
   queued_delayed_commands() {
-    let commands;
-    [commands, this.delayed_commands] = Array.from([this.delayed_commands, []]);
+    const commands = this.delayed_commands;
+    this.delayed_commands = [];
     return commands;
   }
   add_delayed_command(command) { return this.delayed_commands.push(command); }
@@ -51,14 +51,9 @@ export class MovableMapUnit2D extends MapUnit2D {
   integration(delta_time) {
     let cmd;
     if (this.destroyed) { return; }
-    this.commands = _.union(this.commander.next_commands(), this.queued_delayed_commands());
-    for (cmd of Array.from(this.commands)) { this.handle_turn(cmd); }
-    return (() => {
-      const result = [];
-      for (cmd of Array.from(this.commands)) {         result.push(this.handle_move(cmd, delta_time));
-      }
-      return result;
-    })();
+    this.commands = [...this.commander.next_commands(), ...this.queued_delayed_commands()];
+    for (cmd of this.commands) { this.handle_turn(cmd); }
+    for (cmd of this.commands) { this.handle_move(cmd, delta_time); }
   }
 
   handle_turn(command) {
@@ -77,7 +72,7 @@ export class MovableMapUnit2D extends MapUnit2D {
         if (intent_offset === null) {
           return this.move(max_offset);
         } else if (intent_offset > 0) {
-          const real_offset = _.min([intent_offset, max_offset]);
+          const real_offset = Math.min(intent_offset, max_offset);
           if (this.move(real_offset)) {
             command.params.offset -= real_offset;
             if (command.params.offset > 0) { return this.add_delayed_command(command); }
@@ -87,13 +82,12 @@ export class MovableMapUnit2D extends MapUnit2D {
         }
         break;
       case "stop_move":
-        // do not move by default
         return this.moving = false;
     }
   }
 
   turn(direction) {
-    if (_.contains([Direction.UP, Direction.DOWN], direction)) {
+    if ([Direction.UP, Direction.DOWN].includes(direction)) {
       if (this._adjust_x()) { this.direction = direction; }
     } else {
       if (this._adjust_y()) { this.direction = direction; }
@@ -125,11 +119,14 @@ export class MovableMapUnit2D extends MapUnit2D {
   }
 
   move(offset) {
-    return _.detect(_.range(1, offset + 1).reverse(), os => this._try_move(os));
+    for (let os = offset; os >= 1; os--) {
+      if (this._try_move(os)) return true;
+    }
+    return false;
   }
 
   _try_move(offset) {
-    const [offset_x, offset_y] = Array.from(this._offset_by_direction(offset));
+    const [offset_x, offset_y] = this._offset_by_direction(offset);
     if ((offset_x === 0) && (offset_y === 0)) { return false; }
     const target_x = this.area.x1 + offset_x;
     const target_y = this.area.y1 + offset_y;
@@ -148,14 +145,13 @@ export class MovableMapUnit2D extends MapUnit2D {
     offset = parseInt(offset);
     switch (this.direction) {
       case Direction.UP:
-        return [0, - _.min([offset, this.area.y1])];
+        return [0, -Math.min(offset, this.area.y1)];
       case Direction.RIGHT:
-        return [_.min([offset, this.map.max_x - this.area.x2]), 0];
+        return [Math.min(offset, this.map.max_x - this.area.x2), 0];
       case Direction.DOWN:
-        return [0, _.min([offset, this.map.max_y - this.area.y2])];
+        return [0, Math.min(offset, this.map.max_y - this.area.y2)];
       case Direction.LEFT:
-        return [- _.min([offset, this.area.x1]), 0];
+        return [-Math.min(offset, this.area.x1), 0];
     }
   }
 }
-MovableMapUnit2D.initClass();

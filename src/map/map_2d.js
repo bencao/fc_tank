@@ -13,10 +13,10 @@ export class Map2D {
     this.default_width = 40;
     this.default_height = 40;
     this.infinity = 65535;
-    this.map_units = []; // has_many map_units
-    this.terrains = []; // has_many terrains
-    this.tanks = []; // has_many tanks
-    this.missiles = []; // has_many missiles
+    this.map_units = [];
+    this.terrains = [];
+    this.tanks = [];
+    this.missiles = [];
     this.gifts = [];
     this.groups = {
       gift: new Kinetic.Group(),
@@ -41,7 +41,7 @@ export class Map2D {
 
   reset() {
     this.bindings = {};
-    return _.each(this.map_units, unit => unit.destroy());
+    this.map_units.forEach(unit => unit.destroy());
   }
 
   add_terrain(terrain_cls, area) {
@@ -72,11 +72,11 @@ export class Map2D {
   }
 
   random_gift() {
-    _.each(this.gifts, gift => gift.destroy());
+    this.gifts.forEach(gift => gift.destroy());
 
     const gift_classes = getGiftClasses();
-    const vx = parseInt(Math.random() * this.vertexes_rows);
-    const vy = parseInt(Math.random() * this.vertexes_columns);
+    const vx = Math.floor(Math.random() * this.vertexes_rows);
+    const vy = Math.floor(Math.random() * this.vertexes_columns);
     const gift_choice = Math.floor(Math.random() * gift_classes.length);
     const gift = new gift_classes[gift_choice](
       this,
@@ -91,37 +91,35 @@ export class Map2D {
 
   delete_map_unit(map_unit) {
     if (map_unit instanceof Terrain) {
-      this.terrains = _.without(this.terrains, map_unit);
+      this.terrains = this.terrains.filter(t => t !== map_unit);
     } else if (map_unit instanceof Missile) {
-      this.missiles = _.without(this.missiles, map_unit);
+      this.missiles = this.missiles.filter(m => m !== map_unit);
     } else if (map_unit instanceof Tank) {
-      this.tanks = _.without(this.tanks, map_unit);
+      this.tanks = this.tanks.filter(t => t !== map_unit);
     } else if (map_unit instanceof Gift) {
-      this.gifts = _.without(this.gifts, map_unit);
+      this.gifts = this.gifts.filter(g => g !== map_unit);
     }
-    return (this.map_units = _.without(this.map_units, map_unit));
+    this.map_units = this.map_units.filter(u => u !== map_unit);
   }
 
   p1_tank() {
-    return _.first(_.select(this.tanks, tank => tank.type() === "user_p1"));
+    return this.tanks.find(tank => tank.type() === "user_p1");
   }
   p2_tank() {
-    return _.first(_.select(this.tanks, tank => tank.type() === "user_p2"));
+    return this.tanks.find(tank => tank.type() === "user_p2");
   }
   home() {
-    return _.first(
-      _.select(this.terrains, terrain => terrain.type() === "home")
-    );
+    return this.terrains.find(terrain => terrain.type() === "home");
   }
   user_tanks() {
-    return _.select(this.tanks, tank => tank instanceof UserTank);
+    return this.tanks.filter(tank => tank instanceof UserTank);
   }
   enemy_tanks() {
-    return _.select(this.tanks, tank => tank instanceof EnemyTank);
+    return this.tanks.filter(tank => tank instanceof EnemyTank);
   }
 
   units_at(area) {
-    return _.select(this.map_units, map_unit => map_unit.area.collide(area));
+    return this.map_units.filter(map_unit => map_unit.area.collide(area));
   }
   out_of_bound(area) {
     return (
@@ -129,7 +127,7 @@ export class Map2D {
     );
   }
   area_available(unit, area) {
-    return _.all(this.map_units, map_unit => {
+    return this.map_units.every(map_unit => {
       return (
         map_unit === unit ||
         map_unit.accept(unit) ||
@@ -140,25 +138,21 @@ export class Map2D {
 
   init_vertexes() {
     const vertexes = [];
-    let [x1, x2] = Array.from([0, this.default_width]);
+    let x1 = 0, x2 = this.default_width;
     while (x2 <= this.max_x) {
       const column_vertexes = [];
-      let [y1, y2] = Array.from([0, this.default_height]);
+      let y1 = 0, y2 = this.default_height;
       while (y2 <= this.max_y) {
         column_vertexes.push(new MapArea2DVertex(x1, y1, x2, y2));
-        [y1, y2] = Array.from([
-          y1 + this.default_height / 4,
-          y2 + this.default_height / 4
-        ]);
+        y1 += this.default_height / 4;
+        y2 += this.default_height / 4;
       }
       vertexes.push(column_vertexes);
-      [x1, x2] = Array.from([
-        x1 + this.default_width / 4,
-        x2 + this.default_width / 4
-      ]);
+      x1 += this.default_width / 4;
+      x2 += this.default_width / 4;
     }
-    for (let x of Array.from(_.range(0, this.vertexes_columns))) {
-      for (let y of Array.from(_.range(0, this.vertexes_rows))) {
+    for (let x = 0; x < this.vertexes_columns; x++) {
+      for (let y = 0; y < this.vertexes_rows; y++) {
         for (let sib of [
           { x, y: y - 1 },
           { x: x + 1, y },
@@ -179,7 +173,6 @@ export class Map2D {
     return vertexes;
   }
 
-  // area must be the same with a map vertexe
   vertexes_at(area) {
     const vx = parseInt((area.x1 * 4) / this.default_width);
     const vy = parseInt((area.y1 * 4) / this.default_height);
@@ -187,11 +180,11 @@ export class Map2D {
   }
 
   random_vertex() {
-    let vx = parseInt(Math.random() * this.vertexes_rows);
+    let vx = Math.floor(Math.random() * this.vertexes_rows);
     if (vx % 2 === 1) {
       vx = vx - 1;
     }
-    let vy = parseInt(Math.random() * this.vertexes_columns);
+    let vy = Math.floor(Math.random() * this.vertexes_columns);
     if (vy % 2 === 1) {
       vy = vy - 1;
     }
@@ -199,17 +192,16 @@ export class Map2D {
   }
 
   weight(tank, from, to) {
-    const sub_area = _.first(to.sub(from));
-    const terrain_units = _.select(
-      this.units_at(sub_area),
+    const sub_areas = to.sub(from);
+    const sub_area = sub_areas[0];
+    const terrain_units = this.units_at(sub_area).filter(
       unit => unit instanceof Terrain
     );
-    if (_.isEmpty(terrain_units)) {
+    if (terrain_units.length === 0) {
       return 1;
     }
-    const max_weight = _.max(
-      _.map(terrain_units, terrain_unit => terrain_unit.weight(tank))
-    );
+    const weights = terrain_units.map(terrain_unit => terrain_unit.weight(tank));
+    const max_weight = Math.max(...weights);
     return (
       (max_weight / (this.default_width * this.default_height)) *
       sub_area.width() *
@@ -218,17 +210,17 @@ export class Map2D {
   }
 
   shortest_path(tank, start_vertex, end_vertex) {
-    const [d, pi] = Array.from(this.intialize_single_source(end_vertex));
+    const [d, pi] = this.intialize_single_source(end_vertex);
     d[start_vertex.vx][start_vertex.vy].key = 0;
     const heap = new BinomialHeap();
-    for (let x of Array.from(_.range(0, this.vertexes_columns))) {
-      for (let y of Array.from(_.range(0, this.vertexes_rows))) {
+    for (let x = 0; x < this.vertexes_columns; x++) {
+      for (let y = 0; y < this.vertexes_rows; y++) {
         heap.insert(d[x][y]);
       }
     }
     while (!heap.is_empty()) {
       const u = heap.extract_min().satellite;
-      for (let v of Array.from(u.siblings)) {
+      for (let v of u.siblings) {
         this.relax(heap, d, pi, u, v, this.weight(tank, u, v), end_vertex);
       }
       if (u === end_vertex) {
@@ -241,10 +233,10 @@ export class Map2D {
   intialize_single_source(target_vertex) {
     const d = [];
     const pi = [];
-    for (let x of Array.from(_.range(0, this.vertexes_columns))) {
+    for (let x = 0; x < this.vertexes_columns; x++) {
       const column_ds = [];
       const column_pi = [];
-      for (let y of Array.from(_.range(0, this.vertexes_rows))) {
+      for (let y = 0; y < this.vertexes_rows; y++) {
         const node = new BinomialHeapNode(
           this.vertexes[x][y],
           this.infinity - this.vertexes[x][y].a_star_weight(target_vertex)
@@ -259,7 +251,6 @@ export class Map2D {
   }
 
   relax(heap, d, pi, u, v, w, target_vertex) {
-    // an area like [30, 50, 70, 90] is not movable, so do not relax here
     if (v.vx % 2 === 1 && u.vx % 2 === 1) {
       return;
     }
@@ -288,17 +279,17 @@ export class Map2D {
     if (scope == null) {
       scope = this;
     }
-    if (_.isEmpty(this.bindings[event])) {
+    if (!this.bindings[event] || this.bindings[event].length === 0) {
       this.bindings[event] = [];
     }
     return this.bindings[event].push({ scope: scope, callback: callback });
   }
 
   trigger(event, ...params) {
-    if (_.isEmpty(this.bindings[event])) {
+    if (!this.bindings[event] || this.bindings[event].length === 0) {
       return;
     }
-    return Array.from(this.bindings[event]).map(handler =>
+    return this.bindings[event].map(handler =>
       handler.callback.apply(handler.scope, params)
     );
   }

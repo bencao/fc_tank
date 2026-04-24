@@ -52,7 +52,7 @@ export class BinomialHeap {
 
   _extract_min_root_node() {
     // find min in the root list
-    let [curr, min] = Array.from([this.head, this.head]);
+    let [curr, min] = ([this.head, this.head]);
     while (curr !== null) {
       if (curr.key < min.key) { min = curr; }
       curr = curr.sibling;
@@ -64,7 +64,7 @@ export class BinomialHeap {
       min.prev_sibling.sibling = min.sibling;
     }
     if (min.sibling !== null) { min.sibling.prev_sibling = min.prev_sibling; }
-    [min.sibling, min.prev_sibling] = Array.from([null, null]);
+    [min.sibling, min.prev_sibling] = ([null, null]);
     return min;
   }
 
@@ -75,7 +75,7 @@ export class BinomialHeap {
     if (curr !== null) {
       while (curr !== null) {
         [curr.prev_sibling, curr.sibling, curr.parent] =
-          Array.from([curr.sibling, curr.prev_sibling, null]);
+          ([curr.sibling, curr.prev_sibling, null]);
         if (curr.is_head()) { this.union(new BinomialHeap(curr)); }
         curr = curr.prev_sibling;
       }
@@ -128,15 +128,15 @@ export class BinomialHeap {
       while ((z !== null) && (y.key < z.key)) {
         if (y.is_first_child()) { y.parent.child = z; }
         if (z.is_first_child()) { z.parent.child = y; }
-        [y.parent, z.parent] = Array.from([z.parent, y.parent]);
+        [y.parent, z.parent] = ([z.parent, y.parent]);
 
         if (y.prev_sibling !== null) { y.prev_sibling.sibling = z; }
         if (z.prev_sibling !== null) { z.prev_sibling.sibling = y; }
-        [y.prev_sibling, z.prev_sibling] = Array.from([z.prev_sibling, y.prev_sibling]);
+        [y.prev_sibling, z.prev_sibling] = ([z.prev_sibling, y.prev_sibling]);
 
         if (y.sibling !== null) { y.sibling.prev_sibling = z; }
         if (z.sibling !== null) { z.sibling.prev_sibling = y; }
-        [y.sibling, z.sibling] = Array.from([z.sibling, y.sibling]);
+        [y.sibling, z.sibling] = ([z.sibling, y.sibling]);
 
         let { child } = y;
         while (child !== null) {
@@ -148,8 +148,8 @@ export class BinomialHeap {
           child.parent = y;
           child = child.sibling;
         }
-        [y.child, z.child] = Array.from([z.child, y.child]);
-        [y.degree, z.degree] = Array.from([z.degree, y.degree]);
+        [y.child, z.child] = ([z.child, y.child]);
+        [y.degree, z.degree] = ([z.degree, y.degree]);
 
         if (y.is_head()) { this.head = y; }
         result.push(z = y.parent);

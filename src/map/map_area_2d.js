@@ -15,17 +15,17 @@ export class MapArea2D {
     this.y2 = y2;
   }
   intersect(area) {
-    return new MapArea2D(_.max([area.x1, this.x1]), _.max([area.y1, this.y1]),
-      _.min([area.x2, this.x2]), _.min([area.y2, this.y2]));
+    return new MapArea2D(Math.max(area.x1, this.x1), Math.max(area.y1, this.y1),
+      Math.min(area.x2, this.x2), Math.min(area.y2, this.y2));
   }
   sub(area) {
     const intersection = this.intersect(area);
-    return _.select([
+    return [
       new MapArea2D(this.x1, this.y1, this.x2, intersection.y1),
       new MapArea2D(this.x1, intersection.y2, this.x2, this.y2),
       new MapArea2D(this.x1, intersection.y1, intersection.x1, intersection.y2),
       new MapArea2D(intersection.x2, intersection.y1, this.x2, intersection.y2)
-    ], candidate_area => candidate_area.valid());
+    ].filter(candidate_area => candidate_area.valid());
   }
   collide(area) {
     return !((this.x2 <= area.x1) || (this.y2 <= area.y1) || (this.x1 >= area.x2) || (this.y1 >= area.y2));

@@ -10,8 +10,8 @@ export class Terrain extends MapUnit2D {
   }
   new_display() {
     let animation;
-    const animations = _.cloneDeep(Animations.terrain(this.type()));
-    for (animation of Array.from(animations)) {
+    const animations = structuredClone(Animations.terrain(this.type()));
+    for (animation of animations) {
       animation.x += this.area.x1 % 40;
       animation.y += this.area.y1 % 40;
       animation.width = this.area.width();
@@ -37,13 +37,11 @@ export class BrickTerrain extends Terrain {
     return 40 / tank.power;
   }
   defend(missile, destroy_area) {
-    // cut self into pieces
     const pieces = this.area.sub(destroy_area);
-    _.each(pieces, piece => {
-      return this.map.add_terrain(BrickTerrain, piece);
+    pieces.forEach(piece => {
+      this.map.add_terrain(BrickTerrain, piece);
     });
     this.destroy();
-    // return cost of destroy
     return 1;
   }
 }
@@ -68,8 +66,8 @@ export class IronTerrain extends Terrain {
     }
     const double_destroy_area = destroy_area.extend(missile.direction, 1);
     const pieces = this.area.sub(double_destroy_area);
-    _.each(pieces, piece => {
-      return this.map.add_terrain(IronTerrain, piece);
+    pieces.forEach(piece => {
+      this.map.add_terrain(IronTerrain, piece);
     });
     this.destroy();
     return 2;
@@ -77,9 +75,7 @@ export class IronTerrain extends Terrain {
 }
 
 export class WaterTerrain extends Terrain {
-  static initClass() {
-    this.prototype.group = "back";
-  }
+  static group = "back";
   accept(map_unit) {
     if (map_unit instanceof Tank) {
       return map_unit.ship;
@@ -99,12 +95,9 @@ export class WaterTerrain extends Terrain {
     }
   }
 }
-WaterTerrain.initClass();
 
 export class IceTerrain extends Terrain {
-  static initClass() {
-    this.prototype.group = "back";
-  }
+  static group = "back";
   accept(map_unit) {
     return true;
   }
@@ -115,12 +108,9 @@ export class IceTerrain extends Terrain {
     return 4;
   }
 }
-IceTerrain.initClass();
 
 export class GrassTerrain extends Terrain {
-  static initClass() {
-    this.prototype.group = "front";
-  }
+  static group = "front";
   accept(map_unit) {
     return true;
   }
@@ -131,7 +121,6 @@ export class GrassTerrain extends Terrain {
     return 4;
   }
 }
-GrassTerrain.initClass();
 
 export class HomeTerrain extends Terrain {
   type() {
@@ -172,34 +161,26 @@ export class HomeTerrain extends Terrain {
 
   defend_terrains() {
     const home_defend_area = new MapArea2D(220, 460, 300, 520);
-    const home_area = this.map.home.area;
-    return _.reject(
-      this.map.units_at(home_defend_area),
-      unit => unit instanceof HomeTerrain || unit instanceof Tank
+    return this.map.units_at(home_defend_area).filter(
+      unit => !(unit instanceof HomeTerrain) && !(unit instanceof Tank)
     );
   }
 
   delete_defend_terrains() {
-    return _.each(this.defend_terrains(), terrain => terrain.destroy());
+    this.defend_terrains().forEach(terrain => terrain.destroy());
   }
 
   add_defend_terrains(terrain_cls) {
-    return (() => {
-      const result = [];
-      for (let area of [
-        new MapArea2D(220, 460, 260, 480),
-        new MapArea2D(260, 460, 300, 480),
-        new MapArea2D(220, 480, 240, 520),
-        new MapArea2D(280, 480, 300, 520)
-      ]) {
-        if (_.size(this.map.units_at(area)) === 0) {
-          result.push(this.map.add_terrain(terrain_cls, area));
-        } else {
-          result.push(undefined);
-        }
+    for (let area of [
+      new MapArea2D(220, 460, 260, 480),
+      new MapArea2D(260, 460, 300, 480),
+      new MapArea2D(220, 480, 240, 520),
+      new MapArea2D(280, 480, 300, 520)
+    ]) {
+      if (this.map.units_at(area).length === 0) {
+        this.map.add_terrain(terrain_cls, area);
       }
-      return result;
-    })();
+    }
   }
 
   setup_defend_terrains() {
