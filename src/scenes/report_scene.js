@@ -16,11 +16,11 @@ export class ReportScene extends Scene {
     }
     this.game.update_status(
       "hi_score",
-      _.max([
+      Math.max(
         this.game.get_status("p1_score"),
         this.game.get_status("p2_score"),
         this.game.get_config("initial_hi_score")
-      ])
+      )
     );
 
     this.view.update_hi_score(this.game.get_status("hi_score"));
@@ -52,13 +52,11 @@ export class ReportScene extends Scene {
       total: 0,
       total_pts: 0
     };
-    _.each(this.game.get_status(user + "_killed_enemies"), type => {
+    this.game.get_status(user + "_killed_enemies").forEach(type => {
       numbers[type] += 1;
       numbers[`${type}_pts`] += this.game.get_config(`score_for_${type}`);
       numbers["total"] += 1;
-      return (numbers["total_pts"] += this.game.get_config(
-        `score_for_${type}`
-      ));
+      numbers["total_pts"] += this.game.get_config(`score_for_${type}`);
     });
     return numbers;
   }

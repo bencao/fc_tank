@@ -37,9 +37,8 @@ function bornArea(map, parent) {
 }
 
 export class Missile extends MovableMapUnit2D {
-  static initClass() {
-    this.prototype.speed = 0.2;
-  }
+  static speed = 0.2;
+
   constructor(map, parent) {
     super(map, bornArea(map, parent));
     this.parent = parent;
@@ -74,7 +73,6 @@ export class Missile extends MovableMapUnit2D {
     return can_move;
   }
   attack() {
-    // if collide with other object, then explode
     const destroy_area = this.destroy_area();
 
     if (this.map.out_of_bound(destroy_area)) {
@@ -82,10 +80,10 @@ export class Missile extends MovableMapUnit2D {
       this.energy -= this.max_defend_point;
     } else {
       const hit_map_units = this.map.units_at(destroy_area);
-      _.each(hit_map_units, unit => {
+      hit_map_units.forEach(unit => {
         const defend_point = unit.defend(this, destroy_area);
         this.bom_on_destroy = defend_point === this.max_defend_point;
-        return (this.energy -= defend_point);
+        this.energy -= defend_point;
       });
     }
     if (this.energy <= 0) {
@@ -135,4 +133,3 @@ export class Missile extends MovableMapUnit2D {
     );
   }
 }
-Missile.initClass();

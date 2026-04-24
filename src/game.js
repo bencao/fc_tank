@@ -123,7 +123,7 @@ export class Game {
   }
 
   reset() {
-    _.each(this.scenes, scene => scene.stop());
+    Object.values(this.scenes).forEach(scene => scene.stop());
     this.current_scene = null;
     this.init_default_config();
     return this.kick_off();
@@ -131,7 +131,7 @@ export class Game {
 
   switch_scene(type) {
     const target_scene = this.scenes[type];
-    if (!_.isEmpty(this.current_scene)) {
+    if (this.current_scene) {
       this.current_scene.on_stop();
     }
     target_scene.on_start();

@@ -16,9 +16,7 @@ export function getGiftClasses() {
 }
 
 export class Gift extends MapUnit2D {
-  static initClass() {
-    this.prototype.group = "gift";
-  }
+  static group = "gift";
 
   accept(map_unit) {
     return true;
@@ -31,12 +29,11 @@ export class Gift extends MapUnit2D {
     if (this.destroyed) {
       return;
     }
-    const tanks = _.select(
-      this.map.units_at(this.area),
+    const tanks = this.map.units_at(this.area).filter(
       unit => unit instanceof Tank
     );
-    _.each(tanks, tank => this.apply(tank));
-    if (_.size(tanks) > 0) {
+    tanks.forEach(tank => this.apply(tank));
+    if (tanks.length > 0) {
       this.destroy();
       return this.map.trigger("gift_consumed", this, tanks);
     }
@@ -60,19 +57,18 @@ export class Gift extends MapUnit2D {
     return this.type();
   }
 }
-Gift.initClass();
 
 export class LandMineGift extends Gift {
   apply(tank) {
     if (tank instanceof EnemyTank) {
-      return _.each(this.map.user_tanks(), tank => {
-        tank.destroy();
-        return this.map.trigger("user_tank_destroyed", tank, null);
+      this.map.user_tanks().forEach(t => {
+        t.destroy();
+        this.map.trigger("user_tank_destroyed", t, null);
       });
     } else {
-      return _.each(this.map.enemy_tanks(), tank => {
-        tank.destroy();
-        return this.map.trigger("enemy_tank_destroyed", tank, null);
+      this.map.enemy_tanks().forEach(t => {
+        t.destroy();
+        this.map.trigger("enemy_tank_destroyed", t, null);
       });
     }
   }
@@ -115,7 +111,6 @@ export class ShovelGift extends Gift {
     } else {
       this.map.home().delete_defend_terrains();
     }
-    // transfer back to brick after 10 seconds
     return this.attach_timeout_event(() => {
       return this.map.home().restore_defend_terrains();
     }, 10000);
@@ -128,15 +123,14 @@ export class ShovelGift extends Gift {
 export class LifeGift extends Gift {
   apply(tank) {
     if (tank instanceof EnemyTank) {
-      return _.each(this.map.enemy_tanks(), function(enemy_tank) {
+      this.map.enemy_tanks().forEach(enemy_tank => {
         enemy_tank.hp_up(5);
-        return enemy_tank.gift_up(3);
+        enemy_tank.gift_up(3);
       });
     } else {
-      return this.map.trigger("tank_life_up", tank);
+      this.map.trigger("tank_life_up", tank);
     }
   }
-  // TODO add extra user life
   type() {
     return "life";
   }
@@ -158,9 +152,9 @@ export class HatGift extends Gift {
 export class ClockGift extends Gift {
   apply(tank) {
     if (tank instanceof EnemyTank) {
-      return _.each(this.map.user_tanks(), tank => tank.freeze());
+      this.map.user_tanks().forEach(t => t.freeze());
     } else {
-      return _.each(this.map.enemy_tanks(), tank => tank.freeze());
+      this.map.enemy_tanks().forEach(t => t.freeze());
     }
   }
   type() {

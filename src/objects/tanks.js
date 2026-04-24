@@ -23,7 +23,7 @@ export class Tank extends MovableMapUnit2D {
   }
 
   level_up(levels) {
-    this.level = _.min([this.level + levels, 3]);
+    this.level = Math.min(this.level + levels, 3);
     return this._level_adjust();
   }
 
@@ -35,12 +35,12 @@ export class Tank extends MovableMapUnit2D {
         break;
       case 2:
         this.power = 1;
-        this.hp = _.max([this.hp + 1, this.max_hp]);
+        this.hp = Math.max(this.hp + 1, this.max_hp);
         this.max_missile = 2;
         break;
       case 3:
         this.power = 2;
-        this.hp = _.max([this.hp + 1, this.max_hp]);
+        this.hp = Math.max(this.hp + 1, this.max_hp);
         this.max_missile = 2;
         break;
     }
@@ -56,7 +56,7 @@ export class Tank extends MovableMapUnit2D {
     if (this.dead()) {
       return this.destroy();
     } else {
-      this.level = _.max([1, this.level - 1]);
+      this.level = Math.max(1, this.level - 1);
       return this._level_adjust();
     }
   }
@@ -74,7 +74,7 @@ export class Tank extends MovableMapUnit2D {
   }
 
   can_fire() {
-    return _.size(this.missiles) < this.max_missile;
+    return this.missiles.length < this.max_missile;
   }
 
   freeze() {
@@ -110,11 +110,11 @@ export class Tank extends MovableMapUnit2D {
       return;
     }
     super.integration(delta_time);
-    return Array.from(this.commands).map(cmd => this.handle_fire(cmd));
+    this.commands.forEach(cmd => this.handle_fire(cmd));
   }
 
   delete_missile(missile) {
-    return (this.missiles = _.without(this.missiles, missile));
+    return (this.missiles = this.missiles.filter(m => m !== missile));
   }
 
   after_new_display() {
@@ -131,9 +131,8 @@ export class Tank extends MovableMapUnit2D {
 }
 
 export class UserTank extends Tank {
-  static initClass() {
-    this.prototype.speed = 0.13;
-  }
+  static speed = 0.13;
+
   constructor(map, area) {
     super(map, area);
     this.guard = false;
@@ -159,7 +158,7 @@ export class UserTank extends Tank {
       this.on_ship(false);
       return this.max_defend_point - 1;
     }
-    const defend_point = _.min(this.hp, missile.power);
+    const defend_point = Math.min(this.hp, missile.power);
     this.hp_down(missile.power);
     if (this.dead()) {
       this.map.trigger("user_tank_destroyed", this, missile.parent);
@@ -195,7 +194,6 @@ export class UserTank extends Tank {
     return this.map.trigger("user_moved");
   }
 }
-UserTank.initClass();
 
 export class UserP1Tank extends UserTank {
   constructor(map, area) {
@@ -243,7 +241,7 @@ export class EnemyTank extends Tank {
       this.on_ship(false);
       return this.max_defend_point - 1;
     }
-    const defend_point = _.min(this.hp, missile.power);
+    const defend_point = Math.min(this.hp, missile.power);
     this.hp_down(missile.power);
     if (this.dead()) {
       this.map.trigger("enemy_tank_destroyed", this, missile.parent);
@@ -259,7 +257,7 @@ export class EnemyTank extends Tank {
         ? "enemy_lv3"
         : this.gift_counts > 0
         ? `${this.type()}_with_gift`
-        : `${this.type()}_hp` + _.min([this.hp, 4]);
+        : `${this.type()}_hp` + Math.min(this.hp, 4);
     return prefix + (this.ship ? "_with_ship" : "");
   }
   gift_up(gifts) {
@@ -283,41 +281,29 @@ export class EnemyTank extends Tank {
 }
 
 export class StupidTank extends EnemyTank {
-  static initClass() {
-    this.prototype.speed = 0.07;
-  }
+  static speed = 0.07;
   type() {
     return "stupid";
   }
 }
-StupidTank.initClass();
 
 export class FoolTank extends EnemyTank {
-  static initClass() {
-    this.prototype.speed = 0.07;
-  }
+  static speed = 0.07;
   type() {
     return "fool";
   }
 }
-FoolTank.initClass();
 
 export class FishTank extends EnemyTank {
-  static initClass() {
-    this.prototype.speed = 0.13;
-  }
+  static speed = 0.13;
   type() {
     return "fish";
   }
 }
-FishTank.initClass();
 
 export class StrongTank extends EnemyTank {
-  static initClass() {
-    this.prototype.speed = 0.07;
-  }
+  static speed = 0.07;
   type() {
     return "strong";
   }
 }
-StrongTank.initClass();

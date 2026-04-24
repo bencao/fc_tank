@@ -19,11 +19,14 @@ export class Commander {
   next_commands() {
     this.commands = [];
     this.next();
-    return _.uniq(this.commands, function(command) {
-      if (command["type"] === "direction") {
-        return command["params"]["direction"];
-      }
-      return command["type"];
+    const seen = new Set();
+    return this.commands.filter(command => {
+      const key = command.type === "direction"
+        ? command.params.direction
+        : command.type;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
   }
 
@@ -120,7 +123,7 @@ export class UserCommander extends Commander {
   handle_finished_commands() {
     for (let command in this.command_queue) {
       const sequences = this.command_queue[command];
-      if (_.isEmpty(sequences)) {
+      if (sequences.length === 0) {
         continue;
       }
       switch (command) {
@@ -135,8 +138,8 @@ export class UserCommander extends Commander {
             this.turn(command);
             break;
           }
-          var has_start_command = _.contains(sequences, "start");
-          var has_end_command = _.contains(sequences, "end");
+          var has_start_command = sequences.includes("start");
+          var has_end_command = sequences.includes("end");
           if (has_start_command) {
             this.start_move();
           }
@@ -182,7 +185,7 @@ export class EnemyAICommander extends Commander {
 
   next() {
     // move towards home
-    if (_.size(this.path) === 0) {
+    if (this.path.length === 0) {
       const end_vertex =
         Math.random() * 100 <= this.map_unit.iq
           ? this.map.home_vertex
@@ -214,25 +217,19 @@ export class EnemyAICommander extends Commander {
         this.fire();
       }
     }
-    // # fire if user or home in front of me
-    // targets = _.compact([@map.p1_tank(), @map.p2_tank(), @map.home()])
-    // for target in targets
-    //   @fire() if @in_attack_range(target.area)
 
     return (this.last_area = this.map_unit.area);
   }
 
   next_move() {
-    if (_.size(this.map_unit.delayed_commands) > 0) {
+    if (this.map_unit.delayed_commands.length > 0) {
       return;
     }
-    if (_.size(this.path) === 0) {
+    if (this.path.length === 0) {
       return;
     }
     this.target_vertex = this.path.shift();
-    const [direction, offset] = Array.from(
-      this.offset_of(this.current_vertex(), this.target_vertex)
-    );
+    const [direction, offset] = this.offset_of(this.current_vertex(), this.target_vertex);
     this.turn(direction);
     return this.start_move(offset);
   }

@@ -13,7 +13,7 @@ export class BattleFieldView extends View {
   }
 
   update_enemy_statuses(remain_enemy_counts) {
-    _.each(this.enemy_symbols, symbol => symbol.destroy());
+    this.enemy_symbols.forEach(symbol => symbol.destroy());
     this.enemy_symbols = [];
     if (remain_enemy_counts > 0) {
       return (() => {

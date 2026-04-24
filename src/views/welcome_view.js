@@ -135,8 +135,8 @@ export class WelcomeView extends View {
       new MapArea2D(410, 270, 440, 280)
     ]) {
         var animation;
-        const animations = _.cloneDeep(Animations.terrain('brick'));
-        for (animation of Array.from(animations)) {
+        const animations = structuredClone(Animations.terrain('brick'));
+        for (animation of animations) {
           animation.x += (area.x1 % 40);
           animation.y += (area.y1 % 40);
           animation.width = area.width();

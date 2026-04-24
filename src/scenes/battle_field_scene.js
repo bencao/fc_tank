@@ -2,6 +2,7 @@ import { Scene } from "../engine/scene.js";
 import { Map2D } from "../map/map_2d.js";
 import { MapArea2D } from "../map/map_area_2d.js";
 import { TiledMapBuilder } from "../map/tiled_map_builder.js";
+import terrainsJson from "../../data/terrains.json";
 import {
   UserTank,
   UserP1Tank,
@@ -18,14 +19,7 @@ export class BattleFieldScene extends Scene {
     super(game, view);
     this.layer = this.view.layer;
     this.map = new Map2D(this.layer);
-    $.ajax({
-      url: "data/terrains.json",
-      success: json => {
-        return (this.builder = new TiledMapBuilder(this.map, json));
-      },
-      dataType: "json",
-      async: false
-    });
+    this.builder = new TiledMapBuilder(this.map, terrainsJson);
     this.reset_config_variables();
   }
 
@@ -90,7 +84,6 @@ export class BattleFieldScene extends Scene {
   }
 
   start_map() {
-    // wait until builder loaded
     this.map.bind(
       "map_ready",
       function() {
@@ -210,26 +203,26 @@ export class BattleFieldScene extends Scene {
       J: "fire"
     };
 
-    _.forIn(p1_control_mappings, (virtual_command, physical_key) => {
+    Object.entries(p1_control_mappings).forEach(([physical_key, virtual_command]) => {
       this.keyboard.on_key_down(physical_key, event => {
         if (this.map.p1_tank()) {
           return this.map.p1_tank().commander.on_command_start(virtual_command);
         }
       });
-      return this.keyboard.on_key_up(physical_key, event => {
+      this.keyboard.on_key_up(physical_key, event => {
         if (this.map.p1_tank()) {
           return this.map.p1_tank().commander.on_command_end(virtual_command);
         }
       });
     });
 
-    return _.forIn(p2_control_mappings, (virtual_command, physical_key) => {
+    Object.entries(p2_control_mappings).forEach(([physical_key, virtual_command]) => {
       this.keyboard.on_key_down(physical_key, event => {
         if (this.map.p2_tank()) {
           return this.map.p2_tank().commander.on_command_start(virtual_command);
         }
       });
-      return this.keyboard.on_key_up(physical_key, event => {
+      this.keyboard.on_key_up(physical_key, event => {
         if (this.map.p2_tank()) {
           return this.map.p2_tank().commander.on_command_end(virtual_command);
         }
@@ -380,7 +373,7 @@ export class BattleFieldScene extends Scene {
   check_user_win() {
     if (
       this.remain_enemy_counts === 0 &&
-      _.size(this.map.enemy_tanks()) === 0
+      this.map.enemy_tanks().length === 0
     ) {
       return this.user_win();
     }
@@ -393,11 +386,10 @@ export class BattleFieldScene extends Scene {
   }
 
   user_win() {
-    if (!_.isNull(this.winner)) {
+    if (this.winner !== null) {
       return;
     }
     this.winner = "user";
-    // report
     return setTimeout(() => {
       this.save_user_status();
       return this.game.switch_scene("report");
@@ -405,7 +397,7 @@ export class BattleFieldScene extends Scene {
   }
 
   enemy_win() {
-    if (!_.isNull(this.winner)) {
+    if (this.winner !== null) {
       return;
     }
     this.winner = "enemy";
@@ -446,18 +438,18 @@ export class BattleFieldScene extends Scene {
   }
 
   increase_gift_score_by_user(gift, tanks) {
-    return _.each(tanks, tank => {
+    tanks.forEach(tank => {
       const gift_score = this.game.get_config("score_for_gift");
       if (tank instanceof UserP1Tank) {
-        return this.game.increase_p1_score(gift_score);
+        this.game.increase_p1_score(gift_score);
       } else if (tank instanceof UserP2Tank) {
-        return this.game.increase_p2_score(gift_score);
+        this.game.increase_p2_score(gift_score);
       }
     });
   }
 
   draw_gift_points(gift, tanks) {
-    return _.detect(tanks, tank => {
+    return tanks.find(tank => {
       if (tank instanceof UserTank) {
         this.view.draw_point_label(
           tank,

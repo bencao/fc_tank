@@ -1,19 +1,16 @@
 export class Direction {
-  static initClass() {
-    this.UP = 0;
-    this.DOWN = 180;
-    this.LEFT = 270;
-    this.RIGHT = 90;
-  }
+  static UP = 0;
+  static DOWN = 180;
+  static LEFT = 270;
+  static RIGHT = 90;
+
   static all() {
     return [this.UP, this.DOWN, this.LEFT, this.RIGHT];
   }
 }
-Direction.initClass();
 
 export class Animations {
-  static initClass() {
-    this.movables = {
+  static movables = {
       bom: [
         { x: 360, y: 340, width: 40, height: 40 },
         { x: 120, y: 340, width: 40, height: 40 },
@@ -166,7 +163,7 @@ export class Animations {
       missile: [{ x: 250, y: 350, width: 20, height: 20 }]
     };
 
-    this.gifts = {
+  static gifts = {
       land_mine: [
         { x: 0, y: 300, width: 40, height: 40 },
         { x: 360, y: 300, width: 40, height: 40 }
@@ -201,7 +198,7 @@ export class Animations {
       ]
     };
 
-    this.rates = {
+  static rates = {
       bom: 12,
       tank_born: 7,
 
@@ -297,7 +294,7 @@ export class Animations {
       home: 1
     };
 
-    this.terrains = {
+  static terrains = {
       brick: [{ x: 0, y: 240, width: 40, height: 40 }],
       iron: [{ x: 120, y: 240, width: 40, height: 40 }],
       water: [{ x: 240, y: 240, width: 40, height: 40 }],
@@ -306,7 +303,7 @@ export class Animations {
       home_origin: [{ x: 320, y: 240, width: 40, height: 40 }],
       home_destroyed: [{ x: 360, y: 240, width: 40, height: 40 }]
     };
-  }
+
   static movable(type) {
     return this.movables[type];
   }
@@ -317,4 +314,3 @@ export class Animations {
     return this.terrains[type];
   }
 }
-Animations.initClass();
