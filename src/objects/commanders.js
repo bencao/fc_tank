@@ -1,4 +1,5 @@
 import { Direction } from "../constants.js";
+import { MapArea2D } from "../map/map_area_2d.js";
 
 export class Commander {
   constructor(map_unit) {
@@ -266,11 +267,17 @@ export class EnemyAICommander extends Commander {
 }
 
 export class DemoAICommander extends Commander {
+  // Number of consecutive non-moving ticks before we assume we're wedged
+  // against an obstacle and force a fresh route around it.
+  static stuck_threshold = 60;
+
   constructor(map_unit) {
     super(map_unit);
     this.map = this.map_unit.map;
     this.reset_path();
     this.last_area = null;
+    this._last_pos = null;
+    this._stuck_ticks = 0;
     this._schedule_repath();
   }
 
@@ -280,8 +287,19 @@ export class DemoAICommander extends Commander {
       return;
     }
 
-    // Priority 1: if aligned with any enemy, face it and fire
-    const aligned = this._find_aligned_enemy(enemies);
+    // Track whether we actually moved since the last tick so we can detect
+    // being wedged against an obstacle (e.g. firing into iron we can't pierce).
+    if (this._last_pos && this._last_pos.equals(this.map_unit.area)) {
+      this._stuck_ticks += 1;
+    } else {
+      this._stuck_ticks = 0;
+    }
+    this._last_pos = this.map_unit.area;
+    const stuck = this._stuck_ticks >= DemoAICommander.stuck_threshold;
+
+    // Priority 1: if aligned with an enemy AND we have a clear shot, face it
+    // and fire. Skipped while stuck so we always fall through to pathfinding.
+    const aligned = stuck ? null : this._find_aligned_enemy(enemies);
     if (aligned) {
       const dir = this._direction_toward(aligned);
       this.turn(dir);
@@ -290,6 +308,13 @@ export class DemoAICommander extends Commander {
       }
       this.start_move();
       return;
+    }
+
+    // Safety net: if we've been wedged for a while, drop the current path and
+    // force a fresh route around whatever is blocking us.
+    if (stuck) {
+      this.reset_path();
+      this._stuck_ticks = 0;
     }
 
     // Priority 2: pathfind toward nearest enemy
@@ -324,12 +349,53 @@ export class DemoAICommander extends Commander {
 
   _find_aligned_enemy(enemies) {
     for (const enemy of enemies) {
-      if (this.map_unit.area.x1 === enemy.area.x1 ||
-          this.map_unit.area.y1 === enemy.area.y1) {
+      const same_col = this.map_unit.area.x1 === enemy.area.x1;
+      const same_row = this.map_unit.area.y1 === enemy.area.y1;
+      if ((same_col || same_row) && this._has_clear_shot(enemy)) {
         return enemy;
       }
     }
     return null;
+  }
+
+  // True if a missile fired now could actually reach `enemy` - i.e. nothing
+  // between us that our shots can't get through (iron we can't pierce, or the
+  // intact home base). Terrain our missile passes (water/grass/ice) or destroys
+  // (brick) does not count as blocking.
+  _has_clear_shot(enemy) {
+    const me = this.map_unit.area;
+    const them = enemy.area;
+    let gap;
+    if (me.x1 === them.x1) {
+      const top = Math.min(me.y2, them.y2);
+      const bottom = Math.max(me.y1, them.y1);
+      if (top >= bottom) {
+        return true;
+      }
+      gap = new MapArea2D(me.x1, top, me.x2, bottom);
+    } else {
+      const left = Math.min(me.x2, them.x2);
+      const right = Math.max(me.x1, them.x1);
+      if (left >= right) {
+        return true;
+      }
+      gap = new MapArea2D(left, me.y1, right, me.y2);
+    }
+    return !this.map.units_at(gap).some(unit => this._blocks_shot(unit));
+  }
+
+  _blocks_shot(unit) {
+    if (typeof unit.type !== "function") {
+      return false;
+    }
+    const type = unit.type();
+    if (type === "iron") {
+      return this.map_unit.power < 2;
+    }
+    if (type === "home") {
+      return !unit.destroyed;
+    }
+    return false;
   }
 
   _direction_toward(enemy) {
