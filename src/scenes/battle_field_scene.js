@@ -16,6 +16,9 @@ import {
 import { DemoAICommander } from "../objects/commanders.js";
 
 export class BattleFieldScene extends Scene {
+  // Longest step the physics will take in one frame, in ms.
+  static max_delta_time = 100;
+
   constructor(game, view) {
     super(game, view);
     this.layer = this.view.layer;
@@ -280,9 +283,17 @@ export class BattleFieldScene extends Scene {
     return this.enable_user_control();
   }
 
-  integration(offset) {
-    if (!this.running) return;
-    const delta_time = Math.round(offset - this.startedAt);
+  integration(offset, loop_id) {
+    // A loop from an earlier stage must die rather than run alongside this one.
+    if (!this.running || loop_id !== this.loop_id) return;
+
+    // A backgrounded tab serves no frames, so the first one back can carry a
+    // delta of many seconds. Cap it: better a skipped moment than tanks and
+    // missiles teleporting across the map in a single step.
+    const delta_time = Math.min(
+      Math.round(offset - this.startedAt),
+      BattleFieldScene.max_delta_time
+    );
 
     for (let m of this.map.missiles) {
       m.integration(delta_time);
@@ -297,15 +308,14 @@ export class BattleFieldScene extends Scene {
     this.frame_rate += 1;
     this.startedAt = offset;
 
-    if (this.startedAt !== null) {
-      requestAnimationFrame(this.integration.bind(this));
-    }
+    requestAnimationFrame(next => this.integration(next, loop_id));
   }
 
   start_time_line() {
     this.startedAt = performance.now();
 
-    requestAnimationFrame(this.integration.bind(this));
+    const loop_id = this.next_loop_id();
+    requestAnimationFrame(offset => this.integration(offset, loop_id));
 
     // show frame rate
     this.frame_timeline = setInterval(() => {
@@ -315,9 +325,15 @@ export class BattleFieldScene extends Scene {
   }
 
   stop_time_line() {
+    this.running = false;
     this.startedAt = null;
+    this.next_loop_id();
 
     return clearInterval(this.frame_timeline);
+  }
+
+  next_loop_id() {
+    return (this.loop_id = (this.loop_id ?? 0) + 1);
   }
 
   add_extra_life(tank) {

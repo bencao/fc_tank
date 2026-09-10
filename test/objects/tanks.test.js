@@ -50,6 +50,40 @@ describe('Tank (base)', () => {
     expect(t.max_missile).toBe(2);
   });
 
+  it('level_up adds one point of armour rather than filling it up', () => {
+    const t = makeTank();
+    t.max_hp = 5;
+    t.hp = 1;
+    t.update_display = () => {};
+
+    t.level_up(1);
+
+    expect(t.hp).toBe(2);
+  });
+
+  it('never lifts armour past the maximum', () => {
+    const t = makeTank();
+    t.max_hp = 2;
+    t.hp = 2;
+    t.update_display = () => {};
+
+    t.level_up(1);
+
+    expect(t.hp).toBe(2);
+  });
+
+  it('does not heal a damaged tank when a hit knocks it down a level', () => {
+    const t = makeTank();
+    t.max_hp = 5;
+    t.hp = 4;
+    t.level = 3;
+    t.update_display = () => {};
+
+    t.hp_down(1);
+
+    expect(t.hp).toBe(3);
+  });
+
   it('can_fire returns true when missiles < max_missile', () => {
     const t = makeTank();
     expect(t.can_fire()).toBe(true);

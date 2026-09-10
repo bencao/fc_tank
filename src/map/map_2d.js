@@ -75,12 +75,12 @@ export class Map2D {
     this.gifts.forEach(gift => gift.destroy());
 
     const gift_classes = getGiftClasses();
-    const vx = Math.floor(Math.random() * this.vertexes_rows);
-    const vy = Math.floor(Math.random() * this.vertexes_columns);
     const gift_choice = Math.floor(Math.random() * gift_classes.length);
+    // Somewhere an ordinary tank could actually drive to - a gift sealed
+    // inside an iron block is a gift nobody ever collects.
     const gift = new gift_classes[gift_choice](
       this,
-      this.vertexes[vx][vy].clone()
+      this.random_vertex({ power: 1, ship: false }).clone()
     );
     gift.new_display();
     gift.after_new_display();
@@ -179,12 +179,49 @@ export class Map2D {
     return this.vertexes[vx][vy];
   }
 
-  random_vertex() {
-    let vx = Math.floor(Math.random() * this.vertexes_rows);
+  // Somewhere to head for. Given a tank, it avoids squares that tank could
+  // never enter - sending it after a spot inside an iron block just means no
+  // route exists and the tank stands around instead of attacking.
+  random_vertex(tank) {
+    let vertex = this._random_lattice_vertex();
+    if (tank == null) {
+      return vertex;
+    }
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (this.can_occupy(tank, vertex)) { return vertex; }
+      vertex = this._random_lattice_vertex();
+    }
+    // Open ground is scarce on this map; go and look for some.
+    return this._search_occupiable_vertex(tank) ?? vertex;
+  }
+
+  _search_occupiable_vertex(tank) {
+    const columns = Math.ceil(this.vertexes_columns / 2);
+    const rows = Math.ceil(this.vertexes_rows / 2);
+    const total = columns * rows;
+    const from = Math.floor(Math.random() * total);
+    for (let step = 0; step < total; step++) {
+      const at = (from + step) % total;
+      const vertex = this.vertexes[(at % columns) * 2][Math.floor(at / columns) * 2];
+      if (this.can_occupy(tank, vertex)) {
+        return vertex;
+      }
+    }
+    return null;
+  }
+
+  can_occupy(tank, area) {
+    return this.units_at(area).every(
+      unit => !(unit instanceof Terrain) || unit.weight(tank) < this.infinity
+    );
+  }
+
+  _random_lattice_vertex() {
+    let vx = Math.floor(Math.random() * this.vertexes_columns);
     if (vx % 2 === 1) {
       vx = vx - 1;
     }
-    let vy = Math.floor(Math.random() * this.vertexes_columns);
+    let vy = Math.floor(Math.random() * this.vertexes_rows);
     if (vy % 2 === 1) {
       vy = vy - 1;
     }
@@ -202,6 +239,12 @@ export class Map2D {
     }
     const weights = terrain_units.map(terrain_unit => terrain_unit.weight(tank));
     const max_weight = Math.max(...weights);
+    // Terrain this tank simply cannot enter stays impassable. Scaling it down
+    // by the size of the step would turn "never" into "expensive", and the
+    // route would drive straight into an iron wall.
+    if (max_weight >= this.infinity) {
+      return this.infinity;
+    }
     return (
       (max_weight / (this.default_width * this.default_height)) *
       sub_area.width() *
@@ -209,7 +252,19 @@ export class Map2D {
     );
   }
 
+  // Tanks sit on a half-tile lattice, so a vertex offset half a tile in both
+  // axes is somewhere no tank can ever stand and nothing can route to. Aim at
+  // the nearest spot a tank could actually occupy instead.
+  reachable_vertex(vertex) {
+    if (vertex.vx % 2 === 0 || vertex.vy % 2 === 0) {
+      return vertex;
+    }
+    return this.vertexes[vertex.vx - 1][vertex.vy];
+  }
+
   shortest_path(tank, start_vertex, end_vertex) {
+    start_vertex = this.reachable_vertex(start_vertex);
+    end_vertex = this.reachable_vertex(end_vertex);
     const [d, pi] = this.intialize_single_source(end_vertex);
     d[start_vertex.vx][start_vertex.vy].key = 0;
     const heap = new BinomialHeap();
@@ -257,6 +312,9 @@ export class Map2D {
     if (v.vy % 2 === 1 && u.vy % 2 === 1) {
       return;
     }
+    if (w >= this.infinity) {
+      return;
+    }
     const aw = v.a_star_weight(target_vertex) - u.a_star_weight(target_vertex);
     if (d[v.vx][v.vy].key > d[u.vx][u.vy].key + w + aw) {
       heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w + aw);
@@ -264,14 +322,22 @@ export class Map2D {
     }
   }
 
+  // The route back from the goal, tank's own square excluded so the first step
+  // is always a real move. An empty result means there is no way through.
   calculate_shortest_path_from_pi(pi, start_vertex, end_vertex) {
     const reverse_paths = [];
+    const seen = new Set();
     let v = end_vertex;
-    while (pi[v.vx][v.vy] !== null) {
+    while (v !== start_vertex) {
+      // Predecessors can point in a circle when nothing links back to the
+      // start; walking one would never end.
+      if (v === null || seen.has(v)) {
+        return [];
+      }
+      seen.add(v);
       reverse_paths.push(v);
       v = pi[v.vx][v.vy];
     }
-    reverse_paths.push(start_vertex);
     return reverse_paths.reverse();
   }
 

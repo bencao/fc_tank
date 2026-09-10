@@ -23,7 +23,12 @@ export class Tank extends MovableMapUnit2D {
   }
 
   level_up(levels) {
+    const previous_level = this.level;
     this.level = Math.min(this.level + levels, 3);
+    // Armour is earned by gaining a level. Handing it out inside
+    // _level_adjust instead would also hand it out on the way down, so a hit
+    // that knocked a tank back a level would heal it.
+    this.hp = Math.min(this.hp + (this.level - previous_level), this.max_hp);
     return this._level_adjust();
   }
 
@@ -35,12 +40,10 @@ export class Tank extends MovableMapUnit2D {
         break;
       case 2:
         this.power = 1;
-        this.hp = Math.max(this.hp + 1, this.max_hp);
         this.max_missile = 2;
         break;
       case 3:
         this.power = 2;
-        this.hp = Math.max(this.hp + 1, this.max_hp);
         this.max_missile = 2;
         break;
     }

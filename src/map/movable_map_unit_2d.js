@@ -6,11 +6,18 @@ import { Commander } from "../objects/commanders.js";
 export class MovableMapUnit2D extends MapUnit2D {
   static speed = 0.08;
 
+  // How long a move may sit blocked before it is abandoned, in ms. While an
+  // unfinished move is queued a commander will not steer anywhere else, so a
+  // move that can never finish would wedge the unit against the wall forever.
+  static blocked_grace_time = 250;
+
   get speed() { return this.constructor.speed; }
 
   constructor(map, area) {
     super(map, area);
     this.delayed_commands = [];
+    this.move_remainder = 0;
+    this.frame_offset = 0;
     this.moving = false;
     this.direction = 0;
     this.commander = new Commander(this);
@@ -41,6 +48,15 @@ export class MovableMapUnit2D extends MapUnit2D {
     return this.display_object.setAbsolutePosition(center.x, center.y);
   }
 
+  // A commander can be holding timers of its own; they must not keep firing
+  // against a unit that is gone.
+  destroy() {
+    if (typeof this.commander.destroy === "function") {
+      this.commander.destroy();
+    }
+    return super.destroy();
+  }
+
   queued_delayed_commands() {
     const commands = this.delayed_commands;
     this.delayed_commands = [];
@@ -52,8 +68,22 @@ export class MovableMapUnit2D extends MapUnit2D {
     let cmd;
     if (this.destroyed) { return; }
     this.commands = [...this.commander.next_commands(), ...this.queued_delayed_commands()];
+    this.frame_offset = this._frame_offset(delta_time);
     for (cmd of this.commands) { this.handle_turn(cmd); }
     for (cmd of this.commands) { this.handle_move(cmd, delta_time); }
+  }
+
+  // How far this unit may travel during this frame. Distance is carried in
+  // whole pixels, so the sub-pixel leftovers are kept for the next frame -
+  // otherwise a fast display, where a frame is worth less than one pixel,
+  // would truncate every frame to zero and the unit would never move at all.
+  // The budget is shared by every move command in the frame, so a queued move
+  // arriving alongside a fresh one cannot buy a second frame of travel.
+  _frame_offset(delta_time) {
+    const distance = (this.speed * delta_time) + this.move_remainder;
+    const whole = Math.floor(distance);
+    this.move_remainder = distance - whole;
+    return whole;
   }
 
   handle_turn(command) {
@@ -67,17 +97,23 @@ export class MovableMapUnit2D extends MapUnit2D {
     switch(command.type) {
       case "start_move":
         this.moving = true;
-        var max_offset = parseInt(this.speed * delta_time);
+        var max_offset = this.frame_offset;
         var intent_offset = command.params.offset;
         if (intent_offset === null) {
-          return this.move(max_offset);
+          return this._spend(this.move(max_offset));
         } else if (intent_offset > 0) {
           const real_offset = Math.min(intent_offset, max_offset);
-          if (this.move(real_offset)) {
-            command.params.offset -= real_offset;
+          const moved = this.move(real_offset);
+          this._spend(moved);
+          if (moved > 0) {
+            command.params.blocked_time = 0;
+            command.params.offset -= moved;
             if (command.params.offset > 0) { return this.add_delayed_command(command); }
           } else {
-            return this.add_delayed_command(command);
+            command.params.blocked_time = (command.params.blocked_time ?? 0) + delta_time;
+            if (command.params.blocked_time < this.constructor.blocked_grace_time) {
+              return this.add_delayed_command(command);
+            }
           }
         }
         break;
@@ -118,16 +154,28 @@ export class MovableMapUnit2D extends MapUnit2D {
       this.area.x2, this.area.y2 + offset));
   }
 
+  _spend(offset) {
+    this.frame_offset = Math.max(0, this.frame_offset - offset);
+    return offset;
+  }
+
+  // Returns how far the unit actually travelled - 0 when it is blocked.
+  // Walks a pixel at a time so nothing is ever stepped over: checking only the
+  // landing spot lets a fast missile pass clean through a wall thinner than
+  // its stride.
   move(offset) {
-    for (let os = offset; os >= 1; os--) {
-      if (this._try_move(os)) return true;
+    let moved = 0;
+    while (moved < offset) {
+      const step = this._try_move(1);
+      if (step === 0) { break; }
+      moved += step;
     }
-    return false;
+    return moved;
   }
 
   _try_move(offset) {
     const [offset_x, offset_y] = this._offset_by_direction(offset);
-    if ((offset_x === 0) && (offset_y === 0)) { return false; }
+    if ((offset_x === 0) && (offset_y === 0)) { return 0; }
     const target_x = this.area.x1 + offset_x;
     const target_y = this.area.y1 + offset_y;
     const target_area = new MapArea2D(target_x, target_y,
@@ -135,9 +183,9 @@ export class MovableMapUnit2D extends MapUnit2D {
     if (this.map.area_available(this, target_area)) {
       this.area = target_area;
       this.update_display();
-      return true;
+      return Math.abs(offset_x + offset_y);
     } else {
-      return false;
+      return 0;
     }
   }
 

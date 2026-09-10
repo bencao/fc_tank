@@ -176,50 +176,87 @@ export class UserCommander extends Commander {
   }
 }
 
-export class EnemyAICommander extends Commander {
+// Shared plumbing for the commanders that steer by route: how often they may
+// search the map, how they notice they are wedged, and how they walk a route.
+class PathfindingCommander extends Commander {
+  // Frames without moving before we assume the route is blocked.
+  static stuck_threshold = 30;
+  // Frames between route searches. A search scans the whole map, so asking on
+  // every frame - which is what an empty route used to do - starves the frame
+  // budget on its own.
+  static repath_cooldown = 20;
+  // Searching a map with no way through is the most expensive search there is,
+  // because it has to look everywhere before giving up. Wait longer after one.
+  static failed_repath_cooldown = 90;
+
   constructor(map_unit) {
     super(map_unit);
     this.map = this.map_unit.map;
     this.reset_path();
     this.last_area = null;
+    this.stuck_ticks = 0;
+    this.ticks_since_path = this.constructor.repath_cooldown;
+    this._repath_delay = null;
   }
 
-  next() {
-    // move towards home
-    if (this.path.length === 0) {
-      const end_vertex =
-        Math.random() * 100 <= this.map_unit.iq
-          ? this.map.home_vertex
-          : this.map.random_vertex();
-      this.path = this.map.shortest_path(
-        this.map_unit,
-        this.current_vertex(),
-        end_vertex
-      );
+  // Returns true when the route has just been abandoned because the tank has
+  // not shifted for a while - wedged against something the route missed.
+  note_progress() {
+    this.ticks_since_path += 1;
+    const moved = !(this.last_area && this.last_area.equals(this.map_unit.area));
+    this.stuck_ticks = moved ? 0 : this.stuck_ticks + 1;
+    if (this.stuck_ticks < this.constructor.stuck_threshold) {
+      return false;
+    }
+    this.reset_path();
+    this.stuck_ticks = 0;
+    this.wander_action = null;
+    return true;
+  }
+
+  // No route to follow - keep rolling instead of standing in the open. When we
+  // run into something the stuck check clears the heading and we pick another.
+  wander() {
+    if (this.wander_action == null) {
+      const actions = Object.keys(this.direction_action_map);
+      this.wander_action = actions[Math.floor(Math.random() * actions.length)];
+    }
+    this.turn(this.wander_action);
+    return this.start_move();
+  }
+
+  may_plan_route() {
+    return this.ticks_since_path >= this.repath_delay;
+  }
+
+  get repath_delay() {
+    return this._repath_delay ?? this.constructor.repath_cooldown;
+  }
+
+  plan_route(end_vertex) {
+    this.ticks_since_path = 0;
+    this.path = this.map.shortest_path(
+      this.map_unit,
+      this.current_vertex(),
+      end_vertex
+    );
+    this._repath_delay =
+      this.path.length === 0
+        ? this.constructor.failed_repath_cooldown
+        : this.constructor.repath_cooldown;
+    return this.next_move();
+  }
+
+  advance_along_route() {
+    if (this.target_vertex && this.current_vertex().equals(this.target_vertex)) {
       this.next_move();
-      setTimeout(() => this.reset_path(), 2000 + Math.random() * 2000);
-    } else {
-      if (this.current_vertex().equals(this.target_vertex)) {
-        this.next_move();
-      }
     }
+  }
 
-    // more chance to fire if can't move
-    if (
-      this.map_unit.can_fire() &&
-      this.last_area &&
-      this.last_area.equals(this.map_unit.area)
-    ) {
-      if (Math.random() < 0.08) {
-        this.fire();
-      }
-    } else {
-      if (Math.random() < 0.01) {
-        this.fire();
-      }
-    }
-
-    return (this.last_area = this.map_unit.area);
+  // One change-of-mind timer per tank, not one per route ever planned.
+  arm_repath_timer(delay) {
+    clearTimeout(this.repath_timer);
+    this.repath_timer = setTimeout(() => this.reset_path(), delay);
   }
 
   next_move() {
@@ -236,7 +273,12 @@ export class EnemyAICommander extends Commander {
   }
 
   reset_path() {
-    return (this.path = []);
+    this.path = [];
+    this.target_vertex = null;
+  }
+
+  destroy() {
+    clearTimeout(this.repath_timer);
   }
 
   offset_of(current_vertex, target_vertex) {
@@ -258,6 +300,48 @@ export class EnemyAICommander extends Commander {
   current_vertex() {
     return this.map.vertexes_at(this.map_unit.area);
   }
+}
+
+export class EnemyAICommander extends PathfindingCommander {
+  next() {
+    this.note_progress();
+
+    // move towards home
+    if (this.path.length === 0) {
+      if (this.may_plan_route()) {
+        this.plan_route(this.goal_vertex());
+        this.arm_repath_timer(2000 + Math.random() * 2000);
+      }
+      if (this.path.length === 0) {
+        this.wander();
+      }
+    } else {
+      this.advance_along_route();
+    }
+
+    // more chance to fire if can't move
+    if (
+      this.map_unit.can_fire() &&
+      this.last_area &&
+      this.last_area.equals(this.map_unit.area)
+    ) {
+      if (Math.random() < 0.08) {
+        this.fire();
+      }
+    } else {
+      if (Math.random() < 0.01) {
+        this.fire();
+      }
+    }
+
+    return (this.last_area = this.map_unit.area);
+  }
+
+  goal_vertex() {
+    return Math.random() * 100 <= this.map_unit.iq
+      ? this.map.home_vertex
+      : this.map.random_vertex(this.map_unit);
+  }
 
   in_attack_range(area) {
     return (
@@ -266,71 +350,40 @@ export class EnemyAICommander extends Commander {
   }
 }
 
-export class DemoAICommander extends Commander {
-  // Number of consecutive non-moving ticks before we assume we're wedged
-  // against an obstacle and force a fresh route around it.
-  static stuck_threshold = 60;
-
-  constructor(map_unit) {
-    super(map_unit);
-    this.map = this.map_unit.map;
-    this.reset_path();
-    this.last_area = null;
-    this._last_pos = null;
-    this._stuck_ticks = 0;
-    this._schedule_repath();
-  }
-
+export class DemoAICommander extends PathfindingCommander {
   next() {
     const enemies = this.map.enemy_tanks().filter(t => !t.destroyed && !t.initializing);
     if (enemies.length === 0) {
       return;
     }
 
-    // Track whether we actually moved since the last tick so we can detect
-    // being wedged against an obstacle (e.g. firing into iron we can't pierce).
-    if (this._last_pos && this._last_pos.equals(this.map_unit.area)) {
-      this._stuck_ticks += 1;
-    } else {
-      this._stuck_ticks = 0;
-    }
-    this._last_pos = this.map_unit.area;
-    const stuck = this._stuck_ticks >= DemoAICommander.stuck_threshold;
+    const wedged = this.note_progress();
 
     // Priority 1: if aligned with an enemy AND we have a clear shot, face it
-    // and fire. Skipped while stuck so we always fall through to pathfinding.
-    const aligned = stuck ? null : this._find_aligned_enemy(enemies);
+    // and fire. Skipped while wedged so we always fall through to pathfinding.
+    const aligned = wedged ? null : this._find_aligned_enemy(enemies);
     if (aligned) {
-      const dir = this._direction_toward(aligned);
-      this.turn(dir);
+      this.turn(this._direction_toward(aligned));
       if (this.map_unit.can_fire()) {
         this.fire();
       }
       this.start_move();
+      this.last_area = this.map_unit.area;
       return;
     }
 
-    // Safety net: if we've been wedged for a while, drop the current path and
-    // force a fresh route around whatever is blocking us.
-    if (stuck) {
-      this.reset_path();
-      this._stuck_ticks = 0;
-    }
-
     // Priority 2: pathfind toward nearest enemy
-    const nearest = this._find_nearest_enemy(enemies);
-    if (this.path.length === 0 && nearest) {
-      const end_vertex = this.map.vertexes_at(nearest.area);
-      this.path = this.map.shortest_path(
-        this.map_unit,
-        this.current_vertex(),
-        end_vertex
-      );
-      this.next_move();
-    } else {
-      if (this.target_vertex && this.current_vertex().equals(this.target_vertex)) {
-        this.next_move();
+    if (this.path.length === 0) {
+      const nearest = this._find_nearest_enemy(enemies);
+      if (nearest && this.may_plan_route()) {
+        this.plan_route(this.map.vertexes_at(nearest.area));
+        this.arm_repath_timer(1000 + Math.random() * 1000);
       }
+      if (this.path.length === 0) {
+        this.wander();
+      }
+    } else {
+      this.advance_along_route();
     }
 
     // Fire if stuck
@@ -358,10 +411,6 @@ export class DemoAICommander extends Commander {
     return null;
   }
 
-  // True if a missile fired now could actually reach `enemy` - i.e. nothing
-  // between us that our shots can't get through (iron we can't pierce, or the
-  // intact home base). Terrain our missile passes (water/grass/ice) or destroys
-  // (brick) does not count as blocking.
   _has_clear_shot(enemy) {
     const me = this.map_unit.area;
     const them = enemy.area;
@@ -422,54 +471,6 @@ export class DemoAICommander extends Commander {
     return nearest;
   }
 
-  next_move() {
-    if (this.map_unit.delayed_commands.length > 0) {
-      return;
-    }
-    if (this.path.length === 0) {
-      return;
-    }
-    this.target_vertex = this.path.shift();
-    const [direction, offset] = this.offset_of(this.current_vertex(), this.target_vertex);
-    this.turn(direction);
-    return this.start_move(offset);
-  }
-
-  reset_path() {
-    this.path = [];
-    this.target_vertex = null;
-  }
-
-  _schedule_repath() {
-    this._repath_timer = setTimeout(() => {
-      this.reset_path();
-      this._schedule_repath();
-    }, 1000 + Math.random() * 1000);
-  }
-
-  destroy() {
-    clearTimeout(this._repath_timer);
-  }
-
-  offset_of(current_vertex, target_vertex) {
-    if (target_vertex.y1 < current_vertex.y1) {
-      return ["up", current_vertex.y1 - target_vertex.y1];
-    }
-    if (target_vertex.y1 > current_vertex.y1) {
-      return ["down", target_vertex.y1 - current_vertex.y1];
-    }
-    if (target_vertex.x1 < current_vertex.x1) {
-      return ["left", current_vertex.x1 - target_vertex.x1];
-    }
-    if (target_vertex.x1 > current_vertex.x1) {
-      return ["right", target_vertex.x1 - current_vertex.x1];
-    }
-    return ["down", 0];
-  }
-
-  current_vertex() {
-    return this.map.vertexes_at(this.map_unit.area);
-  }
 }
 
 export class MissileCommander extends Commander {

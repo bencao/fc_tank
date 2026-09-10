@@ -66,11 +66,13 @@ export class Missile extends MovableMapUnit2D {
   }
 
   move(offset) {
-    const can_move = super.move(offset);
-    if (!can_move) {
+    const moved = super.move(offset);
+    // Standing still because the frame was worth less than a pixel is not the
+    // same as running into something - only the latter sets a missile off.
+    if (offset > 0 && moved === 0) {
       this.attack();
     }
-    return can_move;
+    return moved;
   }
   attack() {
     const destroy_area = this.destroy_area();
