@@ -26,6 +26,11 @@ export class Game {
       report: new ReportScene(this, new ReportView(this.canvas))
     };
     this.current_scene = null;
+    this.scene_change_listeners = [];
+  }
+
+  on_scene_change(listener) {
+    return this.scene_change_listeners.push(listener);
   }
 
   get_config(key) {
@@ -136,6 +141,8 @@ export class Game {
       this.current_scene.on_stop();
     }
     target_scene.on_start();
-    return (this.current_scene = target_scene);
+    this.current_scene = target_scene;
+    this.scene_change_listeners.forEach(listener => listener(type));
+    return this.current_scene;
   }
 }

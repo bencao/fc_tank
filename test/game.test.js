@@ -25,6 +25,8 @@ globalThis.Kinetic = {
 if (!globalThis.document) {
   globalThis.document = {};
 }
+globalThis.document.addEventListener = vi.fn();
+globalThis.document.removeEventListener = vi.fn();
 globalThis.document.getElementById = vi.fn((id) => {
   if (id === 'tank_sprite') return {};
   return null;
@@ -93,5 +95,31 @@ describe('Game', () => {
   it('increase_p2_score adds to p2 score', () => {
     game.increase_p2_score(500);
     expect(game.get_status('p2_score')).toBe(500);
+  });
+});
+
+describe('Game scene change listeners', () => {
+  it('notifies listeners with the name of the scene it switched to', () => {
+    const game = new Game();
+    const seen = [];
+    game.on_scene_change(name => seen.push(name));
+
+    game.switch_scene('stage');
+    game.switch_scene('report');
+
+    expect(seen).toEqual(['stage', 'report']);
+  });
+
+  it('supports more than one listener', () => {
+    const game = new Game();
+    const first = vi.fn();
+    const second = vi.fn();
+    game.on_scene_change(first);
+    game.on_scene_change(second);
+
+    game.switch_scene('report');
+
+    expect(first).toHaveBeenCalledWith('report');
+    expect(second).toHaveBeenCalledWith('report');
   });
 });

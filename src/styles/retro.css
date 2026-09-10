@@ -1,0 +1,542 @@
+/* ---------------------------------------------------------------------------
+   FC Tank - 1985 arcade shell
+   A CRT set standing in a dark room, with the game's own palette (brick,
+   steel, jungle, ice) borrowed from the sprite sheet.
+   --------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/press-start-2p-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/press-start-2p-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F;
+}
+
+:root {
+  --pixel: "Press Start 2P", "Courier New", monospace;
+
+  /* lifted from the game's tiles and HUD */
+  --brick: #d2481c;
+  --brick-dark: #7c2a0c;
+  --steel: #a9a9a9;
+  --steel-dark: #5b5b5b;
+  --jungle: #3aa93a;
+  --ice: #4c88d8;
+  --amber: #ffb13b;
+  --danger: #db2b00;
+
+  --room: #08080b;
+  --plastic: #2b2723;
+  --plastic-dark: #14120f;
+  --ink: #000;
+  --paper: #efe9dd;
+
+  --screen-scale: 1;
+  --screen-w: calc(600px * var(--screen-scale));
+  --screen-h: calc(520px * var(--screen-scale));
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--room);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: clamp(16px, 3vw, 40px) clamp(12px, 3vw, 40px) 32px;
+  font-family: var(--pixel);
+  font-size: 10px;
+  line-height: 1.9;
+  color: var(--paper);
+  background:
+    /* pool of light behind the set */
+    radial-gradient(120% 90% at 50% 0%, #23212c 0%, #0d0d12 55%, var(--room) 100%),
+    var(--room);
+  background-attachment: fixed;
+  -webkit-font-smoothing: none;
+}
+
+/* Faint grid on the back wall, plus a room-wide scanline haze. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(120, 140, 200, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 140, 200, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px, 40px 40px;
+  mask-image: radial-gradient(80% 60% at 50% 40%, #000 0%, transparent 100%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.16) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+#tank_sprite {
+  display: none;
+}
+
+.cabinet {
+  position: relative;
+  z-index: 1;
+  /* wide enough for the picture to reach 2x on a big display */
+  max-width: 1660px;
+  margin: 0 auto;
+}
+
+/* ------------------------------- marquee -------------------------------- */
+
+.marquee {
+  text-align: center;
+  margin: 0 0 clamp(16px, 2.5vw, 28px);
+}
+
+.marquee__title {
+  margin: 0;
+  font-size: clamp(22px, 5vw, 44px);
+  line-height: 1.25;
+  letter-spacing: 2px;
+  color: var(--amber);
+  text-shadow:
+    3px 0 var(--brick-dark),
+    -3px 0 var(--brick-dark),
+    0 3px var(--brick-dark),
+    0 -3px var(--brick-dark),
+    0 7px var(--brick-dark),
+    0 9px #3d1405,
+    0 0 28px rgba(210, 72, 28, 0.55);
+}
+
+.marquee__title em {
+  font-style: normal;
+  color: var(--brick);
+}
+
+.marquee__sub {
+  margin: 18px 0 0;
+  font-size: clamp(7px, 1.3vw, 10px);
+  letter-spacing: 3px;
+  color: var(--steel);
+}
+
+/* A strip of the game's own brickwork, used as a rule. */
+.brickline {
+  height: 12px;
+  margin: 14px auto 0;
+  max-width: 620px;
+  border: 0;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 5px, var(--ink) 5px 6px),
+    repeating-linear-gradient(to right, transparent 0 29px, var(--ink) 29px 30px),
+    linear-gradient(var(--brick), var(--brick-dark));
+  background-position: 0 0, 0 0, 0 0;
+  opacity: 0.85;
+}
+
+.brickline + .brickline {
+  background-position: 0 0, 15px 0, 0 0;
+  margin-top: 0;
+}
+
+/* --------------------------------- deck --------------------------------- */
+
+.deck {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: clamp(16px, 2.5vw, 32px);
+}
+
+/* ---------------------------------- tv ---------------------------------- */
+
+.tv-slot {
+  min-width: 0;
+}
+
+.tv {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  background: linear-gradient(160deg, #3a342e 0%, var(--plastic) 42%, var(--plastic-dark) 100%);
+  border-radius: 18px 18px 10px 10px;
+  padding: clamp(14px, 2vw, 22px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.6),
+    0 24px 60px rgba(0, 0, 0, 0.75);
+}
+
+.tv__bezel {
+  padding: clamp(10px, 1.6vw, 18px);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #1b1815, #0b0a09);
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, 0.9),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07);
+  display: flex;
+  justify-content: center;
+}
+
+.tv__screen {
+  position: relative;
+  width: var(--screen-w);
+  height: var(--screen-h);
+  max-width: 100%;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 26px rgba(120, 200, 255, 0.18);
+}
+
+#canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 600px;
+  height: 520px;
+  transform: scale(var(--screen-scale));
+  transform-origin: top left;
+  background: #000;
+}
+
+/* Keep the upscaled picture blocky - no smoothing, like a real set. */
+#canvas canvas {
+  image-rendering: pixelated;
+}
+
+/* Scanlines and phosphor glow ride above the picture at constant size, so the
+   line pitch stays tight no matter how far the picture is scaled up. */
+.tv__scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.26) 0 1px,
+    rgba(0, 0, 0, 0) 1px 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+.tv__glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(105deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 40%),
+    radial-gradient(125% 115% at 50% 50%, rgba(0, 0, 0, 0) 72%, rgba(0, 0, 0, 0.42) 100%);
+  animation: flicker 4.5s steps(1) infinite;
+}
+
+@keyframes flicker {
+  0%, 96% { opacity: 1; }
+  97% { opacity: 0.88; }
+  98% { opacity: 1; }
+  99% { opacity: 0.93; }
+}
+
+/* --------------------------------- chin --------------------------------- */
+
+.tv__chin {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 6px 2px;
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: #8d8478;
+}
+
+.tv__brand {
+  color: #b6a992;
+  text-shadow: 0 1px 0 #000;
+}
+
+.tv__power {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.tv__led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--jungle);
+  box-shadow: 0 0 8px var(--jungle), inset 0 0 3px rgba(255, 255, 255, 0.8);
+}
+
+.tv__knobs {
+  display: flex;
+  gap: 10px;
+}
+
+.tv__knobs i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #6a6158, #211d19 70%);
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ------------------------------ side panel ------------------------------ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card {
+  background: linear-gradient(180deg, #1a1a1e, #101013);
+  border: 3px solid var(--steel-dark);
+  border-top-color: #6f6f6f;
+  border-left-color: #6f6f6f;
+  border-bottom-color: #262626;
+  border-right-color: #262626;
+  padding: 14px 14px 16px;
+}
+
+.card__title {
+  margin: 0 0 12px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--amber);
+}
+
+.card--p1 .card__title { color: var(--amber); }
+.card--p2 .card__title { color: var(--jungle); }
+.card--sys .card__title { color: var(--ice); }
+.card--gifts .card__title { color: var(--brick); }
+
+.controls {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.controls dt {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.controls dd {
+  margin: 0;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--steel);
+  line-height: 1.6;
+}
+
+/* ------------------------------- keycaps -------------------------------- */
+
+.key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: #16150f;
+  background: linear-gradient(180deg, #e8e2d4, #b3ac9c);
+  border-top: 1px solid #fff;
+  box-shadow: 0 3px 0 #2c2a26, 0 4px 0 #000;
+}
+
+.key--wide {
+  min-width: 52px;
+}
+
+/* Arrow glyphs are drawn, not typed - the pixel font has no left/right arrow. */
+.key--arrow::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+}
+
+.key--up::before { border-bottom-color: #16150f; margin-bottom: 4px; }
+.key--down::before { border-top-color: #16150f; margin-top: 4px; }
+.key--left::before { border-right-color: #16150f; margin-right: 4px; }
+.key--right::before { border-left-color: #16150f; margin-left: 4px; }
+
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  grid-template-rows: repeat(2, 22px);
+  gap: 3px;
+}
+
+.dpad .key--up { grid-column: 2; grid-row: 1; }
+.dpad .key--left { grid-column: 1; grid-row: 2; }
+.dpad .key--down { grid-column: 2; grid-row: 2; }
+.dpad .key--right { grid-column: 3; grid-row: 2; }
+
+.wasd {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  grid-template-rows: repeat(2, 22px);
+  gap: 3px;
+}
+
+.wasd .key:nth-child(1) { grid-column: 2; grid-row: 1; }
+.wasd .key:nth-child(2) { grid-column: 1; grid-row: 2; }
+.wasd .key:nth-child(3) { grid-column: 2; grid-row: 2; }
+.wasd .key:nth-child(4) { grid-column: 3; grid-row: 2; }
+
+/* ------------------------------ power-ups ------------------------------- */
+
+.gifts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--steel);
+}
+
+.gifts li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Icons are lifted straight out of the game's own sprite sheet, halved. */
+.gift {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  background-image: url("../../image/tanks.png");
+  background-size: 200px 190px;
+  background-position-y: -150px;
+  image-rendering: pixelated;
+}
+
+.gift--mine { background-position-x: 0; }
+.gift--ship { background-position-x: -20px; }
+.gift--gun { background-position-x: -40px; }
+.gift--shovel { background-position-x: -60px; }
+.gift--star { background-position-x: -80px; }
+.gift--hat { background-position-x: -100px; }
+.gift--life { background-position-x: -120px; }
+.gift--clock { background-position-x: -140px; }
+
+/* ------------------------------ coin slot ------------------------------- */
+
+.coin {
+  /* Hidden, not removed, so the panel does not jump when a battle starts. */
+  visibility: hidden;
+  text-align: center;
+  padding: 12px 8px;
+  border: 3px dashed #3a3a42;
+  color: var(--danger);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px rgba(219, 43, 0, 0.7);
+  animation: blink 1.2s steps(1) infinite;
+}
+
+[data-scene="welcome"] .coin,
+[data-scene="stage"] .coin,
+[data-scene="report"] .coin {
+  visibility: visible;
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+
+/* -------------------------------- footer -------------------------------- */
+
+.credits {
+  margin: clamp(20px, 3vw, 34px) 0 0;
+  text-align: center;
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: #5f5c66;
+}
+
+/* A drawn pixel heart - the pixel font has no heart glyph, and a fallback
+   font's version shrinks to an unreadable speck at this size. */
+.heart {
+  display: inline-block;
+  width: 11px;
+  height: 9px;
+  margin: 0 3px -1px;
+  vertical-align: baseline;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 6' shape-rendering='crispEdges' fill='%23db2b00'%3E%3Crect x='1' y='0' width='2' height='1'/%3E%3Crect x='4' y='0' width='2' height='1'/%3E%3Crect x='0' y='1' width='7' height='2'/%3E%3Crect x='1' y='3' width='5' height='1'/%3E%3Crect x='2' y='4' width='3' height='1'/%3E%3Crect x='3' y='5' width='1' height='1'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+.credits a {
+  color: var(--steel);
+  text-decoration: none;
+  border-bottom: 1px solid #3d3b44;
+}
+
+.credits a:hover,
+.credits a:focus-visible {
+  color: var(--amber);
+  border-bottom-color: var(--amber);
+}
+
+/* ------------------------------ small screens --------------------------- */
+
+@media (max-width: 960px) {
+  .deck {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .coin {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv__glare,
+  .coin {
+    animation: none;
+  }
+}

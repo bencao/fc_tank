@@ -25,6 +25,12 @@ npm test
 npm run build
 ```
 
+## Credits
+
+The arcade shell uses [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P)
+by CodeMan38, self-hosted from `public/fonts/` under the SIL Open Font License
+(see `public/fonts/OFL.txt`).
+
 ## Contribute
 
 Dear guys, you're highly welcome to contribute to this project~
