@@ -10,25 +10,26 @@ function memoryStorage(values = {}) {
 }
 
 describe('SoundSwitch', () => {
-  it('starts with the sound on and the mixer unmuted', () => {
+  // A page that bursts into sound unasked is rude; the player turns it on.
+  it('starts with the sound off and the mixer muted', () => {
     const mixer = { mute: vi.fn() };
     const sound = new SoundSwitch(mixer, memoryStorage());
 
-    expect(sound.on).toBe(true);
-    expect(mixer.mute).toHaveBeenLastCalledWith(false);
+    expect(sound.on).toBe(false);
+    expect(mixer.mute).toHaveBeenLastCalledWith(true);
   });
 
-  it('mutes every sound when turned off, and unmutes when turned back on', () => {
+  it('unmutes every sound when turned on, and mutes when turned back off', () => {
     const mixer = { mute: vi.fn() };
     const sound = new SoundSwitch(mixer, memoryStorage());
+
+    sound.toggle();
+    expect(sound.on).toBe(true);
+    expect(mixer.mute).toHaveBeenLastCalledWith(false);
 
     sound.toggle();
     expect(sound.on).toBe(false);
     expect(mixer.mute).toHaveBeenLastCalledWith(true);
-
-    sound.toggle();
-    expect(sound.on).toBe(true);
-    expect(mixer.mute).toHaveBeenLastCalledWith(false);
   });
 
   it('remembers the choice for the next visit', () => {
@@ -38,8 +39,8 @@ describe('SoundSwitch', () => {
     const mixer = { mute: vi.fn() };
     const next_visit = new SoundSwitch(mixer, storage);
 
-    expect(next_visit.on).toBe(false);
-    expect(mixer.mute).toHaveBeenLastCalledWith(true);
+    expect(next_visit.on).toBe(true);
+    expect(mixer.mute).toHaveBeenLastCalledWith(false);
   });
 
   // Private windows and blocked site data make storage throw; the switch
@@ -51,9 +52,9 @@ describe('SoundSwitch', () => {
     };
     const sound = new SoundSwitch({ mute() {} }, broken);
 
-    expect(sound.on).toBe(true);
-    sound.toggle();
     expect(sound.on).toBe(false);
+    sound.toggle();
+    expect(sound.on).toBe(true);
   });
 
   it('tells its listeners whenever it flips', () => {
@@ -64,7 +65,7 @@ describe('SoundSwitch', () => {
     sound.toggle();
     sound.toggle();
 
-    expect(heard).toEqual([false, true]);
+    expect(heard).toEqual([true, false]);
   });
 });
 
@@ -96,10 +97,10 @@ describe('install_sound_switch', () => {
     const buttons = [fakeButton(), fakeButton()];
     install_sound_switch(root, buttons, new SoundSwitch({ mute() {} }, memoryStorage()), fakeDocument());
 
-    expect(root.dataset.sound).toBe('on');
+    expect(root.dataset.sound).toBe('off');
     buttons.forEach(button => {
-      expect(button.attributes['aria-pressed']).toBe('true');
-      expect(button.textContent).toBe('SOUND ON');
+      expect(button.attributes['aria-pressed']).toBe('false');
+      expect(button.textContent).toBe('SOUND OFF');
     });
   });
 
@@ -111,10 +112,10 @@ describe('install_sound_switch', () => {
 
     buttons[1].click();
 
-    expect(sound.on).toBe(false);
-    expect(root.dataset.sound).toBe('off');
-    expect(buttons[0].attributes['aria-pressed']).toBe('false');
-    expect(buttons[0].textContent).toBe('SOUND OFF');
+    expect(sound.on).toBe(true);
+    expect(root.dataset.sound).toBe('on');
+    expect(buttons[0].attributes['aria-pressed']).toBe('true');
+    expect(buttons[0].textContent).toBe('SOUND ON');
   });
 
   it('flips with the M key, but not while a modifier is held or the key repeats', () => {
@@ -123,13 +124,13 @@ describe('install_sound_switch', () => {
     install_sound_switch({ dataset: {} }, [], sound, doc);
 
     doc.press('m');
-    expect(sound.on).toBe(false);
-    doc.press('M');
     expect(sound.on).toBe(true);
+    doc.press('M');
+    expect(sound.on).toBe(false);
 
     doc.press('m', { metaKey: true });
     doc.press('m', { ctrlKey: true });
     doc.press('m', { repeat: true });
-    expect(sound.on).toBe(true);
+    expect(sound.on).toBe(false);
   });
 });

@@ -5,7 +5,7 @@ export class StageScene extends Scene {
     this.current_stage = this.game.get_status('current_stage');
     this.view.update_stage(this.current_stage);
     if (this.game.get_status('stage_autostart')) {
-      setTimeout((() => this.game.switch_scene('battle_field')), 1500);
+      this.autostart_timer = setTimeout((() => this.game.switch_scene('battle_field')), 1500);
     } else {
       this.enable_stage_control();
     }
@@ -13,6 +13,7 @@ export class StageScene extends Scene {
   }
 
   stop() {
+    clearTimeout(this.autostart_timer);
     this.prepare_for_game_scene();
     return super.stop();
   }

@@ -287,13 +287,6 @@ body::after {
   text-shadow: 0 1px 0 #000;
 }
 
-.tv__power {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
 .tv__led {
   width: 9px;
   height: 9px;
@@ -315,18 +308,48 @@ body::after {
   box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* The set's own sound switch: a rocker that lights while the sound is on. */
-.tv__sound {
+/* The set's own buttons: raised plastic keys with a lamp in them - sound
+   lights amber while it plays, power green while the set is on. */
+.tv__sound,
+.tv__power {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 6px;
+  padding: 7px 11px 6px;
   font: inherit;
+  font-size: 9px;
   letter-spacing: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
+  color: #cbbfa9;
+  background: linear-gradient(#3b342d, #221e1a);
+  border: 1px solid #4d443a;
+  border-radius: 4px;
+  box-shadow:
+    0 2px 0 #0d0b09,
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tv__power { margin-left: auto; }
+
+.tv__sound:active,
+.tv__power:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #0d0b09, inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.tv__sound:hover,
+.tv__sound:focus-visible,
+.tv__power:hover,
+.tv__power:focus-visible {
+  color: var(--paper);
+  border-color: #7a6c5c;
+}
+
+.tv__sound:focus-visible,
+.tv__power:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
 }
 
 .tv__sound::before {
@@ -338,17 +361,28 @@ body::after {
   box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.8);
 }
 
+[data-sound="on"] .tv__sound { color: var(--amber); }
+
 [data-sound="on"] .tv__sound::before {
   background: var(--amber);
   box-shadow: 0 0 8px var(--amber), inset 0 0 3px rgba(255, 255, 255, 0.8);
 }
 
-.tv__sound:hover,
-.tv__sound:focus-visible { color: var(--paper); }
+/* Switched off: the lamp goes out and the picture shrinks to a line and a
+   dot, the way a tube dies. */
+:root[data-power="off"] .tv__led {
+  background: #2a2622;
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.8);
+}
 
-.tv__sound:focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 2px;
+[data-power="off"] #canvas {
+  animation: tube-off 0.45s ease-in forwards;
+}
+
+@keyframes tube-off {
+  0% { clip-path: inset(0 0 0 0); filter: brightness(1); }
+  55% { clip-path: inset(49.6% 0 49.6% 0); filter: brightness(3); }
+  100% { clip-path: inset(49.6% 50% 49.6% 50%); filter: brightness(3); opacity: 0; }
 }
 
 /* ------------------------------ side panel ------------------------------ */
@@ -518,6 +552,11 @@ body::after {
 [data-scene="stage"] .coin,
 [data-scene="report"] .coin {
   visibility: visible;
+}
+
+/* No coin to insert into a set that is switched off. */
+:root[data-power="off"] .coin {
+  visibility: hidden;
 }
 
 @keyframes blink {

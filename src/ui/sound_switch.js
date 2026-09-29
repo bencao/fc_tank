@@ -10,7 +10,8 @@ export class SoundSwitch {
     this.mixer = mixer;
     this.storage = storage;
     this.listeners = [];
-    this.on = this.read() !== "off";
+    // Off until the player turns it on.
+    this.on = this.read() === "on";
     this.mixer.mute(!this.on);
   }
 
