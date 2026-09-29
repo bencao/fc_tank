@@ -54,8 +54,11 @@ export class Tank extends MovableMapUnit2D {
     return this.update_display();
   }
 
+  // Not negative damage: taking a hit also costs a level and, for an enemy
+  // carrying one, drops a power-up - neither should happen on a heal.
   hp_up(lives) {
-    return this.hp_down(-lives);
+    this.hp += lives;
+    return this.update_display();
   }
 
   hp_down(lives) {

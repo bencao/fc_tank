@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Tank, UserTank, StupidTank, FoolTank, FishTank, StrongTank } from '../../src/objects/tanks.js';
 
 describe('Tank (base)', () => {
@@ -164,5 +164,19 @@ describe('Tank types', () => {
   it('StrongTank type is strong', () => {
     const t = Object.create(StrongTank.prototype);
     expect(t.type()).toBe('strong');
+  });
+});
+
+describe('EnemyTank gaining hit points', () => {
+  it('drops no power-up and keeps its level - only a hit does that', () => {
+    const t = Object.create(StupidTank.prototype);
+    Object.assign(t, { hp: 2, level: 2, power: 1, max_missile: 1, gift_counts: 2 });
+    t.map = { random_gift: vi.fn() };
+    t.update_display = vi.fn();
+
+    t.hp_up(1);
+
+    expect(t.map.random_gift).not.toHaveBeenCalled();
+    expect({ hp: t.hp, level: t.level, gift_counts: t.gift_counts }).toEqual({ hp: 3, level: 2, gift_counts: 2 });
   });
 });
