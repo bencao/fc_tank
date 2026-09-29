@@ -14,7 +14,7 @@ const lobby_screen = game => game.scenes.lobby.view.show_lobby.mock.calls.at(-1)
 
 // A guest who opened the invitation for room K7QX2M. join() settles the way
 // the test says: with a link to a host, or with a RoomError.
-async function joining({ fails } = {}) {
+async function joining({ fails, touch = false } = {}) {
   const [host_link, guest_link] = link_pair();
   const connector = {
     join: vi.fn(async () => {
@@ -26,7 +26,7 @@ async function joining({ fails } = {}) {
   vi.spyOn(game.scenes.lobby.view, 'show_lobby');
   const page = new EventTarget();
   const go_to_title = vi.fn();
-  become_guest(game, 'K7QX2M', { page, win: new EventTarget(), go_to_title });
+  become_guest(game, 'K7QX2M', { page, win: new EventTarget(), go_to_title, touch: () => touch });
   await flush();
   const host = new FriendsSession(host_link, 'host');
   return { game, host, host_link, page, go_to_title, connector };
@@ -145,6 +145,15 @@ describe('A friends play guest', () => {
 
     expect(game.current_scene).toBe(game.scenes.lobby);
     expect(lobby_screen(game).status).toBe('THE HOST LEFT');
+  });
+
+  // A phone won't play a sound before its first touch, and a friend who just
+  // opened the link has touched nothing - stage 1's music would go missing.
+  it('asks a friend on a touch screen for a tap before the game starts', async () => {
+    const { game } = await joining({ touch: true });
+
+    expect(lobby_screen(game).status).toBe('CONNECTED!');
+    expect(lobby_screen(game).hint).toMatch(/TAP .*SOUND/);
   });
 
   // An iPhone that locked mid-game comes back to a link that died quietly: the
