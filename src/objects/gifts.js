@@ -80,16 +80,18 @@ export class LandMineGift extends Gift {
   static weight = 0.5;
   static game_changer = true;
 
+  // The tank that set it off gets the kills - with no killer named, the
+  // scene would score every one of them to P2, even in a one-player game.
   apply(tank) {
     if (tank instanceof EnemyTank) {
       this.map.user_tanks().forEach(t => {
         t.destroy();
-        this.map.trigger("user_tank_destroyed", t, null);
+        this.map.trigger("user_tank_destroyed", t, tank);
       });
     } else {
       this.map.enemy_tanks().forEach(t => {
         t.destroy();
-        this.map.trigger("enemy_tank_destroyed", t, null);
+        this.map.trigger("enemy_tank_destroyed", t, tank);
       });
     }
   }
@@ -126,15 +128,16 @@ export class StarGift extends Gift {
 }
 
 export class ShovelGift extends Gift {
+  // The wall comes back on the home's clock, not the gift's: the gift is
+  // destroyed the moment it is picked up, and would take its timer with it.
   apply(tank) {
+    const home = this.map.home();
     if (tank instanceof UserTank) {
-      this.map.home().setup_defend_terrains();
+      home.setup_defend_terrains();
     } else {
-      this.map.home().delete_defend_terrains();
+      home.delete_defend_terrains();
     }
-    return this.attach_timeout_event(() => {
-      return this.map.home().restore_defend_terrains();
-    }, 10000);
+    return home.restore_defend_terrains_after(10000);
   }
   type() {
     return "shovel";

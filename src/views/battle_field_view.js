@@ -184,6 +184,9 @@ export class BattleFieldView extends View {
     return this.status_panel.add(this.stage_label);
   }
 
+  // Symbols are a single still frame: drawn with the layer, never started.
+  // A started sprite keeps its timer and animation running after destroy(),
+  // and the enemy counter throws its symbols away every time it changes.
   new_symbol(parent, type, tx, ty) {
     const image = document.getElementById('tank_sprite');
     const animations = (() => { switch (type) {
@@ -206,7 +209,6 @@ export class BattleFieldView extends View {
       index     : 0
     });
     parent.add(symbol);
-    symbol.start();
     return symbol;
   }
 }

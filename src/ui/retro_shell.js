@@ -40,12 +40,24 @@ export function install_screen_scaling(root, screen) {
   return apply;
 }
 
+// How wide the picture may be in a slot `slot_width` across: the TV's case
+// and bezel wrap it, and have to fit in the slot too. `set` and `picture` are
+// the TV's and the picture's current widths - whatever their size, the
+// difference between them is the frame.
+export function room_for_picture(slot_width, { set, picture }) {
+  return slot_width - (set - picture);
+}
+
 function fit(root, screen) {
   // On a touch screen the pad has to stay in reach, so the picture always
   // shares the window with it instead of pushing it off the bottom.
   const touch = root.dataset.input === "touch";
   const stacked = window.matchMedia(STACKED_LAYOUT).matches;
-  const available_width = slot_of(screen).clientWidth;
+  const set = screen.closest(".tv") ?? screen;
+  const available_width = room_for_picture(slot_of(screen).clientWidth, {
+    set: set.offsetWidth,
+    picture: screen.offsetWidth
+  });
   const available_height = stacked && !touch ? Infinity : viewport_room_for(screen);
   const scale = compute_scale(available_width, available_height, BASE_WIDTH, BASE_HEIGHT, MAX_SCALE);
   root.style.setProperty("--screen-scale", scale);

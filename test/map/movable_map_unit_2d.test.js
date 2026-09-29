@@ -159,3 +159,34 @@ describe('MovableMapUnit2D movement', () => {
     expect(unit.area.x1).toBe(4);
   });
 });
+
+describe('MovableMapUnit2D sprite animation', () => {
+  // Kinetic rewinds a sprite to its first frame whenever its animation is set,
+  // even to the one it is already playing. Driving a blinking tank (a guarded
+  // one, say) must not rewind it on every step, or it never blinks at all.
+  it('only sets the animation when it changes', () => {
+    const unit = makeUnit(makeMap());
+    const set = [];
+    unit.display_object.setAnimation = state => set.push(state);
+
+    travel(unit, { frames: 10, delta: 16 });
+    unit.animation_state = () => 'user_p1_lv1_with_guard';
+    travel(unit, { frames: 10, delta: 16 });
+
+    expect(set).toEqual(['user_p1_lv1', 'user_p1_lv1_with_guard']);
+  });
+});
+
+describe('MovableMapUnit2D sprite position', () => {
+  // The sweep walks a pixel at a time, but the sprite only needs to be put
+  // where the unit ends up.
+  it('is updated once per move, not once per pixel', () => {
+    const unit = makeUnit(makeMap());
+    const positions = [];
+    unit.display_object.setAbsolutePosition = (x, y) => positions.push([x, y]);
+
+    unit.move(8);
+
+    expect(positions).toEqual([[28, 20]]);
+  });
+});

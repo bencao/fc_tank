@@ -31,6 +31,16 @@ export class Map2D {
 
     this.image = document.getElementById("tank_sprite");
 
+    // Terrain filed by the route lattice's 10px cells, so a question about a
+    // small area looks at the walls around it rather than every one on the map.
+    this.terrain_cell = this.default_width / 4;
+    this.terrain_grid_columns = Math.ceil(this.max_x / this.terrain_cell);
+    this.terrain_grid_rows = Math.ceil(this.max_y / this.terrain_cell);
+    this.terrain_grid = Array.from(
+      { length: this.terrain_grid_columns * this.terrain_grid_rows },
+      () => []
+    );
+
     this.vertexes_columns = (4 * this.max_x) / this.default_width - 3;
     this.vertexes_rows = (4 * this.max_y) / this.default_height - 3;
     this.vertexes = this.init_vertexes();
@@ -49,6 +59,7 @@ export class Map2D {
     terrain.new_display();
     terrain.after_new_display();
     this.terrains.push(terrain);
+    this._each_terrain_cell(terrain.area, cell => cell.push(terrain));
     this.map_units.push(terrain);
     return terrain;
   }
@@ -85,6 +96,10 @@ export class Map2D {
   delete_map_unit(map_unit) {
     if (map_unit instanceof Terrain) {
       this.terrains = this.terrains.filter(t => t !== map_unit);
+      this._each_terrain_cell(map_unit.area, cell => {
+        const at = cell.indexOf(map_unit);
+        if (at >= 0) { cell.splice(at, 1); }
+      });
     } else if (map_unit instanceof Missile) {
       this.missiles = this.missiles.filter(m => m !== map_unit);
     } else if (map_unit instanceof Tank) {
@@ -113,7 +128,7 @@ export class Map2D {
 
   // A tank at least three quarters under grass can't be seen by the other side.
   hidden_in_grass(tank) {
-    const covered = this.terrains
+    const covered = this.terrains_at(tank.area)
       .filter(terrain => terrain.type() === "grass")
       .map(grass => grass.area.intersect(tank.area))
       .filter(overlap => overlap.valid())
@@ -129,17 +144,44 @@ export class Map2D {
   units_at(area) {
     return this.map_units.filter(map_unit => map_unit.area.collide(area));
   }
+
+  // Same as units_at, for terrain only - and without a scan of the whole map.
+  terrains_at(area) {
+    const found = new Set();
+    this._each_terrain_cell(area, cell => {
+      for (const terrain of cell) {
+        if (terrain.area.collide(area)) { found.add(terrain); }
+      }
+    });
+    return [...found];
+  }
+
+  _each_terrain_cell(area, visit) {
+    const size = this.terrain_cell;
+    const clamp = (value, cells) => Math.min(Math.max(value, 0), cells - 1);
+    const x1 = clamp(Math.floor(area.x1 / size), this.terrain_grid_columns);
+    const x2 = clamp(Math.ceil(area.x2 / size) - 1, this.terrain_grid_columns);
+    const y1 = clamp(Math.floor(area.y1 / size), this.terrain_grid_rows);
+    const y2 = clamp(Math.ceil(area.y2 / size) - 1, this.terrain_grid_rows);
+    for (let x = x1; x <= x2; x++) {
+      for (let y = y1; y <= y2; y++) {
+        visit(this.terrain_grid[y * this.terrain_grid_columns + x]);
+      }
+    }
+  }
   out_of_bound(area) {
     return (
       area.x1 < 0 || area.x2 > this.max_x || area.y1 < 0 || area.y2 > this.max_y
     );
   }
+  // The overlap test goes first: it is plain arithmetic, and for all but a
+  // few units it settles the question without asking accept().
   area_available(unit, area) {
     return this.map_units.every(map_unit => {
       return (
         map_unit === unit ||
-        map_unit.accept(unit) ||
-        !map_unit.area.collide(area)
+        !map_unit.area.collide(area) ||
+        map_unit.accept(unit)
       );
     });
   }
@@ -240,8 +282,8 @@ export class Map2D {
   }
 
   can_occupy(tank, area) {
-    return this.units_at(area).every(
-      unit => !(unit instanceof Terrain) || unit.weight(tank) < this.infinity
+    return this.terrains_at(area).every(
+      terrain => terrain.weight(tank) < this.infinity
     );
   }
 
@@ -260,9 +302,7 @@ export class Map2D {
   weight(tank, from, to) {
     const sub_areas = to.sub(from);
     const sub_area = sub_areas[0];
-    const terrain_units = this.units_at(sub_area).filter(
-      unit => unit instanceof Terrain
-    );
+    const terrain_units = this.terrains_at(sub_area);
     if (terrain_units.length === 0) {
       return 1;
     }

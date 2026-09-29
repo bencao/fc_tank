@@ -42,6 +42,23 @@ describe('BattleFieldScene time line', () => {
     vi.useRealTimers();
   });
 
+  // A frame's timestamp is when the frame began, which can be a moment
+  // before the time line was started - time must not run backwards.
+  it('never steps the battle back in time', () => {
+    const scene = makeScene();
+    const tank = { integration: vi.fn() };
+    scene.map.tanks = [tank];
+    scene.running = true;
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    scene.start_time_line();
+    now.mockRestore();
+
+    harness.frame(990);
+
+    expect(tank.integration).toHaveBeenCalledWith(0);
+    scene.stop_time_line();
+  });
+
   it('runs exactly one loop while a battle is on', () => {
     const scene = makeScene();
     scene.running = true;
