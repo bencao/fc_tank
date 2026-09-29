@@ -56,6 +56,13 @@ export class NameEntryView extends View {
     return this.layer.draw();
   }
 
+  // Friends play: this player's initials are in; the other's aren't yet.
+  show_waiting() {
+    this.cursor.hide();
+    this.hint.setText("WAITING FOR YOUR FRIEND...");
+    return this.layer.draw();
+  }
+
   show_saving() {
     this.cursor.hide();
     this.hint.setText("SAVING...");

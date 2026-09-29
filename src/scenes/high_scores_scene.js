@@ -15,8 +15,8 @@ export class HighScoresScene extends Scene {
     this.game.update_status("high_score_ranks", []);
     this.game.update_status("high_score_entries", null);
 
-    this.keyboard.on_key_down("ENTER", () => this.game.switch_scene("welcome"));
-    this.leave_timer = setTimeout(() => this.game.switch_scene("welcome"), SHOW_MS);
+    this.keyboard.on_key_down("ENTER", () => this.game.switch_scene(this.game.home_scene()));
+    this.leave_timer = setTimeout(() => this.game.switch_scene(this.game.home_scene()), SHOW_MS);
 
     if (posted) {
       return this.show(posted, ranks);

@@ -65,12 +65,20 @@ describe('parse_entry', () => {
       .toEqual({ name: 'ABC', score: 4500, stage: 12, difficulty: 'NIGHTMARE' });
   });
 
+  // Friends play posts one run for the team: both players' initials.
+  it('accepts a team - two sets of initials joined by &', () => {
+    expect(parse_entry({ name: 'ABC&XYZ', score: 9000, stage: 3, difficulty: 'HARD' }).name).toBe('ABC&XYZ');
+  });
+
   // Anything can POST to the endpoint; only a well-formed run is kept, rebuilt
   // field by field so nothing else rides along.
   it.each([
     ['lowercase initials', { name: 'abc' }],
     ['too many initials', { name: 'ABCD' }],
     ['non-letter initials', { name: '<b>' }],
+    ['half a team', { name: 'ABC&' }],
+    ['a short teammate', { name: 'ABC&XY' }],
+    ['a team of three', { name: 'ABC&XYZ&QQQ' }],
     ['a zero score', { score: 0 }],
     ['a score no kill can give', { score: 150 }],
     ['an absurd score', { score: 100_000_000 }],

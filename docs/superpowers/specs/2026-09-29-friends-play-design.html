@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Friends Play Design</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1d1f; --muted: #6b6b70; --line: #e3e0d8;
+    --card: #ffffff; --code-bg: #f3f1ec; --accent: #db2b00; --amber: #b86a12;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121214; --fg: #ececef; --muted: #9a9aa2; --line: #2c2c31;
+      --card: #1a1a1e; --code-bg: #202025; --accent: #ff6a3d; --amber: #ffb04a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h1 em { color: var(--accent); font-style: normal; }
+  h2 { font-size: 1.35rem; margin: 44px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 26px 0 6px; }
+  .meta { color: var(--muted); margin: 0 0 28px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre:not(.mermaid) { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: .85rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: .92rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  .mermaid { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; text-align: center; }
+  .callout { border-left: 3px solid var(--amber); background: var(--card); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1><em>FC</em> Tank: Friends Play</h1>
+  <p class="meta">Design · 2026-09-29 · branch <code>feat/friends-play</code></p>
+
+  <h2>Summary</h2>
+  <p>
+    Online two-player co-op. One player picks <strong>FRIENDS PLAY</strong> on the title screen,
+    and the game makes a room and shows an invitation link (<code>/?join=K7QX2M</code>) with a
+    COPY / SHARE button. The friend opens the link and joins. They then play the classic 2P game
+    together, each in their own browser, as P1 and P2. After a game over, each friend enters their
+    own initials on their own screen, and the run goes on the global leaderboard as one team
+    entry: <code>ABC&amp;XYZ</code> with the combined score.
+  </p>
+
+  <h2>Decisions</h2>
+  <table>
+    <tr><th>Question</th><th>Decision</th><th>Why</th></tr>
+    <tr>
+      <td>Transport</td>
+      <td>WebRTC data channel, peer to peer. Signaling through <code>/api/room</code> on the existing Upstash Redis.</td>
+      <td>Lowest latency, no new vendor, nothing billed per message. The game is already on Vercel functions + Upstash.</td>
+    </tr>
+    <tr>
+      <td>Who simulates</td>
+      <td>The <strong>host is authoritative</strong>: only the host runs the battle. The guest is a remote keyboard plus a screen mirror.</td>
+      <td>The engine uses <code>Math.random</code> and variable rAF deltas. Lockstep would need a deterministic rewrite; mirroring works with the engine as it is.</td>
+    </tr>
+    <tr>
+      <td>What is mirrored</td>
+      <td>Scene switches, whitelisted <code>View</code> method calls, battle frames (sprites + terrain diffs + explosions), and sounds.</td>
+      <td>Views are already a narrow API. The guest drives its own copies of the same views, so it looks identical.</td>
+    </tr>
+    <tr>
+      <td>ICE</td>
+      <td>Non-trickle (gather all candidates, then post the SDP once). Public STUN, no TURN.</td>
+      <td>One offer and one answer means two Redis writes. Without TURN, roughly 10–20% of NAT pairs can't connect; the UI says so plainly. Adding TURN later only changes <code>ICE_SERVERS</code>.</td>
+    </tr>
+    <tr>
+      <td>Team score</td>
+      <td>One leaderboard row. Name <code>ABC&amp;XYZ</code> (host first), score = P1 + P2.</td>
+      <td>"X &amp; Y" as asked. The server accepts one or two sets of initials.</td>
+    </tr>
+    <tr>
+      <td>Local 2P</td>
+      <td>Unchanged (separate rows per player).</td>
+      <td>Out of scope. It could adopt team entry later.</td>
+    </tr>
+  </table>
+
+  <h2>Connection flow</h2>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant H as Host browser
+  participant R as /api/room (Redis, TTL 30 min)
+  participant G as Guest browser
+  H->>H: RTCPeerConnection + data channel, createOffer, gather ICE
+  H->>R: POST {offer}
+  R-->>H: {code: K7QX2M}
+  Note over H: Shows /?join=K7QX2M with COPY / SHARE
+  loop every second until answered
+    H->>R: GET ?code=K7QX2M
+  end
+  G->>R: GET ?code=K7QX2M
+  R-->>G: {offer}
+  G->>G: setRemoteDescription, createAnswer, gather ICE
+  G->>R: PUT ?code=K7QX2M {answer} (first guest wins, later ones get 409)
+  R-->>H: {offer, answer}
+  H->>H: setRemoteDescription(answer)
+  H-->>G: data channel open (peer to peer)
+  </pre>
+
+  <h2>In-game data flow</h2>
+  <pre class="mermaid">
+flowchart LR
+  subgraph Guest
+    GK[keyboard / touch pad] -->|key events| GS[FriendsSession]
+    GS -->|scene, view, frame, sound| GM[Mirror scenes]
+    GM --> GV[Same views + SpriteMirror]
+  end
+  subgraph Host
+    HS[FriendsSession] -->|remote key events| RK[Remote Keyboard]
+    RK -->|P2 commands| P2[P2 tank commander]
+    SIM[BattleFieldScene simulation] --> FR[FrameRecorder]
+    FR -->|frame ~30 Hz| HS
+    HV[Views] -->|mirrored calls| HS
+    HSC[game.switch_scene] -->|scene| HS
+  end
+  GS <== RTCDataChannel reliable, ordered ==> HS
+  </pre>
+
+  <h3>Messages</h3>
+  <table>
+    <tr><th>Type</th><th>Direction</th><th>Payload</th></tr>
+    <tr><td><code>key</code></td><td>guest → host</td><td><code>{key: "ArrowUp", down: true}</code>. Only keys the game understands; repeats dropped.</td></tr>
+    <tr><td><code>initials</code></td><td>guest → host</td><td><code>{name: "XYZ"}</code></td></tr>
+    <tr><td><code>scene</code></td><td>host → guest</td><td><code>{name: "battle_field"}</code></td></tr>
+    <tr><td><code>view</code></td><td>host → guest</td><td><code>{view, method, args}</code>, only for whitelisted methods; map units are sent as <code>{area}</code></td></tr>
+    <tr><td><code>frame</code></td><td>host → guest</td><td><code>{units: [[id, kind, anim, x, y, rot]], terrain: {add, remove}, booms: [[x, y]]}</code></td></tr>
+    <tr><td><code>sound</code></td><td>host → guest</td><td><code>{name}</code></td></tr>
+    <tr><td><code>name_entry</code></td><td>host → guest</td><td><code>{score}</code>: team score; guest starts its own initials entry</td></tr>
+  </table>
+  <p>
+    All messages share one reliable, ordered channel. Frames carry every tank, missile and gift
+    in full. Terrain only goes out as a diff against what was last sent (the first frame of a
+    battle carries all of it), so terrain needs the reliable channel. Frames go out at most
+    every 33&nbsp;ms, which is about 1–2&nbsp;KB per frame.
+  </p>
+
+  <h2>Scene flow</h2>
+  <pre class="mermaid">
+stateDiagram-v2
+  [*] --> welcome
+  welcome --> lobby: FRIENDS PLAY + ENTER (host)
+  [*] --> lobby: opened /?join=CODE (guest)
+  lobby --> welcome: SPACE (cancel) / error + ENTER
+  lobby --> stage: friend joined + host ENTER
+  stage --> battle_field
+  battle_field --> report
+  report --> stage: stage cleared
+  report --> name_entry: game over, team scored
+  report --> lobby: game over, no score
+  name_entry --> high_scores: both initials in → one team row
+  high_scores --> lobby: still connected → play again
+  high_scores --> welcome: friend gone
+  </pre>
+  <p>
+    The guest never moves between scenes on its own. It follows the host's <code>scene</code>
+    messages. The exceptions are its own lobby (joining, errors) and its initials entry.
+  </p>
+
+  <h2>Controls</h2>
+  <ul>
+    <li><strong>Both friends use the 1P keys</strong>, each at their own keyboard: arrows move and Z fires (or the touch pad). The host's drive P1; the guest's drive P2. ENTER on either side pauses the shared game.</li>
+    <li>While friends play is on, the page shows only the 1P card, retitled "YOUR CONTROLS". WASD + J still work quietly as a fallback, so nobody used to the 2P keys gets stuck.</li>
+    <li>If the guest's window loses focus, every key it holds is released, so its tank can't keep driving.</li>
+  </ul>
+
+  <h2>Failure handling</h2>
+  <table>
+    <tr><th>Case</th><th>Behaviour</th></tr>
+    <tr><td>Room missing / expired</td><td>Guest: "ROOM NOT FOUND". ENTER goes to the title screen and drops <code>?join</code> from the URL.</td></tr>
+    <tr><td>Room already has a guest</td><td>"ROOM IS FULL" (409).</td></tr>
+    <tr><td>ICE fails / 20 s timeout</td><td>"COULDN'T CONNECT". Probably a strict NAT; both sides can try again.</td></tr>
+    <tr><td>Guest leaves mid-game</td><td>Host plays on alone: P2's keys are released and its tank idles. Afterwards the host goes to the title screen, not the lobby.</td></tr>
+    <tr><td>Host leaves</td><td>Guest: "HOST LEFT", then ENTER for the title screen.</td></tr>
+    <tr><td>Abuse</td><td>Room creation limited per IP per hour; SDP must look like SDP and stay under 16 KB; rooms expire after 30 min.</td></tr>
+  </table>
+
+  <h2>Modules</h2>
+  <table>
+    <tr><th>File</th><th>Role</th></tr>
+    <tr><td><code>server/rooms.js</code>, <code>api/room.js</code></td><td>Signaling store and endpoint (create / read / answer), rate limited, TTL.</td></tr>
+    <tr><td><code>src/friends/rooms_client.js</code></td><td>Fetch wrapper for <code>/api/room</code>.</td></tr>
+    <tr><td><code>src/friends/peer_link.js</code></td><td>Thin wrapper over RTCPeerConnection + data channel (browser only).</td></tr>
+    <tr><td><code>src/friends/session.js</code></td><td>Typed messages over any link; connection state; remote keyboard source.</td></tr>
+    <tr><td><code>src/friends/frame_recorder.js</code></td><td>Host: Map2D → frame (units, terrain diff, booms).</td></tr>
+    <tr><td><code>src/friends/sprite_mirror.js</code></td><td>Guest: frame → Kinetic sprites.</td></tr>
+    <tr><td><code>src/friends/view_mirror.js</code></td><td>Forward whitelisted view calls host → guest.</td></tr>
+    <tr><td><code>src/friends/guest.js</code></td><td>Guest-side scenes: lobby, mirror, battle mirror, initials.</td></tr>
+    <tr><td><code>src/scenes/lobby_scene.js</code>, <code>src/views/lobby_view.js</code></td><td>Host lobby (create room, wait, start).</td></tr>
+    <tr><td><code>src/ui/invite_panel.js</code></td><td>DOM invite link with COPY / SHARE, shown in the lobby.</td></tr>
+  </table>
+
+  <h2>Testing</h2>
+  <ul>
+    <li>Unit (Vitest, node): rooms server, rooms client, session over an in-memory link pair, frame recorder against a real <code>Map2D</code>, sprite mirror, view mirror, keyboard source, welcome 3-way menu, team name entry, leaderboard name format.</li>
+    <li>End to end (agent-browser, headed): two browser sessions on the dev server. The host creates a room, the guest opens the link, both play a stage, and team initials land on the leaderboard.</li>
+  </ul>
+
+  <div class="callout">
+    <strong>Known limits:</strong> no TURN relay; no reconnecting after a drop; guest input
+    reaches the host after one network round trip (the guest's tank responds ~RTT/2 + one frame
+    later than the host's).
+  </div>
+</main>
+<script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true, theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default' });</script>
+</body>
+</html>

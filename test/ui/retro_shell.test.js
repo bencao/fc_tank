@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reflect_difficulty, room_for_picture } from '../../src/ui/retro_shell.js';
+import { reflect_difficulty, reflect_friends, room_for_picture } from '../../src/ui/retro_shell.js';
 
 function fakeGame(name) {
   const listeners = [];
@@ -26,6 +26,31 @@ describe('reflect_difficulty', () => {
     expect(root.dataset.difficulty).toBe('nightmare');
     game.turn('HARD');
     expect(root.dataset.difficulty).toBe('hard');
+  });
+});
+
+describe('reflect_friends', () => {
+  function friendsGame() {
+    const listeners = [];
+    return {
+      on_friends_change: listener => listeners.push(listener),
+      change: session => listeners.forEach(listener => listener(session))
+    };
+  }
+
+  // Each friend is at a keyboard of their own and plays on the 1P keys, so the
+  // page shows those alone - as "your controls" - while friends play is on.
+  it('marks the page with which friend this is while friends play is on', () => {
+    const root = { dataset: {} };
+    const game = friendsGame();
+    reflect_friends(root, game);
+    expect(root.dataset.friends).toBe('');
+
+    game.change({ role: 'guest', connected: true });
+    expect(root.dataset.friends).toBe('guest');
+
+    game.change(null);
+    expect(root.dataset.friends).toBe('');
   });
 });
 

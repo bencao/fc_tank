@@ -4,7 +4,7 @@ import { defineConfig, loadEnv } from 'vite';
 // Serves the functions in api/ during `vite dev`, the way Vercel serves them
 // in production, so the TypeSafe API key and the Redis token never have to
 // reach the browser.
-const API_ROUTES = ['enemy-guide', 'leaderboard'];
+const API_ROUTES = ['enemy-guide', 'leaderboard', 'room'];
 
 function vercelFunctions() {
   return {

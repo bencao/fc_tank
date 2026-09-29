@@ -1,11 +1,16 @@
 import { Scene } from "../engine/scene.js";
 
+// The menu, top to bottom: 1 PLAYER, 2 PLAYERS, FRIENDS PLAY - two players,
+// each in their own browser (see src/friends/).
+export const MODES = { SINGLE: 0, DOUBLE: 1, FRIENDS: 2 };
+const MODE_COUNT = 3;
+
 export class WelcomeScene extends Scene {
   start() {
     super.start();
     this.demo_timer = null;
     this.view.play_start_animation(() => {
-      this.view.update_player_mode(this.game.single_player_mode());
+      this.view.update_player_mode(this.mode());
       this.view.update_difficulty(this.game.difficulty().name);
       this.enable_selection_control();
       return this.start_demo_timer();
@@ -24,39 +29,31 @@ export class WelcomeScene extends Scene {
   }
 
   prepare_for_game_scene() {
-    this.game.update_status('game_over', false);
     if (!this.game.get_status('demo_mode')) {
       this.game.update_status('stage_autostart', false);
       this.game.update_status('current_stage', this.game.get_config('initial_stage'));
     }
-    this.game.update_status('p1_score', this.game.get_config('initial_p1_score'));
-    this.game.update_status('p2_score', this.game.get_config('initial_p2_score'));
-    this.game.update_status('p1_lives', this.game.get_config('initial_p1_lives'));
-    this.game.update_status('p2_lives', this.game.get_config('initial_p2_lives'));
-    this.game.update_status('p1_level', this.game.get_config('initial_p1_level'));
-    this.game.update_status('p2_level', this.game.get_config('initial_p2_level'));
-    this.game.update_status('p1_ship', this.game.get_config('initial_p1_ship'));
-    return this.game.update_status('p2_ship', this.game.get_config('initial_p2_ship'));
+    return this.game.reset_run();
   }
 
   enable_selection_control() {
     this.keyboard.on_key_down('ENTER', () => {
       this.clear_demo_timer();
       this.game.update_status('demo_mode', false);
-      return this.game.switch_scene('stage');
+      return this.game.switch_scene(this.mode() === MODES.FRIENDS ? 'lobby' : 'stage');
     });
 
     this.keyboard.on_key_down('SPACE', () => {
       this.reset_demo_timer();
-      return this.toggle_players();
+      return this.choose_mode((this.mode() + 1) % MODE_COUNT);
     });
     this.keyboard.on_key_down('UP', () => {
       this.reset_demo_timer();
-      return this.choose_players(1);
+      return this.choose_mode(this.mode() - 1);
     });
     this.keyboard.on_key_down('DOWN', () => {
       this.reset_demo_timer();
-      return this.choose_players(2);
+      return this.choose_mode(this.mode() + 1);
     });
 
     this.keyboard.on_key_down('LEFT', () => {
@@ -101,12 +98,14 @@ export class WelcomeScene extends Scene {
     }
   }
 
-  toggle_players() {
-    return this.choose_players(this.game.single_player_mode() ? 2 : 1);
+  mode() {
+    return this.game.get_status('mode') ?? MODES.SINGLE;
   }
 
-  choose_players(players) {
-    this.game.update_status('players', players);
-    return this.view.update_player_mode(this.game.single_player_mode());
+  choose_mode(mode) {
+    mode = Math.min(Math.max(mode, 0), MODE_COUNT - 1);
+    this.game.update_status('mode', mode);
+    this.game.update_status('players', mode === MODES.SINGLE ? 1 : 2);
+    return this.view.update_player_mode(mode);
   }
 }

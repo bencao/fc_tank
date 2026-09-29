@@ -33,6 +33,8 @@ globalThis.document.getElementById = vi.fn((id) => {
 });
 
 const { Game } = await import('../src/game.js');
+const { FriendsSession } = await import('../src/friends/session.js');
+const { link_pair, flush } = await import('./helpers/link_pair.js');
 
 describe('Game', () => {
   let game;
@@ -154,5 +156,94 @@ describe('Game scene change listeners', () => {
 
     expect(first).toHaveBeenCalledWith('report');
     expect(second).toHaveBeenCalledWith('report');
+  });
+});
+
+describe('Game hosting friends play', () => {
+  function hosting() {
+    const game = new Game();
+    const [host_link, guest_link] = link_pair();
+    const received = [];
+    guest_link.on_message = text => received.push(JSON.parse(text));
+    game.start_friends(new FriendsSession(host_link, 'host'));
+    return { game, received, guest_link };
+  }
+
+  it('tells the friend which scene it is on, before the scene draws anything', async () => {
+    const { game, received } = hosting();
+
+    game.switch_scene('stage');
+    await flush();
+
+    expect(received[0]).toEqual({ t: 'scene', name: 'stage' });
+    expect(received).toContainEqual({ t: 'view', view: 'stage', method: 'update_stage', args: [1] });
+  });
+
+  it('passes on every sound its scenes play', async () => {
+    const { game, received } = hosting();
+
+    game.scenes.report.sound.on_play('lose');
+    await flush();
+
+    expect(received).toEqual([{ t: 'sound', name: 'lose' }]);
+  });
+
+  it('comes home to the lobby while the friend is here, and to the title once they go', async () => {
+    const { game, guest_link } = hosting();
+    expect(game.home_scene()).toBe('lobby');
+
+    guest_link.close();
+    await flush();
+
+    expect(game.hosting_friends()).toBe(false);
+    expect(game.home_scene()).toBe('welcome');
+  });
+
+  it('lets the scene on screen know when the friend leaves', async () => {
+    const { game, guest_link } = hosting();
+    game.switch_scene('report');
+    game.scenes.report.on_friend_left = vi.fn();
+
+    guest_link.close();
+    await flush();
+
+    expect(game.scenes.report.on_friend_left).toHaveBeenCalled();
+  });
+
+  it('tells listeners when friends play starts and ends', async () => {
+    const game = new Game();
+    const seen = [];
+    game.on_friends_change(session => seen.push(session?.role ?? null));
+    const [host_link, guest_link] = link_pair();
+
+    game.start_friends(new FriendsSession(host_link, 'host'));
+    guest_link.close();
+    await flush();
+
+    expect(seen).toEqual(['host', null]);
+  });
+
+  it('sends nothing without a friend', () => {
+    const game = new Game();
+
+    expect(() => game.switch_scene('stage')).not.toThrow();
+    expect(game.home_scene()).toBe('welcome');
+  });
+});
+
+describe('Game.reset_run', () => {
+  it('starts both players over for a new game', () => {
+    const game = new Game();
+    game.update_status('p1_score', 500);
+    game.update_status('p2_lives', 0);
+    game.update_status('p2_level', 3);
+    game.update_status('game_over', true);
+
+    game.reset_run();
+
+    expect(game.get_status('p1_score')).toBe(0);
+    expect(game.get_status('p2_lives')).toBe(2);
+    expect(game.get_status('p2_level')).toBe(1);
+    expect(game.get_status('game_over')).toBe(false);
   });
 });
