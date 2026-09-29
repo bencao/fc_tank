@@ -2,13 +2,20 @@ import { WelcomeScene } from "./scenes/welcome_scene.js";
 import { StageScene } from "./scenes/stage_scene.js";
 import { BattleFieldScene } from "./scenes/battle_field_scene.js";
 import { ReportScene } from "./scenes/report_scene.js";
+import { NameEntryScene } from "./scenes/name_entry_scene.js";
+import { HighScoresScene } from "./scenes/high_scores_scene.js";
 import { WelcomeView } from "./views/welcome_view.js";
 import { StageView } from "./views/stage_view.js";
 import { BattleFieldView } from "./views/battle_field_view.js";
 import { ReportView } from "./views/report_view.js";
+import { NameEntryView } from "./views/name_entry_view.js";
+import { HighScoresView } from "./views/high_scores_view.js";
+import { LeaderboardClient } from "./leaderboard_client.js";
+import { DIFFICULTIES, DEFAULT_DIFFICULTY } from "./difficulty.js";
 
 export class Game {
-  constructor() {
+  constructor({ leaderboard = new LeaderboardClient() } = {}) {
+    this.leaderboard = leaderboard;
     this.canvas = new Kinetic.Stage({
       container: "canvas",
       width: 600,
@@ -23,9 +30,21 @@ export class Game {
         this,
         new BattleFieldView(this.canvas)
       ),
-      report: new ReportScene(this, new ReportView(this.canvas))
+      report: new ReportScene(this, new ReportView(this.canvas)),
+      name_entry: new NameEntryScene(this, new NameEntryView(this.canvas)),
+      high_scores: new HighScoresScene(this, new HighScoresView(this.canvas))
     };
     this.current_scene = null;
+    this.scene_change_listeners = [];
+    this.difficulty_change_listeners = [];
+  }
+
+  on_scene_change(listener) {
+    return this.scene_change_listeners.push(listener);
+  }
+
+  on_difficulty_change(listener) {
+    return this.difficulty_change_listeners.push(listener);
   }
 
   get_config(key) {
@@ -80,7 +99,13 @@ export class Game {
       p2_lives: 2,
       p1_killed_enemies: [],
       p2_killed_enemies: [],
-      demo_mode: false
+      demo_mode: false,
+      // Whether the idle title screen shows a demo next, or the high scores.
+      attract_demo_next: false,
+      // The runs just posted to the leaderboard, for the high scores to mark.
+      high_score_ranks: [],
+      high_score_entries: null,
+      difficulty: DEFAULT_DIFFICULTY
     };
   }
 
@@ -111,6 +136,26 @@ export class Game {
     }
   }
 
+  difficulty() {
+    return DIFFICULTIES[this.statuses["difficulty"]];
+  }
+
+  harder() {
+    return this._turn_difficulty(1);
+  }
+
+  easier() {
+    return this._turn_difficulty(-1);
+  }
+
+  _turn_difficulty(step) {
+    const level = this.statuses["difficulty"] + step;
+    this.statuses["difficulty"] = Math.min(Math.max(level, 0), DIFFICULTIES.length - 1);
+    const difficulty = this.difficulty();
+    this.difficulty_change_listeners.forEach(listener => listener(difficulty));
+    return difficulty;
+  }
+
   single_player_mode() {
     return this.statuses["players"] === 1;
   }
@@ -136,6 +181,8 @@ export class Game {
       this.current_scene.on_stop();
     }
     target_scene.on_start();
-    return (this.current_scene = target_scene);
+    this.current_scene = target_scene;
+    this.scene_change_listeners.forEach(listener => listener(type));
+    return this.current_scene;
   }
 }

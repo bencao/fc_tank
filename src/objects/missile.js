@@ -49,6 +49,11 @@ export class Missile extends MovableMapUnit2D {
     this.commander = new MissileCommander(this);
   }
 
+  // Player missiles fly faster (see PLAYER_EDGE in tanks.js).
+  get speed() {
+    return super.speed * (this.parent.constructor.missile_speed_boost ?? 1);
+  }
+
   type() {
     return "missile";
   }
@@ -66,11 +71,16 @@ export class Missile extends MovableMapUnit2D {
   }
 
   move(offset) {
-    const can_move = super.move(offset);
-    if (!can_move) {
+    const moved = super.move(offset);
+    // Standing still because the frame was worth less than a pixel is not the
+    // same as running into something - only the latter sets a missile off.
+    // Being stopped short counts too: chasing a tank that is driving away, the
+    // missile gains a few pixels every frame before it bumps into it, and
+    // waiting for a frame with no progress at all meant it never went off.
+    if (offset > 0 && moved < offset) {
       this.attack();
     }
-    return can_move;
+    return moved;
   }
   attack() {
     const destroy_area = this.destroy_area();
@@ -79,7 +89,14 @@ export class Missile extends MovableMapUnit2D {
       this.bom_on_destroy = true;
       this.energy -= this.max_defend_point;
     } else {
-      const hit_map_units = this.map.units_at(destroy_area);
+      let hit_map_units = this.map.units_at(destroy_area);
+      // Missiles meeting head-on cancel each other out and go no further -
+      // otherwise whichever went off first would also blow up the tank
+      // standing behind the other one.
+      const met = hit_map_units.filter(unit => unit instanceof Missile && unit !== this && !unit.accept(this));
+      if (met.length > 0) {
+        hit_map_units = met;
+      }
       hit_map_units.forEach(unit => {
         const defend_point = unit.defend(this, destroy_area);
         this.bom_on_destroy = defend_point === this.max_defend_point;

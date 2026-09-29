@@ -1,64 +1,142 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
-    <title>
-      FC Tank - Classic Battle City built with web technologies
-    </title>
-    <style type="text/css">
-      #tank_sprite {
-        display: none;
-      }
-      #canvas {
-        background: #000;
-        width: 600px;
-        height: 520px;
-      }
-      #game_instructions {
-        padding: 2em;
-      }
-      #row {
-        display: flex;
-      }
-      body {
-        background: #999;
-      }
-      strong {
-        font-weight: bold;
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#08080b" />
+    <title>FC Tank - Classic Battle City built with web technologies</title>
+    <link rel="stylesheet" href="./src/styles/retro.css" />
   </head>
   <body>
     <img
       id="tank_sprite"
-      alt="tanks"
+      alt=""
       width="400"
       height="360"
       src="image/tanks.png"
     />
-    <div id="row">
-      <div id="canvas"></div>
-      <div id="game_instructions">
-        <dl class="p1">
-          <dt>P1 Control</dt>
-          <dd>Press keyboard <strong>UP, DOWN, LEFT, RIGHT</strong> to move</dd>
-          <dd>Press keyboard <strong>Z</strong> to fire</dd>
-          <dd>
-            Press keyboard <strong>SPACE</strong> to toggle 1 user or 2 users
-            mode
-          </dd>
-          <dd>
-            Press keyboard <strong>ENTER</strong> to start game or toggle game
-            start/pause
-          </dd>
-        </dl>
-        <dl class="p2">
-          <dt>P2 Control</dt>
-          <dd>Press keyboard <strong>W, S, A, D</strong> to move</dd>
-          <dd>Press keyboard <strong>J</strong> to fire</dd>
-        </dl>
-      </div>
+
+    <div class="cabinet">
+      <header class="marquee">
+        <h1 class="marquee__title"><em>FC</em> TANK</h1>
+        <hr class="brickline" />
+        <hr class="brickline" />
+        <p class="marquee__sub">8-BIT COMBAT &middot; 1 OR 2 PLAYERS &middot; 50 STAGES</p>
+      </header>
+
+      <main class="deck">
+        <div class="tv-slot">
+          <section class="tv" aria-label="Game screen">
+            <div class="tv__bezel">
+              <div class="tv__screen" id="screen">
+                <div id="canvas"></div>
+                <div class="tv__scanlines" aria-hidden="true"></div>
+                <div class="tv__glare" aria-hidden="true"></div>
+              </div>
+            </div>
+            <div class="tv__chin">
+              <span class="tv__brand">MODEL FC-90</span>
+              <span class="tv__knobs" aria-hidden="true"><i></i><i></i></span>
+              <button type="button" class="tv__sound" data-sound-switch aria-pressed="true">SOUND ON</button>
+              <span class="tv__power">
+                <span class="tv__led" aria-hidden="true"></span>POWER
+              </span>
+            </div>
+          </section>
+        </div>
+
+        <div class="gamepad" id="gamepad" aria-label="Touch controller">
+          <div class="gamepad__dpad" data-pad-dpad role="group" aria-label="Direction pad">
+            <i class="gamepad__arm gamepad__arm--up" aria-hidden="true"></i>
+            <i class="gamepad__arm gamepad__arm--down" aria-hidden="true"></i>
+            <i class="gamepad__arm gamepad__arm--left" aria-hidden="true"></i>
+            <i class="gamepad__arm gamepad__arm--right" aria-hidden="true"></i>
+            <i class="gamepad__hub" aria-hidden="true"></i>
+          </div>
+          <div class="gamepad__system">
+            <button type="button" class="gamepad__pill" data-pad-button="SELECT">SELECT</button>
+            <button type="button" class="gamepad__pill" data-pad-button="START">START</button>
+            <button type="button" class="gamepad__pill gamepad__pill--sound" data-sound-switch aria-pressed="true">SOUND ON</button>
+          </div>
+          <div class="gamepad__buttons">
+            <button type="button" class="gamepad__fire gamepad__fire--b" data-pad-button="B" aria-label="Fire">B</button>
+            <button type="button" class="gamepad__fire gamepad__fire--a" data-pad-button="A" aria-label="Fire">A</button>
+          </div>
+        </div>
+
+        <aside class="panel" aria-label="Controls">
+          <section class="card card--p1">
+            <h2 class="card__title">1P CONTROL</h2>
+            <dl class="controls">
+              <dt>
+                <span class="dpad" role="img" aria-label="Arrow keys">
+                  <kbd class="key key--arrow key--up"></kbd>
+                  <kbd class="key key--arrow key--left"></kbd>
+                  <kbd class="key key--arrow key--down"></kbd>
+                  <kbd class="key key--arrow key--right"></kbd>
+                </span>
+              </dt>
+              <dd>MOVE</dd>
+              <dt><kbd class="key">Z</kbd></dt>
+              <dd>FIRE</dd>
+            </dl>
+          </section>
+
+          <section class="card card--p2">
+            <h2 class="card__title">2P CONTROL</h2>
+            <dl class="controls">
+              <dt>
+                <span class="wasd">
+                  <kbd class="key">W</kbd>
+                  <kbd class="key">A</kbd>
+                  <kbd class="key">S</kbd>
+                  <kbd class="key">D</kbd>
+                </span>
+              </dt>
+              <dd>MOVE</dd>
+              <dt><kbd class="key">J</kbd></dt>
+              <dd>FIRE</dd>
+            </dl>
+          </section>
+
+          <section class="card card--sys">
+            <h2 class="card__title">SYSTEM</h2>
+            <dl class="controls">
+              <dt><kbd class="key key--wide">SPACE</kbd></dt>
+              <dd>1P / 2P MODE</dd>
+              <dt><kbd class="key key--arrow key--left" aria-label="Left arrow"></kbd> <kbd class="key key--arrow key--right" aria-label="Right arrow"></kbd></dt>
+              <dd>DIFFICULTY</dd>
+              <dt><kbd class="key key--wide">ENTER</kbd></dt>
+              <dd>START &middot; PAUSE</dd>
+              <dt><kbd class="key">M</kbd></dt>
+              <dd>SOUND ON / OFF</dd>
+            </dl>
+          </section>
+
+          <section class="card card--gifts">
+            <h2 class="card__title">POWER-UPS</h2>
+            <ul class="gifts">
+              <li><i class="gift gift--star" aria-hidden="true"></i>LEVEL UP</li>
+              <li><i class="gift gift--gun" aria-hidden="true"></i>TOP GUN</li>
+              <li><i class="gift gift--hat" aria-hidden="true"></i>SHIELD</li>
+              <li><i class="gift gift--ship" aria-hidden="true"></i>CROSS WATER</li>
+              <li><i class="gift gift--clock" aria-hidden="true"></i>FREEZE ENEMY</li>
+              <li><i class="gift gift--shovel" aria-hidden="true"></i>STEEL BASE</li>
+              <li><i class="gift gift--life" aria-hidden="true"></i>EXTRA LIFE</li>
+              <li><i class="gift gift--mine" aria-hidden="true"></i>CLEAR SCREEN</li>
+            </ul>
+          </section>
+
+          <p class="coin">PRESS ENTER TO START</p>
+        </aside>
+      </main>
+
+      <footer class="credits">
+        &copy; BEN<span class="heart">&#9829;</span>FENG &middot; MIT LICENSE &middot;
+        <a href="https://github.com/bencao/fc_tank">SOURCE ON GITHUB</a>
+      </footer>
     </div>
+
     <script src="vendor/kinetic.min.js"></script>
     <script type="module" src="src/bootstrap.js"></script>
   </body>

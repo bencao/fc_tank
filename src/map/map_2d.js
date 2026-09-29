@@ -2,7 +2,7 @@ import { BinomialHeap, BinomialHeapNode } from "../engine/data_structures.js";
 import { MapArea2DVertex } from "./map_area_2d_vertex.js";
 import { Missile } from "../objects/missile.js";
 import { Terrain } from "./terrains.js";
-import { Gift, getGiftClasses } from "../objects/gifts.js";
+import { Gift, pickGiftClass } from "../objects/gifts.js";
 import { Tank, UserTank, EnemyTank } from "../objects/tanks.js";
 
 export class Map2D {
@@ -31,6 +31,16 @@ export class Map2D {
 
     this.image = document.getElementById("tank_sprite");
 
+    // Terrain filed by the route lattice's 10px cells, so a question about a
+    // small area looks at the walls around it rather than every one on the map.
+    this.terrain_cell = this.default_width / 4;
+    this.terrain_grid_columns = Math.ceil(this.max_x / this.terrain_cell);
+    this.terrain_grid_rows = Math.ceil(this.max_y / this.terrain_cell);
+    this.terrain_grid = Array.from(
+      { length: this.terrain_grid_columns * this.terrain_grid_rows },
+      () => []
+    );
+
     this.vertexes_columns = (4 * this.max_x) / this.default_width - 3;
     this.vertexes_rows = (4 * this.max_y) / this.default_height - 3;
     this.vertexes = this.init_vertexes();
@@ -49,6 +59,7 @@ export class Map2D {
     terrain.new_display();
     terrain.after_new_display();
     this.terrains.push(terrain);
+    this._each_terrain_cell(terrain.area, cell => cell.push(terrain));
     this.map_units.push(terrain);
     return terrain;
   }
@@ -71,17 +82,10 @@ export class Map2D {
     return missile;
   }
 
-  random_gift() {
+  random_gift(gift_class = pickGiftClass()) {
     this.gifts.forEach(gift => gift.destroy());
 
-    const gift_classes = getGiftClasses();
-    const vx = Math.floor(Math.random() * this.vertexes_rows);
-    const vy = Math.floor(Math.random() * this.vertexes_columns);
-    const gift_choice = Math.floor(Math.random() * gift_classes.length);
-    const gift = new gift_classes[gift_choice](
-      this,
-      this.vertexes[vx][vy].clone()
-    );
+    const gift = new gift_class(this, this._gift_vertex(gift_class).clone());
     gift.new_display();
     gift.after_new_display();
     this.gifts.push(gift);
@@ -92,6 +96,10 @@ export class Map2D {
   delete_map_unit(map_unit) {
     if (map_unit instanceof Terrain) {
       this.terrains = this.terrains.filter(t => t !== map_unit);
+      this._each_terrain_cell(map_unit.area, cell => {
+        const at = cell.indexOf(map_unit);
+        if (at >= 0) { cell.splice(at, 1); }
+      });
     } else if (map_unit instanceof Missile) {
       this.missiles = this.missiles.filter(m => m !== map_unit);
     } else if (map_unit instanceof Tank) {
@@ -118,20 +126,62 @@ export class Map2D {
     return this.tanks.filter(tank => tank instanceof EnemyTank);
   }
 
+  // A tank at least three quarters under grass can't be seen by the other side.
+  hidden_in_grass(tank) {
+    const covered = this.terrains_at(tank.area)
+      .filter(terrain => terrain.type() === "grass")
+      .map(grass => grass.area.intersect(tank.area))
+      .filter(overlap => overlap.valid())
+      .reduce((sum, overlap) => sum + overlap.width() * overlap.height(), 0);
+    return covered >= 0.75 * tank.area.width() * tank.area.height();
+  }
+
+  // Player tanks the enemies can see: on the field and not hiding in grass.
+  visible_user_tanks() {
+    return this.user_tanks().filter(tank => !tank.destroyed && !this.hidden_in_grass(tank));
+  }
+
   units_at(area) {
     return this.map_units.filter(map_unit => map_unit.area.collide(area));
+  }
+
+  // Same as units_at, for terrain only - and without a scan of the whole map.
+  terrains_at(area) {
+    const found = new Set();
+    this._each_terrain_cell(area, cell => {
+      for (const terrain of cell) {
+        if (terrain.area.collide(area)) { found.add(terrain); }
+      }
+    });
+    return [...found];
+  }
+
+  _each_terrain_cell(area, visit) {
+    const size = this.terrain_cell;
+    const clamp = (value, cells) => Math.min(Math.max(value, 0), cells - 1);
+    const x1 = clamp(Math.floor(area.x1 / size), this.terrain_grid_columns);
+    const x2 = clamp(Math.ceil(area.x2 / size) - 1, this.terrain_grid_columns);
+    const y1 = clamp(Math.floor(area.y1 / size), this.terrain_grid_rows);
+    const y2 = clamp(Math.ceil(area.y2 / size) - 1, this.terrain_grid_rows);
+    for (let x = x1; x <= x2; x++) {
+      for (let y = y1; y <= y2; y++) {
+        visit(this.terrain_grid[y * this.terrain_grid_columns + x]);
+      }
+    }
   }
   out_of_bound(area) {
     return (
       area.x1 < 0 || area.x2 > this.max_x || area.y1 < 0 || area.y2 > this.max_y
     );
   }
+  // The overlap test goes first: it is plain arithmetic, and for all but a
+  // few units it settles the question without asking accept().
   area_available(unit, area) {
     return this.map_units.every(map_unit => {
       return (
         map_unit === unit ||
-        map_unit.accept(unit) ||
-        !map_unit.area.collide(area)
+        !map_unit.area.collide(area) ||
+        map_unit.accept(unit)
       );
     });
   }
@@ -179,12 +229,70 @@ export class Map2D {
     return this.vertexes[vx][vy];
   }
 
-  random_vertex() {
-    let vx = Math.floor(Math.random() * this.vertexes_rows);
+  // Somewhere to head for. Given a tank, it avoids squares that tank could
+  // never enter - sending it after a spot inside an iron block just means no
+  // route exists and the tank stands around instead of attacking.
+  // Somewhere an ordinary tank could actually drive to - a gift sealed inside
+  // an iron block is a gift nobody ever collects. Power-ups that hit a whole
+  // side at once favour the player's (bottom) half 1.2 : 1, as the player has
+  // one tank to reach them with against the enemies' many.
+  _gift_vertex(gift_class) {
+    const driver = { power: 1, ship: false };
+    if (!gift_class.game_changer) {
+      return this.random_vertex(driver);
+    }
+    const middle = this.max_y / 2 - this.default_height / 2;
+    const want_bottom = Math.random() < 1.2 / 2.2;
+    let vertex = this.random_vertex(driver);
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (want_bottom ? vertex.y1 > middle : vertex.y1 < middle) {
+        return vertex;
+      }
+      vertex = this.random_vertex(driver);
+    }
+    return vertex;
+  }
+
+  random_vertex(tank) {
+    let vertex = this._random_lattice_vertex();
+    if (tank == null) {
+      return vertex;
+    }
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (this.can_occupy(tank, vertex)) { return vertex; }
+      vertex = this._random_lattice_vertex();
+    }
+    // Open ground is scarce on this map; go and look for some.
+    return this._search_occupiable_vertex(tank) ?? vertex;
+  }
+
+  _search_occupiable_vertex(tank) {
+    const columns = Math.ceil(this.vertexes_columns / 2);
+    const rows = Math.ceil(this.vertexes_rows / 2);
+    const total = columns * rows;
+    const from = Math.floor(Math.random() * total);
+    for (let step = 0; step < total; step++) {
+      const at = (from + step) % total;
+      const vertex = this.vertexes[(at % columns) * 2][Math.floor(at / columns) * 2];
+      if (this.can_occupy(tank, vertex)) {
+        return vertex;
+      }
+    }
+    return null;
+  }
+
+  can_occupy(tank, area) {
+    return this.terrains_at(area).every(
+      terrain => terrain.weight(tank) < this.infinity
+    );
+  }
+
+  _random_lattice_vertex() {
+    let vx = Math.floor(Math.random() * this.vertexes_columns);
     if (vx % 2 === 1) {
       vx = vx - 1;
     }
-    let vy = Math.floor(Math.random() * this.vertexes_columns);
+    let vy = Math.floor(Math.random() * this.vertexes_rows);
     if (vy % 2 === 1) {
       vy = vy - 1;
     }
@@ -194,14 +302,18 @@ export class Map2D {
   weight(tank, from, to) {
     const sub_areas = to.sub(from);
     const sub_area = sub_areas[0];
-    const terrain_units = this.units_at(sub_area).filter(
-      unit => unit instanceof Terrain
-    );
+    const terrain_units = this.terrains_at(sub_area);
     if (terrain_units.length === 0) {
       return 1;
     }
     const weights = terrain_units.map(terrain_unit => terrain_unit.weight(tank));
     const max_weight = Math.max(...weights);
+    // Terrain this tank simply cannot enter stays impassable. Scaling it down
+    // by the size of the step would turn "never" into "expensive", and the
+    // route would drive straight into an iron wall.
+    if (max_weight >= this.infinity) {
+      return this.infinity;
+    }
     return (
       (max_weight / (this.default_width * this.default_height)) *
       sub_area.width() *
@@ -209,7 +321,19 @@ export class Map2D {
     );
   }
 
+  // Tanks sit on a half-tile lattice, so a vertex offset half a tile in both
+  // axes is somewhere no tank can ever stand and nothing can route to. Aim at
+  // the nearest spot a tank could actually occupy instead.
+  reachable_vertex(vertex) {
+    if (vertex.vx % 2 === 0 || vertex.vy % 2 === 0) {
+      return vertex;
+    }
+    return this.vertexes[vertex.vx - 1][vertex.vy];
+  }
+
   shortest_path(tank, start_vertex, end_vertex) {
+    start_vertex = this.reachable_vertex(start_vertex);
+    end_vertex = this.reachable_vertex(end_vertex);
     const [d, pi] = this.intialize_single_source(end_vertex);
     d[start_vertex.vx][start_vertex.vy].key = 0;
     const heap = new BinomialHeap();
@@ -257,6 +381,9 @@ export class Map2D {
     if (v.vy % 2 === 1 && u.vy % 2 === 1) {
       return;
     }
+    if (w >= this.infinity) {
+      return;
+    }
     const aw = v.a_star_weight(target_vertex) - u.a_star_weight(target_vertex);
     if (d[v.vx][v.vy].key > d[u.vx][u.vy].key + w + aw) {
       heap.decrease_key(d[v.vx][v.vy], d[u.vx][u.vy].key + w + aw);
@@ -264,14 +391,22 @@ export class Map2D {
     }
   }
 
+  // The route back from the goal, tank's own square excluded so the first step
+  // is always a real move. An empty result means there is no way through.
   calculate_shortest_path_from_pi(pi, start_vertex, end_vertex) {
     const reverse_paths = [];
+    const seen = new Set();
     let v = end_vertex;
-    while (pi[v.vx][v.vy] !== null) {
+    while (v !== start_vertex) {
+      // Predecessors can point in a circle when nothing links back to the
+      // start; walking one would never end.
+      if (v === null || seen.has(v)) {
+        return [];
+      }
+      seen.add(v);
       reverse_paths.push(v);
       v = pi[v.vx][v.vy];
     }
-    reverse_paths.push(start_vertex);
     return reverse_paths.reverse();
   }
 

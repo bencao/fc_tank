@@ -8,6 +8,12 @@ export class Terrain extends MapUnit2D {
   accept(map_unit) {
     return false;
   }
+  // A terrain is a single still frame, drawn whenever its layer is. Starting
+  // the sprite would only run a timer and an animation for every piece of
+  // wall on the map - and every shot brick leaves more pieces.
+  after_new_display() {
+    this.map.groups[this.group].add(this.display_object);
+  }
   new_display() {
     let animation;
     const animations = structuredClone(Animations.terrain(this.type()));
@@ -191,5 +197,13 @@ export class HomeTerrain extends Terrain {
   restore_defend_terrains() {
     this.delete_defend_terrains();
     return this.add_defend_terrains(BrickTerrain);
+  }
+
+  // A second shovel restarts the countdown rather than being cut short by
+  // the first one's.
+  restore_defend_terrains_after(delay) {
+    clearTimeout(this.restore_timeout);
+    this.attach_timeout_event(() => this.restore_defend_terrains(), delay);
+    this.restore_timeout = this.attached_timeout_handlers.at(-1);
   }
 }

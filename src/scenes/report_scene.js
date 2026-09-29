@@ -17,6 +17,7 @@ export class ReportScene extends Scene {
     this.game.update_status(
       "hi_score",
       Math.max(
+        this.game.get_status("hi_score"),
         this.game.get_status("p1_score"),
         this.game.get_status("p2_score"),
         this.game.get_config("initial_hi_score")
@@ -26,7 +27,7 @@ export class ReportScene extends Scene {
     this.view.update_hi_score(this.game.get_status("hi_score"));
     return setTimeout(() => {
       if (this.game.get_status("game_over")) {
-        return this.game.switch_scene("welcome");
+        return this.game.switch_scene(this.anyone_scored() ? "name_entry" : "welcome");
       } else {
         this.game.next_stage();
         this.game.update_status("stage_autostart", true);
@@ -37,6 +38,12 @@ export class ReportScene extends Scene {
 
   stop() {
     return super.stop();
+  }
+
+  // Whoever scored gets to put their initials on the leaderboard.
+  anyone_scored() {
+    return this.game.get_status("p1_score") > 0 ||
+      (!this.game.single_player_mode() && this.game.get_status("p2_score") > 0);
   }
 
   calculate_numbers(user) {

@@ -25,6 +25,8 @@ globalThis.Kinetic = {
 if (!globalThis.document) {
   globalThis.document = {};
 }
+globalThis.document.addEventListener = vi.fn();
+globalThis.document.removeEventListener = vi.fn();
 globalThis.document.getElementById = vi.fn((id) => {
   if (id === 'tank_sprite') return {};
   return null;
@@ -93,5 +95,64 @@ describe('Game', () => {
   it('increase_p2_score adds to p2 score', () => {
     game.increase_p2_score(500);
     expect(game.get_status('p2_score')).toBe(500);
+  });
+});
+
+describe('Game difficulty', () => {
+  it('starts on NORMAL and turns up or down one step at a time, stopping at either end', () => {
+    const game = new Game();
+    expect(game.difficulty().name).toBe('NORMAL');
+
+    game.harder();
+    expect(game.difficulty().name).toBe('HARD');
+    game.harder();
+    expect(game.difficulty().name).toBe('NIGHTMARE');
+    game.harder();
+    expect(game.difficulty().name).toBe('NIGHTMARE');
+
+    game.easier();
+    game.easier();
+    game.easier();
+    expect(game.difficulty().name).toBe('EASY');
+    game.easier();
+    expect(game.difficulty().name).toBe('EASY');
+  });
+
+  it('tells listeners the new difficulty whenever it turns', () => {
+    const game = new Game();
+    const seen = [];
+    game.on_difficulty_change(difficulty => seen.push(difficulty.name));
+
+    game.harder();
+    game.harder();
+    game.easier();
+
+    expect(seen).toEqual(['HARD', 'NIGHTMARE', 'HARD']);
+  });
+});
+
+describe('Game scene change listeners', () => {
+  it('notifies listeners with the name of the scene it switched to', () => {
+    const game = new Game();
+    const seen = [];
+    game.on_scene_change(name => seen.push(name));
+
+    game.switch_scene('stage');
+    game.switch_scene('report');
+
+    expect(seen).toEqual(['stage', 'report']);
+  });
+
+  it('supports more than one listener', () => {
+    const game = new Game();
+    const first = vi.fn();
+    const second = vi.fn();
+    game.on_scene_change(first);
+    game.on_scene_change(second);
+
+    game.switch_scene('report');
+
+    expect(first).toHaveBeenCalledWith('report');
+    expect(second).toHaveBeenCalledWith('report');
   });
 });

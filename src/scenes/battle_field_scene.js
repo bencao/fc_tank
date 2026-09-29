@@ -14,13 +14,18 @@ import {
   FoolTank
 } from "../objects/tanks.js";
 import { DemoAICommander } from "../objects/commanders.js";
+import { EnemyGuide } from "../ai/enemy_guide.js";
 
 export class BattleFieldScene extends Scene {
+  // Longest step the physics will take in one frame, in ms.
+  static max_delta_time = 100;
+
   constructor(game, view) {
     super(game, view);
     this.layer = this.view.layer;
     this.map = new Map2D(this.layer);
     this.builder = new TiledMapBuilder(this.map, terrainsJson);
+    this.enemy_guide = new EnemyGuide(this.map);
     this.reset_config_variables();
   }
 
@@ -48,6 +53,7 @@ export class BattleFieldScene extends Scene {
     this.view.update_enemy_statuses(this.remain_enemy_counts);
     this.view.update_p1_lives(this.remain_user_p1_lives);
     this.view.update_p2_lives(this.remain_user_p2_lives);
+    this.view.update_difficulty(this.game.difficulty().name);
     return this.view.update_stage(this.current_stage);
   }
 
@@ -69,6 +75,7 @@ export class BattleFieldScene extends Scene {
 
   stop() {
     super.stop();
+    clearTimeout(this.finish_timeout);
     this.stop_time_line();
     return this.map.reset();
   }
@@ -280,9 +287,19 @@ export class BattleFieldScene extends Scene {
     return this.enable_user_control();
   }
 
-  integration(offset) {
-    if (!this.running) return;
-    const delta_time = Math.round(offset - this.startedAt);
+  integration(offset, loop_id) {
+    // A loop from an earlier stage must die rather than run alongside this one.
+    if (!this.running || loop_id !== this.loop_id) return;
+
+    // A backgrounded tab serves no frames, so the first one back can carry a
+    // delta of many seconds. Cap it: better a skipped moment than tanks and
+    // missiles teleporting across the map in a single step. A frame's stamp
+    // is when it began, which can be just before the time line started - and
+    // time must not run backwards.
+    const delta_time = Math.max(0, Math.min(
+      Math.round(offset - this.startedAt),
+      BattleFieldScene.max_delta_time
+    ));
 
     for (let m of this.map.missiles) {
       m.integration(delta_time);
@@ -297,15 +314,24 @@ export class BattleFieldScene extends Scene {
     this.frame_rate += 1;
     this.startedAt = offset;
 
-    if (this.startedAt !== null) {
-      requestAnimationFrame(this.integration.bind(this));
-    }
+    requestAnimationFrame(next => this.integration(next, loop_id));
   }
 
   start_time_line() {
     this.startedAt = performance.now();
 
-    requestAnimationFrame(this.integration.bind(this));
+    const loop_id = this.next_loop_id();
+    requestAnimationFrame(offset => this.integration(offset, loop_id));
+
+    // Jev picks objectives every couple of seconds: for the enemies on
+    // NIGHTMARE, and always for the AI-driven player tank in the demo.
+    const guided = {
+      enemies: this.game.difficulty().jev_guide,
+      players: Boolean(this.is_demo_mode())
+    };
+    if (guided.enemies || guided.players) {
+      this.enemy_guide.start(guided);
+    }
 
     // show frame rate
     this.frame_timeline = setInterval(() => {
@@ -315,9 +341,16 @@ export class BattleFieldScene extends Scene {
   }
 
   stop_time_line() {
+    this.running = false;
     this.startedAt = null;
+    this.next_loop_id();
+    this.enemy_guide.stop();
 
     return clearInterval(this.frame_timeline);
+  }
+
+  next_loop_id() {
+    return (this.loop_id = (this.loop_id ?? 0) + 1);
   }
 
   add_extra_life(tank) {
@@ -349,7 +382,7 @@ export class BattleFieldScene extends Scene {
         UserP1Tank,
         new MapArea2D(160, 480, 200, 520)
       );
-      p1_tank.level_up(this.game.get_status("p1_level") - 1);
+      p1_tank.level_up(this.arrival_level("p1_level") - 1);
       p1_tank.on_ship(this.game.get_status("p1_ship"));
       if (this.is_demo_mode()) {
         p1_tank.commander = new DemoAICommander(p1_tank);
@@ -365,13 +398,18 @@ export class BattleFieldScene extends Scene {
         UserP2Tank,
         new MapArea2D(320, 480, 360, 520)
       );
-      p2_tank.level_up(this.game.get_status("p2_level") - 1);
+      p2_tank.level_up(this.arrival_level("p2_level") - 1);
       p2_tank.on_ship(this.game.get_status("p2_ship"));
       if (this.is_demo_mode()) {
         p2_tank.commander = new DemoAICommander(p2_tank);
       }
       return this.view.update_p2_lives(this.remain_user_p2_lives);
     }
+  }
+
+  // A player tank arrives at the level it had, or the difficulty's minimum.
+  arrival_level(status_key) {
+    return Math.max(this.game.get_status(status_key), this.game.difficulty().player_level);
   }
 
   born_enemy_tank() {
@@ -384,10 +422,16 @@ export class BattleFieldScene extends Scene {
       ];
       const enemy_tank_types = [StupidTank, FishTank, FoolTank, StrongTank];
       const randomed = Math.floor(Math.random() * enemy_tank_types.length);
-      this.map.add_tank(
+      const tank = this.map.add_tank(
         enemy_tank_types[randomed],
         enemy_born_areas[this.last_enemy_born_area_index]
       );
+      const difficulty = this.game.difficulty();
+      tank.commander.shoot_on_sight = difficulty.shoot_on_sight;
+      tank.commander.blunder_rate = difficulty.blunder_rate;
+      if (difficulty.extra_enemy_hp > 0) {
+        tank.hp_up(difficulty.extra_enemy_hp);
+      }
       this.last_enemy_born_area_index =
         (this.last_enemy_born_area_index + 1) % 3;
       return this.view.update_enemy_statuses(this.remain_enemy_counts);
@@ -403,8 +447,14 @@ export class BattleFieldScene extends Scene {
     }
   }
 
+  // Lives count only the tanks held in reserve - in a two-player game the
+  // other player can be out of lives and still fighting with their last tank.
   check_enemy_win() {
-    if (this.remain_user_p1_lives === 0 && this.remain_user_p2_lives === 0) {
+    if (
+      this.remain_user_p1_lives === 0 &&
+      this.remain_user_p2_lives === 0 &&
+      this.map.user_tanks().length === 0
+    ) {
       return this.enemy_win();
     }
   }
@@ -415,12 +465,12 @@ export class BattleFieldScene extends Scene {
     }
     this.winner = "user";
     if (this.is_demo_mode()) {
-      return setTimeout(() => {
+      return this.finish_after(() => {
         this.game.update_status('demo_mode', false);
         return this.game.switch_scene("welcome");
       }, 3000);
     }
-    return setTimeout(() => {
+    return this.finish_after(() => {
       this.save_user_status();
       return this.game.switch_scene("report");
     }, 3000);
@@ -432,17 +482,25 @@ export class BattleFieldScene extends Scene {
     }
     this.winner = "enemy";
     if (this.is_demo_mode()) {
-      return setTimeout(() => {
+      return this.finish_after(() => {
         this.game.update_status('demo_mode', false);
         return this.game.switch_scene("welcome");
       }, 3000);
     }
     this.disable_user_controls();
-    return setTimeout(() => {
+    return this.finish_after(() => {
       this.game.update_status("game_over", true);
       this.sound.play("lose");
       return this.game.switch_scene("report");
     }, 3000);
+  }
+
+  // The battle is decided; move on after a moment. Kept so that stopping the
+  // scene - the player leaving the demo, say - can call it off.
+  finish_after(next) {
+    clearTimeout(this.finish_timeout);
+    this.finish_timeout = setTimeout(next, 3000);
+    return this.finish_timeout;
   }
 
   increase_kill_score_by_user(tank, killed_by_tank) {

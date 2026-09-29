@@ -3,6 +3,10 @@ import { UserCommander, EnemyAICommander } from "./commanders.js";
 import { Missile } from "./missile.js";
 
 export class Tank extends MovableMapUnit2D {
+  // Time between shots, in ms. Without it a tank could refire the instant its
+  // missile was cancelled, and whoever reacts first would win every duel.
+  static reload_time = 300;
+
   constructor(map, area) {
     super(map, area);
     this.hp = 1;
@@ -23,7 +27,12 @@ export class Tank extends MovableMapUnit2D {
   }
 
   level_up(levels) {
+    const previous_level = this.level;
     this.level = Math.min(this.level + levels, 3);
+    // Armour is earned by gaining a level. Handing it out inside
+    // _level_adjust instead would also hand it out on the way down, so a hit
+    // that knocked a tank back a level would heal it.
+    this.hp = Math.min(this.hp + (this.level - previous_level), this.max_hp);
     return this._level_adjust();
   }
 
@@ -35,20 +44,21 @@ export class Tank extends MovableMapUnit2D {
         break;
       case 2:
         this.power = 1;
-        this.hp = Math.max(this.hp + 1, this.max_hp);
         this.max_missile = 2;
         break;
       case 3:
         this.power = 2;
-        this.hp = Math.max(this.hp + 1, this.max_hp);
         this.max_missile = 2;
         break;
     }
     return this.update_display();
   }
 
+  // Not negative damage: taking a hit also costs a level and, for an enemy
+  // carrying one, drops a power-up - neither should happen on a heal.
   hp_up(lives) {
-    return this.hp_down(-lives);
+    this.hp += lives;
+    return this.update_display();
   }
 
   hp_down(lives) {
@@ -70,11 +80,16 @@ export class Tank extends MovableMapUnit2D {
     if (!this.can_fire()) {
       return;
     }
+    this.reload_left = this.constructor.reload_time;
     return this.missiles.push(this.map.add_missile(this));
   }
 
   can_fire() {
-    return this.missiles.length < this.max_missile;
+    return this.missiles.length < this.max_missile && !(this.reload_left > 0);
+  }
+
+  reload(delta_time) {
+    this.reload_left = Math.max((this.reload_left ?? 0) - delta_time, 0);
   }
 
   freeze() {
@@ -98,6 +113,12 @@ export class Tank extends MovableMapUnit2D {
     }
   }
 
+  // Every command passes through handle_move; only a move that is allowed to
+  // happen should run the engine - not a shot, or a frozen tank.
+  is_driving(cmd) {
+    return cmd.type === "start_move" && !this.frozen;
+  }
+
   handle_fire(cmd) {
     switch (cmd.type) {
       case "fire":
@@ -109,6 +130,7 @@ export class Tank extends MovableMapUnit2D {
     if (this.initializing || this.destroyed) {
       return;
     }
+    this.reload(delta_time);
     super.integration(delta_time);
     this.commands.forEach(cmd => this.handle_fire(cmd));
   }
@@ -119,10 +141,13 @@ export class Tank extends MovableMapUnit2D {
 
   after_new_display() {
     super.after_new_display();
-    return this.display_object.afterFrame(4, () => {
-      this.initializing = false;
-      return this.update_display();
-    });
+    return this.display_object.afterFrame(4, () => this.born());
+  }
+
+  // The born animation is over and the tank takes to the field.
+  born() {
+    this.initializing = false;
+    return this.update_display();
   }
 
   destroy() {
@@ -130,17 +155,38 @@ export class Tank extends MovableMapUnit2D {
   }
 }
 
+// Player tanks move, shoot and reload this much faster than they otherwise
+// would, at every difficulty - enough to win a one-on-one, not a crowd.
+export const PLAYER_EDGE = 1.2;
+
 export class UserTank extends Tank {
-  static speed = 0.13;
+  static speed = 0.13 * PLAYER_EDGE;
+  static missile_speed_boost = PLAYER_EDGE;
+  static reload_time = Tank.reload_time / PLAYER_EDGE;
+  // How long a hat keeps the guard up, in ms.
+  static guard_time = 10000;
+  // How long a freshly arrived tank is guarded once it can move, in ms. It is
+  // guarded through the born animation too, when it can't dodge anything.
+  static spawn_guard_time = 4000;
+  // How long a shot asked for too early waits for the gun, in ms.
+  static fire_buffer_time = 200;
 
   constructor(map, area) {
     super(map, area);
-    this.guard = false;
+    this.guard = true;
   }
-  on_guard(guard) {
+  born() {
+    super.born();
+    return this.on_guard(true, this.constructor.spawn_guard_time);
+  }
+  // A new guard replaces the old one's countdown, so the arrival guard running
+  // out can't cut short a hat picked up in the meantime.
+  on_guard(guard, duration = this.constructor.guard_time) {
+    clearTimeout(this.guard_timeout);
     this.guard = guard;
     if (this.guard) {
-      this.attach_timeout_event(() => this.on_guard(false), 10000);
+      this.attach_timeout_event(() => this.on_guard(false), duration);
+      this.guard_timeout = this.attached_timeout_handlers.at(-1);
     }
     return this.update_display();
   }
@@ -185,13 +231,38 @@ export class UserTank extends Tank {
   }
 
   fire() {
-    super.fire();
+    if (!super.fire()) {
+      return;
+    }
+    this.fire_buffer_left = 0;
     return this.map.trigger("user_fired");
+  }
+
+  // A shot asked for while the gun isn't ready is held on to for a moment and
+  // fired the instant it is, rather than dropped - otherwise a tap a hair too
+  // early is simply lost and the gun feels like it jams.
+  handle_fire(cmd) {
+    if (cmd.type === "fire" && !this.fire()) {
+      this.fire_buffer_left = this.constructor.fire_buffer_time;
+    }
+  }
+
+  integration(delta_time) {
+    if (this.initializing || this.destroyed) {
+      return;
+    }
+    this.fire_buffer_left = Math.max((this.fire_buffer_left ?? 0) - delta_time, 0);
+    super.integration(delta_time);
+    if (this.fire_buffer_left > 0) {
+      this.fire();
+    }
   }
 
   handle_move(cmd, delta_time) {
     super.handle_move(cmd, delta_time);
-    return this.map.trigger("user_moved");
+    if (this.is_driving(cmd)) {
+      return this.map.trigger("user_moved");
+    }
   }
 }
 
@@ -276,7 +347,9 @@ export class EnemyTank extends Tank {
   }
   handle_move(cmd, delta_time) {
     super.handle_move(cmd, delta_time);
-    return this.map.trigger("enemy_moved");
+    if (this.is_driving(cmd)) {
+      return this.map.trigger("enemy_moved");
+    }
   }
 }
 
