@@ -225,6 +225,16 @@ class PathfindingCommander extends Commander {
     return this.start_move();
   }
 
+  // Objective chosen by Jev (see src/ai/enemy_guide.js). Until guidance
+  // arrives - or if it never does - the commander's own rules decide.
+  follow(objective) {
+    if (objective === this.objective) {
+      return;
+    }
+    this.objective = objective;
+    this.reset_path();
+  }
+
   may_plan_route() {
     return this.ticks_since_path >= this.repath_delay;
   }
@@ -446,16 +456,6 @@ export class EnemyAICommander extends PathfindingCommander {
     return (this.last_area = this.map_unit.area);
   }
 
-  // Objective chosen by Jev (see src/ai/enemy_guide.js). Until guidance
-  // arrives - or if it never does - the tank's own iq decides.
-  follow(objective) {
-    if (objective === this.objective) {
-      return;
-    }
-    this.objective = objective;
-    this.reset_path();
-  }
-
   goal_vertex() {
     if (this.objective === "attack_base") {
       return this.map.home_vertex;
@@ -501,6 +501,10 @@ export class DemoAICommander extends PathfindingCommander {
   // single kill, so they are rushed without stopping to trade shots.
   static game_changers = ["clock", "land_mine"];
 
+  // Where the demo tank stands to guard the base: P1's spawn point, right
+  // beside it and always reachable.
+  static guard_post = { area: new MapArea2D(160, 480, 200, 520) };
+
   next() {
     const enemies = this.map.enemy_tanks().filter(t => !t.destroyed && !t.initializing);
     if (enemies.length === 0) {
@@ -525,13 +529,15 @@ export class DemoAICommander extends PathfindingCommander {
       return;
     }
 
-    // Priority 2: pick up a power-up; otherwise pathfind toward nearest enemy.
-    // A power-up that appears mid-chase takes over from the enemy.
-    if (power_up && this.route_target !== power_up) {
+    // Priority 2: head where Jev says; without guidance, pick up a power-up
+    // or else pathfind toward the nearest enemy. A power-up that appears
+    // mid-chase takes over from the enemy, unless Jev has other plans.
+    const wants_power_up = rushing || !this.objective || this.objective === "get_power_up";
+    if (power_up && wants_power_up && this.route_target !== power_up) {
       this.reset_path();
     }
     if (this.path.length === 0) {
-      const target = power_up ?? this._find_nearest_enemy(enemies);
+      const target = this._route_target(enemies, wants_power_up ? power_up : null);
       if (target && this.may_plan_route()) {
         this.route_target = target;
         this.plan_route(this.map.vertexes_at(target.area));
@@ -556,6 +562,13 @@ export class DemoAICommander extends PathfindingCommander {
     }
 
     this.last_area = this.map_unit.area;
+  }
+
+  _route_target(enemies, power_up) {
+    if (this.objective === "defend_base") {
+      return DemoAICommander.guard_post;
+    }
+    return power_up ?? this._find_nearest_enemy(enemies);
   }
 
   _find_nearest_enemy(enemies) {

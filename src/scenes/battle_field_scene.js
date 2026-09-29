@@ -319,11 +319,14 @@ export class BattleFieldScene extends Scene {
     const loop_id = this.next_loop_id();
     requestAnimationFrame(offset => this.integration(offset, loop_id));
 
-    // Jev picks each enemy's objective every couple of seconds. The demo plays
-    // unattended on the welcome screen, so it sticks to the built-in AI, as
-    // does EASY.
-    if (!this.is_demo_mode() && this.game.difficulty().jev_guide) {
-      this.enemy_guide.start();
+    // Jev picks objectives every couple of seconds: for the enemies on
+    // NIGHTMARE, and always for the AI-driven player tank in the demo.
+    const guided = {
+      enemies: this.game.difficulty().jev_guide,
+      players: Boolean(this.is_demo_mode())
+    };
+    if (guided.enemies || guided.players) {
+      this.enemy_guide.start(guided);
     }
 
     // show frame rate

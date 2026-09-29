@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { build_guide_request, guide_enemies, parse_snapshot, handle_guide_request } from '../../server/enemy_guide.js';
 
 const snapshot = {
+  guide: { enemies: true, players: false },
   base: { x: 6, y: 12 },
-  players: [{ id: 'p1', x: 4, y: 12, level: 1 }],
+  players: [{ id: 'p1', x: 4, y: 12, level: 1, distance_to_nearest_enemy: 11, distance_to_power_up: 7 }],
   power_ups: [{ type: 'star', x: 3, y: 6 }],
   enemies: [
     { id: 'e1', type: 'fish', x: 0, y: 0, hp: 2, distance_to_base: 18, distance_to_nearest_player: 16, distance_to_power_up: 9 },
@@ -25,13 +26,28 @@ describe('build_guide_request', () => {
     const { state } = build_guide_request(snapshot);
 
     expect(state.power_ups).toEqual([
-      { type: 'star', x: 3, y: 6, effect: expect.stringMatching(/upgrade/i) }
+      { type: 'star', x: 3, y: 6, if_enemy_takes_it: expect.stringMatching(/upgrade/i), if_player_takes_it: expect.stringMatching(/upgrade/i) }
     ]);
     expect(state.enemy_priorities).toEqual([
       expect.stringMatching(/power-up/),
       expect.stringMatching(/player tanks/),
       expect.stringMatching(/base/)
     ]);
+  });
+});
+
+describe('build_guide_request for the demo player', () => {
+  it('asks the player tank its own objective, and skips enemies it was not asked to guide', () => {
+    const { state, questions } = build_guide_request({ ...snapshot, guide: { enemies: false, players: true } });
+
+    expect(Object.keys(questions)).toEqual(['p1']);
+    expect(Object.keys(questions.p1.criteria)).toEqual(['get_power_up', 'hunt_enemy', 'defend_base']);
+    expect(JSON.stringify(questions.p1.instructions)).toContain('`players[0]`');
+    expect(state.player_priorities).toHaveLength(3);
+    expect(state.power_ups[0]).toMatchObject({
+      if_enemy_takes_it: expect.stringMatching(/enemy/i),
+      if_player_takes_it: expect.stringMatching(/player/i)
+    });
   });
 });
 

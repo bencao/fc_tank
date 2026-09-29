@@ -122,20 +122,22 @@ describe('BattleFieldScene enemy guide', () => {
     scene.running = true;
 
     scene.start_time_line();
-    expect(scene.enemy_guide.start).toHaveBeenCalledTimes(1);
+    expect(scene.enemy_guide.start).toHaveBeenCalledWith({ enemies: true, players: false });
 
     scene.stop_time_line();
     expect(scene.enemy_guide.stop).toHaveBeenCalled();
   });
 
-  it('leaves the demo to the built-in AI', () => {
-    const scene = makeGuidedScene({ demo: true, level: 3 });
-    scene.running = true;
+  it('always lets Jev steer the demo player, and the enemies too on NIGHTMARE', () => {
+    for (const [level, enemies] of [[1, false], [3, true]]) {
+      const scene = makeGuidedScene({ demo: true, level });
+      scene.running = true;
 
-    scene.start_time_line();
-    scene.stop_time_line();
+      scene.start_time_line();
+      scene.stop_time_line();
 
-    expect(scene.enemy_guide.start).not.toHaveBeenCalled();
+      expect(scene.enemy_guide.start).toHaveBeenCalledWith({ enemies, players: true });
+    }
   });
 
   it('leaves EASY, NORMAL and HARD to the classic built-in AI', () => {

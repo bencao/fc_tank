@@ -471,3 +471,55 @@ describe('EnemyAICommander wrong-way blunders', () => {
     expect(map.path_requests).toBe(0);
   });
 });
+
+describe('DemoAICommander following Jev guidance', () => {
+  function makeGuidedDemo(gift_type) {
+    const here = Object.assign(new MapArea2D(200, 400, 240, 440), { vx: 20, vy: 40 });
+    const spots = {
+      400: Object.assign(new MapArea2D(400, 400, 440, 440), { vx: 40, vy: 40 }),
+      160: Object.assign(new MapArea2D(160, 480, 200, 520), { vx: 16, vy: 48 }),
+      0: Object.assign(new MapArea2D(0, 0, 40, 40), { vx: 0, vy: 0 }),
+      200: here
+    };
+    const map = {
+      gifts: gift_type ? [{ type: () => gift_type, area: new MapArea2D(400, 400, 440, 440), destroyed: false }] : [],
+      enemy_tanks: () => [{ area: new MapArea2D(0, 0, 40, 40), destroyed: false, initializing: false }],
+      units_at: () => [],
+      vertexes_at: area => spots[area.x1],
+      goals: [],
+      shortest_path(tank, start, end) { map.goals.push(end); return []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 400, 240, 440), direction: Direction.UP, power: 1,
+      delayed_commands: [], can_fire: () => true
+    };
+    return { commander: new DemoAICommander(tank), map, spots };
+  }
+
+  it('chases the enemy when told to hunt, even with a power-up about', () => {
+    const { commander, map, spots } = makeGuidedDemo('star');
+
+    commander.follow('hunt_enemy');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([spots[0]]);
+  });
+
+  it('falls back beside the base when told to defend it', () => {
+    const { commander, map, spots } = makeGuidedDemo(null);
+
+    commander.follow('defend_base');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([spots[160]]);
+  });
+
+  it('still rushes a clock whatever Jev says', () => {
+    const { commander, map, spots } = makeGuidedDemo('clock');
+
+    commander.follow('hunt_enemy');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([spots[400]]);
+  });
+});

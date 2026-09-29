@@ -28,14 +28,17 @@ SPACE picks 1P / 2P):
 At every level, player tanks and their missiles get a 1.2x speed edge. The
 levels live in `src/difficulty.js`.
 
-NIGHTMARE needs a TypeSafe API key. Put it in `.env.local` (git-ignored) - and
+Leave the start screen idle and a demo plays, with Jev steering the AI player
+tank - grab the power-up, hunt an enemy, or fall back to guard the base.
+
+NIGHTMARE and the demo need a TypeSafe API key. Put it in `.env.local` (git-ignored) - and
 in the Vercel project's environment for deploys:
 
 ```bash
 TYPESAFE_API_KEY=...
 ```
 
-Without a key the endpoint fails and NIGHTMARE enemies fall back to the classic AI.
+Without a key the endpoint fails and the tanks fall back to their built-in AI.
 
 ## Test
 

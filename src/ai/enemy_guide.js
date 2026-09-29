@@ -1,5 +1,6 @@
-// Asks Jev (through /api/enemy-guide) which objective each enemy tank should
-// pursue, and hands the answers to the tanks' commanders. The commanders keep
+// Asks Jev (through /api/enemy-guide) which objective each enemy tank - and, in
+// the demo, the AI-driven player tank - should pursue, and hands the answers
+// to the tanks' commanders. The commanders keep
 // doing the driving; this only tells them where to head.
 
 const TILE = 40;
@@ -19,18 +20,9 @@ function id_of(tank) {
 const tile = value => value / TILE;
 const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
-export function battlefield_snapshot(map) {
+export function battlefield_snapshot(map, guide = { enemies: true, players: false }) {
   const home = map.home();
   const base = home ? { x: tile(home.area.x1), y: tile(home.area.y1) } : { x: 6, y: 12 };
-  const players = map
-    .user_tanks()
-    .filter(tank => !tank.destroyed)
-    .map(tank => ({
-      id: tank.type() === "user_p1" ? "p1" : "p2",
-      x: tile(tank.area.x1),
-      y: tile(tank.area.y1),
-      level: tank.level
-    }));
   const power_ups = map.gifts
     .filter(gift => !gift.destroyed)
     .map(gift => ({ type: gift.type(), x: tile(gift.area.x1), y: tile(gift.area.y1) }));
@@ -39,23 +31,34 @@ export function battlefield_snapshot(map) {
     // Nothing there - say so with a distance larger than the map.
     return Number.isFinite(closest) ? closest : 99;
   };
-  const enemies = map
-    .enemy_tanks()
-    .filter(tank => !tank.destroyed)
-    .map(tank => {
-      const at = { x: tile(tank.area.x1), y: tile(tank.area.y1) };
-      return {
-        id: id_of(tank),
-        type: tank.type(),
-        ...at,
-        hp: tank.hp,
-        distance_to_base: distance(at, base),
-        distance_to_nearest_player: nearest(at, players),
-        distance_to_power_up: nearest(at, power_ups)
-      };
-    });
-  return { base, players, power_ups, enemies };
+  const on_field = tanks => tanks.filter(tank => !tank.destroyed);
+  const tile_of = tank => ({ x: tile(tank.area.x1), y: tile(tank.area.y1) });
+  const players = on_field(map.user_tanks()).map(tank => {
+    const at = tile_of(tank);
+    return {
+      id: player_id(tank),
+      ...at,
+      level: tank.level,
+      distance_to_nearest_enemy: nearest(at, on_field(map.enemy_tanks()).map(tile_of)),
+      distance_to_power_up: nearest(at, power_ups)
+    };
+  });
+  const enemies = on_field(map.enemy_tanks()).map(tank => {
+    const at = tile_of(tank);
+    return {
+      id: id_of(tank),
+      type: tank.type(),
+      ...at,
+      hp: tank.hp,
+      distance_to_base: distance(at, base),
+      distance_to_nearest_player: nearest(at, players),
+      distance_to_power_up: nearest(at, power_ups)
+    };
+  });
+  return { guide, base, players, power_ups, enemies };
 }
+
+const player_id = tank => (tank.type() === "user_p1" ? "p1" : "p2");
 
 export class EnemyGuide {
   static interval = 2000;
@@ -63,12 +66,15 @@ export class EnemyGuide {
   constructor(map, { fetch = globalThis.fetch.bind(globalThis) } = {}) {
     this.map = map;
     this.fetch = fetch;
+    // Which side(s) Jev steers; set by start().
+    this.guided = { enemies: true, players: false };
     this.in_flight = false;
     this.run = 0;
   }
 
-  start() {
+  start(guided = { enemies: true, players: false }) {
     this.stop();
+    this.guided = guided;
     const run = this.run;
     this.timer = setInterval(() => {
       // One question at a time: a late answer is already about a battlefield
@@ -89,13 +95,16 @@ export class EnemyGuide {
   }
 
   async tick(run = this.run) {
-    const tanks = new Map(this.map.enemy_tanks().map(tank => [id_of(tank), tank]));
+    const tanks = new Map([
+      ...this.map.enemy_tanks().map(tank => [id_of(tank), tank]),
+      ...this.map.user_tanks().map(tank => [player_id(tank), tank])
+    ]);
     let guidance;
     try {
       const response = await this.fetch("/api/enemy-guide", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(battlefield_snapshot(this.map))
+        body: JSON.stringify(battlefield_snapshot(this.map, this.guided))
       });
       if (!response.ok) {
         return;

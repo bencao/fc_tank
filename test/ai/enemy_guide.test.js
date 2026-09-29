@@ -8,7 +8,10 @@ function makeMap() {
     commander: { follow(objective) { this.objective = objective; } }
   });
   const enemies = [enemy('fish', 0, 0, 2), enemy('strong', 240, 400, 4)];
-  const players = [{ type: () => 'user_p1', area: new MapArea2D(160, 480, 200, 520), level: 2, destroyed: false }];
+  const players = [{
+    type: () => 'user_p1', area: new MapArea2D(160, 480, 200, 520), level: 2, destroyed: false,
+    commander: { follow(objective) { this.objective = objective; } }
+  }];
   const gifts = [{ type: () => 'star', area: new MapArea2D(120, 240, 160, 280), destroyed: false }];
   return {
     enemies,
@@ -27,7 +30,9 @@ describe('battlefield_snapshot', () => {
     const snapshot = battlefield_snapshot(map);
 
     expect(snapshot.base).toEqual({ x: 6, y: 12 });
-    expect(snapshot.players).toEqual([{ id: 'p1', x: 4, y: 12, level: 2 }]);
+    expect(snapshot.players).toEqual([
+      { id: 'p1', x: 4, y: 12, level: 2, distance_to_nearest_enemy: 4, distance_to_power_up: 7 }
+    ]);
     expect(snapshot.power_ups).toEqual([{ type: 'star', x: 3, y: 6 }]);
     expect(snapshot.enemies).toHaveLength(2);
     expect(snapshot.enemies[1]).toMatchObject({
@@ -59,6 +64,22 @@ describe('EnemyGuide', () => {
     expect(posts[0].url).toBe('/api/enemy-guide');
     expect(posts[0].body.enemies).toHaveLength(2);
     expect(map.enemies.map(t => t.commander.objective)).toEqual(['roam', 'attack_base']);
+  });
+
+  it('says who it wants guided, and steers the demo player tank with its answer', async () => {
+    const map = makeMap();
+    const posts = [];
+    const fetch = async (url, init) => {
+      posts.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ guidance: { p1: { objective: 'defend_base', confidence: 0.8 } } }));
+    };
+
+    const guide = new EnemyGuide(map, { fetch });
+    guide.guided = { enemies: false, players: true };
+    await guide.tick();
+
+    expect(posts[0].guide).toEqual({ enemies: false, players: true });
+    expect(map.players[0].commander.objective).toBe('defend_base');
   });
 
   it('leaves the tanks to their own devices when guidance is unavailable', async () => {
