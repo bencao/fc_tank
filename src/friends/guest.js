@@ -203,6 +203,7 @@ class GuestNameEntryScene extends MirrorScene {
       this.show_initials();
     });
     this.keyboard.on_key_down("ENTER", () => this.save());
+    this.keyboard.on_key_down("SPACE", () => this.save(null));
   }
 
   show_initials() {
@@ -212,11 +213,12 @@ class GuestNameEntryScene extends MirrorScene {
     this.idle_timer = setTimeout(() => this.save(), 30_000);
   }
 
-  save() {
+  // name: null opts out of the board.
+  save(name = this.initials?.text()) {
     if (this.sent || !this.initials) { return; }
     this.sent = true;
     clearTimeout(this.idle_timer);
-    this.game.friends?.send("initials", { name: this.initials.text() });
+    this.game.friends?.send("initials", { name });
     return this.view.show_waiting();
   }
 }
