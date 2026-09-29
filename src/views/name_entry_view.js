@@ -42,7 +42,7 @@ export class NameEntryView extends View {
   show_player(label, score) {
     this.player_label.setText(label);
     this.score_label.setText(String(score));
-    this.hint.setText("UP/DOWN: LETTER   FIRE: NEXT   ENTER: DONE");
+    this.hint.setText("UP/DOWN: LETTER  FIRE: NEXT  ENTER: DONE  SPACE: SKIP");
     return this.layer.draw();
   }
 
