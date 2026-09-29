@@ -6,19 +6,19 @@ function mockKineticObj() {
     add: vi.fn(), hide: vi.fn(), show: vi.fn(), draw: vi.fn(),
     move: vi.fn(), start: vi.fn(), stop: vi.fn(), destroy: vi.fn(),
     setAbsolutePosition: vi.fn(), setText: vi.fn(), play: vi.fn(),
-    clone: vi.fn(() => mockKineticObj()),
+    clone: vi.fn(mockKineticObj),
   };
   return obj;
 }
 globalThis.Kinetic = {
-  Stage: vi.fn(() => mockKineticObj()),
-  Layer: vi.fn(() => mockKineticObj()),
-  Group: vi.fn(() => mockKineticObj()),
-  Sprite: vi.fn(() => mockKineticObj()),
-  Text: vi.fn(() => mockKineticObj()),
-  Rect: vi.fn(() => mockKineticObj()),
-  Tween: vi.fn(() => mockKineticObj()),
-  Path: vi.fn(() => mockKineticObj()),
+  Stage: vi.fn(mockKineticObj),
+  Layer: vi.fn(mockKineticObj),
+  Group: vi.fn(mockKineticObj),
+  Sprite: vi.fn(mockKineticObj),
+  Text: vi.fn(mockKineticObj),
+  Rect: vi.fn(mockKineticObj),
+  Tween: vi.fn(mockKineticObj),
+  Path: vi.fn(mockKineticObj),
   Easings: { Linear: 'linear' }
 };
 
