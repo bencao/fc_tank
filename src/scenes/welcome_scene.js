@@ -71,9 +71,16 @@ export class WelcomeScene extends Scene {
     });
   }
 
+  // Left idle, the title screen shows the leaderboard and a demo in turn,
+  // like an arcade's attract mode.
   start_demo_timer() {
     this.clear_demo_timer();
     this.demo_timer = setTimeout(() => {
+      const demo_next = this.game.get_status('attract_demo_next');
+      this.game.update_status('attract_demo_next', !demo_next);
+      if (!demo_next) {
+        return this.game.switch_scene('high_scores');
+      }
       this.game.update_status('demo_mode', true);
       const random_stage = 1 + Math.floor(Math.random() * this.game.get_config('total_stages'));
       this.game.update_status('current_stage', random_stage);
