@@ -7,7 +7,7 @@ function enemyGuideApi() {
   return {
     name: 'enemy-guide-api',
     configureServer(server) {
-      Object.assign(process.env, loadEnv(server.config.mode, process.cwd(), 'TYPESAFE_'));
+      Object.assign(process.env, loadEnv(server.config.mode, process.cwd(), ['TYPESAFE_', 'KV_', 'UPSTASH_', 'JEV_']));
       server.middlewares.use('/api/enemy-guide', async (req, res) => {
         const { POST } = await server.ssrLoadModule('/api/enemy-guide.js');
         const response = await POST(new Request(`http://localhost${req.originalUrl}`, {
@@ -17,7 +17,7 @@ function enemyGuideApi() {
           duplex: 'half',
         }));
         res.statusCode = response.status;
-        res.setHeader('content-type', response.headers.get('content-type') ?? 'application/json');
+        response.headers.forEach((value, name) => res.setHeader(name, value));
         res.end(await response.text());
       });
     },

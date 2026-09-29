@@ -70,6 +70,8 @@ export class EnemyGuide {
     this.guided = { enemies: true, players: false };
     this.in_flight = false;
     this.run = 0;
+    // Set when the Jev call budget runs out: no asking before this time (ms).
+    this.resume_at = 0;
   }
 
   start(guided = { enemies: true, players: false }) {
@@ -95,6 +97,9 @@ export class EnemyGuide {
   }
 
   async tick(run = this.run) {
+    if (Date.now() < this.resume_at) {
+      return;
+    }
     const tanks = new Map([
       ...this.map.enemy_tanks().map(tank => [id_of(tank), tank]),
       ...this.map.user_tanks().map(tank => [player_id(tank), tank])
@@ -106,6 +111,9 @@ export class EnemyGuide {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(battlefield_snapshot(this.map, this.guided))
       });
+      if (response.status === 429) {
+        return this.budget_spent(tanks, response);
+      }
       if (!response.ok) {
         return;
       }
@@ -119,6 +127,16 @@ export class EnemyGuide {
     }
     for (const [id, { objective }] of Object.entries(guidance)) {
       tanks.get(id)?.commander.follow(objective);
+    }
+  }
+
+  // The day's Jev call budget is gone: every tank drops what Jev told it and
+  // goes back to its built-in AI, and nobody asks again until the budget resets.
+  budget_spent(tanks, response) {
+    const retry_after = Number.parseInt(response.headers.get("retry-after"), 10);
+    this.resume_at = Date.now() + (Number.isFinite(retry_after) ? retry_after : 3600) * 1000;
+    for (const tank of tanks.values()) {
+      tank.commander.follow(null);
     }
   }
 }

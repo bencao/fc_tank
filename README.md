@@ -40,6 +40,12 @@ TYPESAFE_API_KEY=...
 
 Without a key the endpoint fails and the tanks fall back to their built-in AI.
 
+Jev calls are capped at 5,000 per UTC day (set `JEV_DAILY_CALL_BUDGET` to
+change it), counted in the Upstash Redis store connected to the Vercel project
+(`KV_REST_API_URL` / `KV_REST_API_TOKEN`). Once the day's budget is spent the
+endpoint answers `429`, and every tank goes back to its built-in AI until
+midnight UTC. Without a store (local dev) calls are counted per process.
+
 ## Test
 
 ```bash

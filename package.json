@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",
+    "@upstash/redis": "^1.39.0",
     "howler": "^2.2.4"
   }
 }

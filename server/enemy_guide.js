@@ -165,13 +165,33 @@ export function parse_snapshot(body) {
   };
 }
 
-export async function handle_guide_request(request, client) {
+// budget: a JevBudget (server/jev_budget.js) - every Jev call is charged to it.
+export async function handle_guide_request(request, client, budget) {
   let snapshot;
   try {
     snapshot = parse_snapshot(await request.json());
   } catch {
     return Response.json({ error: "expected a battlefield snapshot" }, { status: 400 });
   }
+  if (Object.keys(build_guide_request(snapshot).questions).length === 0) {
+    return Response.json({ guidance: {} });
+  }
+
+  let spend;
+  try {
+    spend = await budget.spend();
+  } catch (error) {
+    // Can't tell what has been spent, so don't spend any more.
+    console.error("enemy guide: call budget unavailable", error);
+    return Response.json({ error: "guidance unavailable" }, { status: 503 });
+  }
+  if (!spend.allowed) {
+    return Response.json(
+      { error: "Jev call budget spent for today" },
+      { status: 429, headers: { "retry-after": String(spend.retry_after_seconds) } }
+    );
+  }
+
   try {
     return Response.json({ guidance: await guide_enemies(client, snapshot) });
   } catch (error) {

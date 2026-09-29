@@ -122,4 +122,36 @@ describe('EnemyGuide', () => {
       expect(map.enemies[0].commander.objective).toBeUndefined();
     });
   });
+
+  describe('when the Jev call budget is spent', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('drops every Jev objective and stops asking until the budget resets', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-28T23:00:00Z'));
+      const map = makeMap();
+      map.enemies[0].commander.follow('attack_base');
+      map.players[0].commander.follow('hunt_enemy');
+      let asked = 0;
+      const fetch = async () => {
+        asked += 1;
+        return new Response('{"error":"Jev call budget spent for today"}', {
+          status: 429, headers: { 'retry-after': '3600' }
+        });
+      };
+      const guide = new EnemyGuide(map, { fetch });
+      guide.guided = { enemies: true, players: true };
+
+      await guide.tick();
+      expect(map.enemies[0].commander.objective).toBeNull();
+      expect(map.players[0].commander.objective).toBeNull();
+
+      await guide.tick();
+      expect(asked).toBe(1);
+
+      vi.setSystemTime(new Date('2026-09-29T00:00:01Z'));
+      await guide.tick();
+      expect(asked).toBe(2);
+    });
+  });
 });

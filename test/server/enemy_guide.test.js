@@ -110,8 +110,10 @@ describe('handle_guide_request', () => {
     })
   };
 
+  const open_budget = { spend: async () => ({ allowed: true }) };
+
   it('answers a snapshot with guidance as JSON', async () => {
-    const response = await handle_guide_request(post(snapshot), client);
+    const response = await handle_guide_request(post(snapshot), client, open_budget);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       guidance: {
@@ -122,13 +124,41 @@ describe('handle_guide_request', () => {
   });
 
   it('refuses a body that is not a snapshot', async () => {
-    const response = await handle_guide_request(post('not json'), client);
+    const response = await handle_guide_request(post('not json'), client, open_budget);
     expect(response.status).toBe(400);
   });
 
   it('reports a failed Jev call as a bad gateway', async () => {
     const failing = { systemOne: async () => { throw new Error('down'); } };
-    const response = await handle_guide_request(post(snapshot), failing);
+    const response = await handle_guide_request(post(snapshot), failing, open_budget);
     expect(response.status).toBe(502);
+  });
+
+  it('turns Jev away once the call budget is spent, saying when to try again', async () => {
+    const spent = { spend: async () => ({ allowed: false, retry_after_seconds: 3600 }) };
+    const untouched = { systemOne: async () => { throw new Error('should not be called'); } };
+
+    const response = await handle_guide_request(post(snapshot), untouched, spent);
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('3600');
+  });
+
+  it('does not call Jev when the budget cannot be checked', async () => {
+    const unreachable = { spend: async () => { throw new Error('redis down'); } };
+    const untouched = { systemOne: async () => { throw new Error('should not be called'); } };
+
+    const response = await handle_guide_request(post(snapshot), untouched, unreachable);
+
+    expect(response.status).toBe(503);
+  });
+
+  it('charges nothing when there is nobody to guide', async () => {
+    let charged = 0;
+    const counting = { spend: async () => { charged += 1; return { allowed: true }; } };
+
+    await handle_guide_request(post({ ...snapshot, enemies: [] }), client, counting);
+
+    expect(charged).toBe(0);
   });
 });
