@@ -53,6 +53,7 @@ export class BattleFieldScene extends Scene {
     this.view.update_enemy_statuses(this.remain_enemy_counts);
     this.view.update_p1_lives(this.remain_user_p1_lives);
     this.view.update_p2_lives(this.remain_user_p2_lives);
+    this.view.update_difficulty(this.game.difficulty().name);
     return this.view.update_stage(this.current_stage);
   }
 

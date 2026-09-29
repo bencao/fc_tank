@@ -517,6 +517,294 @@ body::after {
   border-bottom-color: var(--amber);
 }
 
+/* ------------------------------- gamepad -------------------------------- */
+
+/* An FC controller for touch screens - only shown there (data-input is set by
+   src/ui/virtual_gamepad.js). It presses the same keys a keyboard would. */
+.gamepad {
+  display: none;
+}
+
+[data-input="touch"] .gamepad {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: clamp(6px, 2vw, 12px);
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: clamp(10px, 3vw, 16px) clamp(10px, 3.5vw, 18px);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #d9d2c3, #b8b0a0);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.25),
+    0 14px 30px rgba(0, 0, 0, 0.6);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+.gamepad__dpad {
+  --arm: clamp(32px, 10vw, 44px);
+  position: relative;
+  width: calc(var(--arm) * 3);
+  height: calc(var(--arm) * 3);
+  touch-action: none;
+  /* A little dark well the cross sits in. */
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.18) 55%, transparent 72%);
+}
+
+.gamepad__arm,
+.gamepad__hub {
+  position: absolute;
+  width: var(--arm);
+  height: var(--arm);
+  background: linear-gradient(180deg, #2d2b28, #121110);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12);
+}
+
+.gamepad__hub { left: var(--arm); top: var(--arm); }
+.gamepad__arm--up { left: var(--arm); top: 0; border-radius: 6px 6px 0 0; }
+.gamepad__arm--down { left: var(--arm); bottom: 0; border-radius: 0 0 6px 6px; }
+.gamepad__arm--left { left: 0; top: var(--arm); border-radius: 6px 0 0 6px; }
+.gamepad__arm--right { right: 0; top: var(--arm); border-radius: 0 6px 6px 0; }
+
+/* Embossed arrows on each arm. */
+.gamepad__arm::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border: 7px solid transparent;
+  transform: translate(-50%, -50%);
+}
+.gamepad__arm--up::before { border-bottom-color: #555; margin-top: -4px; }
+.gamepad__arm--down::before { border-top-color: #555; margin-top: 4px; }
+.gamepad__arm--left::before { border-right-color: #555; margin-left: -4px; }
+.gamepad__arm--right::before { border-left-color: #555; margin-left: 4px; }
+
+.gamepad__dpad[data-direction="UP"] .gamepad__arm--up,
+.gamepad__dpad[data-direction="DOWN"] .gamepad__arm--down,
+.gamepad__dpad[data-direction="LEFT"] .gamepad__arm--left,
+.gamepad__dpad[data-direction="RIGHT"] .gamepad__arm--right {
+  background: #0a0a09;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.8);
+}
+
+.gamepad__dpad[data-direction="UP"] .gamepad__arm--up::before { border-bottom-color: var(--amber); }
+.gamepad__dpad[data-direction="DOWN"] .gamepad__arm--down::before { border-top-color: var(--amber); }
+.gamepad__dpad[data-direction="LEFT"] .gamepad__arm--left::before { border-right-color: var(--amber); }
+.gamepad__dpad[data-direction="RIGHT"] .gamepad__arm--right::before { border-left-color: var(--amber); }
+
+.gamepad__system {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.gamepad__pill {
+  min-width: 48px;
+  padding: 8px 2px 6px;
+  font-family: var(--pixel);
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--brick-dark);
+  background: none;
+  border: 0;
+  touch-action: none;
+}
+
+/* The rubber pill itself sits above its printed label. */
+.gamepad__pill::before {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 14px;
+  margin: 0 auto 7px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #3a3835, #1b1a18);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+.gamepad__pill.is-pressed::before {
+  background: #0a0a09;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.8);
+}
+
+.gamepad__buttons {
+  display: flex;
+  gap: clamp(8px, 2.5vw, 14px);
+  /* Tilted like the real pad's A/B pair. */
+  transform: rotate(-18deg);
+}
+
+.gamepad__fire {
+  width: clamp(46px, 13vw, 60px);
+  height: clamp(46px, 13vw, 60px);
+  border-radius: 50%;
+  border: 3px solid #1b1a18;
+  font-family: var(--pixel);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  background: radial-gradient(circle at 35% 30%, #ff6a4a, var(--danger) 55%, #8a1a00 100%);
+  box-shadow: 0 4px 0 #4a0e00, 0 6px 10px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+}
+
+.gamepad__fire--a {
+  margin-top: -18px;
+}
+
+.gamepad__fire.is-pressed {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #4a0e00, 0 2px 4px rgba(0, 0, 0, 0.5);
+  filter: brightness(1.2);
+}
+
+/* A narrow phone has no room for the pills side by side. */
+@media (max-width: 480px) {
+  .gamepad__system {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+}
+
+/* On a touch screen the page is the console: the keyboard legend, footer and
+   most of the marquee give their room to the picture and the pad. */
+[data-input="touch"] body {
+  padding:
+    max(10px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  touch-action: manipulation;
+}
+
+[data-input="touch"] .panel,
+[data-input="touch"] .credits,
+[data-input="touch"] .marquee__sub,
+[data-input="touch"] .brickline,
+[data-input="touch"] .tv__chin {
+  display: none;
+}
+
+[data-input="touch"] .marquee {
+  margin-bottom: 10px;
+}
+
+[data-input="touch"] .marquee__title {
+  font-size: 20px;
+}
+
+[data-input="touch"] .deck {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+[data-input="touch"] .tv,
+[data-input="touch"] .tv__bezel {
+  padding: 6px;
+  border-radius: 10px;
+}
+
+/* Sideways, the pad splits either side of the picture like a handheld. */
+@media (orientation: landscape) {
+  [data-input="touch"] .marquee {
+    display: none;
+  }
+
+  [data-input="touch"] .deck {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "dpad tv system"
+      "dpad tv buttons";
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 18px;
+  }
+
+  [data-input="touch"] .tv-slot { grid-area: tv; }
+  [data-input="touch"] .gamepad { display: contents; }
+  [data-input="touch"] .gamepad__dpad { grid-area: dpad; }
+  [data-input="touch"] .gamepad__system { grid-area: system; align-self: end; }
+  [data-input="touch"] .gamepad__buttons { grid-area: buttons; align-self: start; margin-top: 24px; }
+  /* No plastic body behind them here, so the printing goes light. */
+  [data-input="touch"] .gamepad__pill { color: var(--steel); }
+}
+
+/* ------------------------------- nightmare ------------------------------ */
+
+/* NIGHTMARE turns the room's lamp blood red: the wall grid glows like hot
+   coals, the set throws a pulsing red halo, and the marquee burns. */
+[data-difficulty="nightmare"] body {
+  background:
+    radial-gradient(120% 90% at 50% 0%, #4a0a06 0%, #1c0504 50%, #070101 100%),
+    #070101;
+  background-attachment: fixed;
+}
+
+[data-difficulty="nightmare"] body::before {
+  background-image:
+    linear-gradient(rgba(219, 43, 0, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(219, 43, 0, 0.14) 1px, transparent 1px),
+    radial-gradient(60% 45% at 50% 38%, rgba(219, 43, 0, 0.22), transparent 70%);
+  background-size: 40px 40px, 40px 40px, 100% 100%;
+  animation: dread 3.2s ease-in-out infinite;
+}
+
+@keyframes dread {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+[data-difficulty="nightmare"] .tv {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.6),
+    0 24px 60px rgba(0, 0, 0, 0.75),
+    0 0 90px rgba(219, 43, 0, 0.45);
+}
+
+[data-difficulty="nightmare"] .tv__screen {
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 30px rgba(255, 40, 0, 0.35);
+}
+
+[data-difficulty="nightmare"] .tv__led {
+  background: var(--danger);
+  box-shadow: 0 0 10px var(--danger), inset 0 0 3px rgba(255, 255, 255, 0.8);
+}
+
+[data-difficulty="nightmare"] .marquee__title {
+  color: #ff5a2a;
+  text-shadow:
+    3px 0 #4a0a06,
+    -3px 0 #4a0a06,
+    0 3px #4a0a06,
+    0 -3px #4a0a06,
+    0 7px #4a0a06,
+    0 9px #1c0504,
+    0 0 36px rgba(255, 30, 0, 0.9);
+}
+
+[data-difficulty="nightmare"] .marquee__title em {
+  color: var(--amber);
+}
+
+[data-difficulty="nightmare"] .card {
+  border-top-color: #7a2a1c;
+  border-left-color: #7a2a1c;
+  border-bottom-color: #2a0806;
+  border-right-color: #2a0806;
+  background: linear-gradient(180deg, #1e0f0d, #120807);
+}
+
 /* ------------------------------ small screens --------------------------- */
 
 @media (max-width: 960px) {
@@ -536,7 +824,8 @@ body::after {
 
 @media (prefers-reduced-motion: reduce) {
   .tv__glare,
-  .coin {
+  .coin,
+  [data-difficulty="nightmare"] body::before {
     animation: none;
   }
 }

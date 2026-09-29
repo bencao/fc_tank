@@ -1,5 +1,9 @@
 import { View } from "../engine/view.js";
 
+// Ink for the difficulty in the status bar - NIGHTMARE in the same red as the
+// room it turns blood red.
+const DIFFICULTY_INK = { EASY: "#060", NORMAL: "#000", HARD: "#730", NIGHTMARE: "#c00" };
+
 export class BattleFieldView extends View {
   init_view() {
     this.status_panel = new Kinetic.Group();
@@ -9,6 +13,7 @@ export class BattleFieldView extends View {
     this.init_enemy_tanks_statuses();
     this.init_p1_tank_status();
     this.init_p2_tank_status();
+    this.init_difficulty();
     return this.init_stage();
   }
 
@@ -35,6 +40,11 @@ export class BattleFieldView extends View {
 
   update_p2_lives(remain_user_p2_lives) {
     return this.user_p2_remain_lives_label.setText(remain_user_p2_lives);
+  }
+
+  update_difficulty(name) {
+    this.difficulty_label.setText(name);
+    return this.difficulty_label.setFill(DIFFICULTY_INK[name] ?? "#000");
   }
 
   update_stage(current_stage) {
@@ -142,6 +152,23 @@ export class BattleFieldView extends View {
     });
     this.status_panel.add(user_p2_label);
     return this.status_panel.add(this.user_p2_remain_lives_label);
+  }
+
+  // Squeezed between 2P and the stage flag: small enough that NIGHTMARE fits
+  // the bar's width.
+  init_difficulty() {
+    this.difficulty_label = new Kinetic.Text({
+      x         : 520,
+      y         : 400,
+      width     : 80,
+      align     : "center",
+      fontSize  : 12,
+      fontStyle : "bold",
+      fontFamily: "Courier",
+      text      : "",
+      fill      : "#000"
+    });
+    return this.status_panel.add(this.difficulty_label);
   }
 
   init_stage() {

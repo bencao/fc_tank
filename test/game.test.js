@@ -117,6 +117,18 @@ describe('Game difficulty', () => {
     game.easier();
     expect(game.difficulty().name).toBe('EASY');
   });
+
+  it('tells listeners the new difficulty whenever it turns', () => {
+    const game = new Game();
+    const seen = [];
+    game.on_difficulty_change(difficulty => seen.push(difficulty.name));
+
+    game.harder();
+    game.harder();
+    game.easier();
+
+    expect(seen).toEqual(['HARD', 'NIGHTMARE', 'HARD']);
+  });
 });
 
 describe('Game scene change listeners', () => {

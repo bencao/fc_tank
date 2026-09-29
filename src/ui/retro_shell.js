@@ -16,6 +16,15 @@ export function reflect_current_scene(root, game) {
   return show;
 }
 
+// NIGHTMARE dresses the whole room differently, so the page needs to know
+// where the difficulty dial sits - now and whenever it turns.
+export function reflect_difficulty(root, game) {
+  const show = difficulty => { root.dataset.difficulty = difficulty.name.toLowerCase(); };
+  game.on_difficulty_change(show);
+  show(game.difficulty());
+  return show;
+}
+
 export function install_screen_scaling(root, screen) {
   const apply = () => {
     // Two passes: the first resizes the screen, the second re-measures the
@@ -32,9 +41,12 @@ export function install_screen_scaling(root, screen) {
 }
 
 function fit(root, screen) {
+  // On a touch screen the pad has to stay in reach, so the picture always
+  // shares the window with it instead of pushing it off the bottom.
+  const touch = root.dataset.input === "touch";
   const stacked = window.matchMedia(STACKED_LAYOUT).matches;
   const available_width = slot_of(screen).clientWidth;
-  const available_height = stacked ? Infinity : viewport_room_for(screen);
+  const available_height = stacked && !touch ? Infinity : viewport_room_for(screen);
   const scale = compute_scale(available_width, available_height, BASE_WIDTH, BASE_HEIGHT, MAX_SCALE);
   root.style.setProperty("--screen-scale", scale);
 }
