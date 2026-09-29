@@ -51,3 +51,39 @@ describe('WelcomeScene selection controls', () => {
     expect(players()).toBe(2);
   });
 });
+
+describe('WelcomeScene when left idle', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function makeIdleWelcome() {
+    const statuses = {};
+    const scene = Object.create(WelcomeScene.prototype);
+    scene.game = {
+      get_status: key => statuses[key],
+      update_status: (key, value) => { statuses[key] = value; },
+      get_config: () => 50,
+      switch_scene: vi.fn()
+    };
+    return { scene, statuses };
+  }
+
+  // Like the arcade's attract mode: the leaderboard, then a demo, in turn.
+  it('shows the high scores and the demo in turn', () => {
+    vi.useFakeTimers();
+    const { scene, statuses } = makeIdleWelcome();
+
+    scene.start_demo_timer();
+    vi.advanceTimersByTime(5000);
+    expect(scene.game.switch_scene).toHaveBeenLastCalledWith('high_scores');
+    expect(statuses.demo_mode).toBeFalsy();
+
+    scene.start_demo_timer();
+    vi.advanceTimersByTime(5000);
+    expect(scene.game.switch_scene).toHaveBeenLastCalledWith('stage');
+    expect(statuses.demo_mode).toBe(true);
+
+    scene.start_demo_timer();
+    vi.advanceTimersByTime(5000);
+    expect(scene.game.switch_scene).toHaveBeenLastCalledWith('high_scores');
+  });
+});
