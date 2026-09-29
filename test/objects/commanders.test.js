@@ -326,6 +326,18 @@ describe('EnemyAICommander attacking players', () => {
     expect(commands).toContainEqual({ type: 'fire' });
   });
 
+  it('leaves lined-up players alone when shooting on sight is off', () => {
+    const commander = makeFacingPlayer();
+    commander.shoot_on_sight = false;
+    const orig = Math.random;
+    Math.random = () => 0.5; // rule out the random potshot
+    try {
+      expect(commander.next_commands()).not.toContainEqual({ type: 'fire' });
+    } finally {
+      Math.random = orig;
+    }
+  });
+
   it('holds fire when an iron wall is in the way', () => {
     const commander = makeFacingPlayer({ blocked: true });
     const orig = Math.random;

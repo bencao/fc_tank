@@ -6,6 +6,7 @@ export class WelcomeScene extends Scene {
     this.demo_timer = null;
     this.view.play_start_animation(() => {
       this.view.update_player_mode(this.game.single_player_mode());
+      this.view.update_difficulty(this.game.difficulty().name);
       this.enable_selection_control();
       return this.start_demo_timer();
     });
@@ -45,9 +46,28 @@ export class WelcomeScene extends Scene {
       return this.game.switch_scene('stage');
     });
 
-    return this.keyboard.on_key_down('SPACE', () => {
+    this.keyboard.on_key_down('SPACE', () => {
       this.reset_demo_timer();
       return this.toggle_players();
+    });
+    this.keyboard.on_key_down('UP', () => {
+      this.reset_demo_timer();
+      return this.choose_players(1);
+    });
+    this.keyboard.on_key_down('DOWN', () => {
+      this.reset_demo_timer();
+      return this.choose_players(2);
+    });
+
+    this.keyboard.on_key_down('LEFT', () => {
+      this.reset_demo_timer();
+      this.game.easier();
+      return this.view.update_difficulty(this.game.difficulty().name);
+    });
+    return this.keyboard.on_key_down('RIGHT', () => {
+      this.reset_demo_timer();
+      this.game.harder();
+      return this.view.update_difficulty(this.game.difficulty().name);
     });
   }
 
@@ -75,11 +95,11 @@ export class WelcomeScene extends Scene {
   }
 
   toggle_players() {
-    if (this.game.single_player_mode()) {
-      this.game.update_status('players', 2);
-    } else {
-      this.game.update_status('players', 1);
-    }
+    return this.choose_players(this.game.single_player_mode() ? 2 : 1);
+  }
+
+  choose_players(players) {
+    this.game.update_status('players', players);
     return this.view.update_player_mode(this.game.single_player_mode());
   }
 }

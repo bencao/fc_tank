@@ -10,6 +10,7 @@ export class WelcomeView extends View {
     this.init_tank_90_logo();
     this.init_player_mode_selection_text();
     this.init_player_mode_selection_tank();
+    this.init_difficulty_dial();
     return this.init_copy_right_text();
   }
 
@@ -23,6 +24,10 @@ export class WelcomeView extends View {
     } else {
       return this.selection_tank.setAbsolutePosition(170, 390);
     }
+  }
+
+  update_difficulty(name) {
+    return this.difficulty_label.setText(`< ${name} >`);
   }
 
   play_start_animation(callback) {
@@ -174,6 +179,19 @@ export class WelcomeView extends View {
       text      : "2 PLAYERS",
       fill      : "#fff"
     }));
+  }
+
+  init_difficulty_dial() {
+    this.difficulty_label = new Kinetic.Text({
+      x         : 210,
+      y         : 420,
+      fontSize  : 22,
+      fontStyle : "bold",
+      fontFamily: "Courier",
+      text      : "",
+      fill      : "#fc6"
+    });
+    return this.static_group.add(this.difficulty_label);
   }
 
   init_copy_right_text() {

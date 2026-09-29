@@ -320,8 +320,9 @@ export class BattleFieldScene extends Scene {
     requestAnimationFrame(offset => this.integration(offset, loop_id));
 
     // Jev picks each enemy's objective every couple of seconds. The demo plays
-    // unattended on the welcome screen, so it sticks to the built-in AI.
-    if (!this.is_demo_mode()) {
+    // unattended on the welcome screen, so it sticks to the built-in AI, as
+    // does EASY.
+    if (!this.is_demo_mode() && this.game.difficulty().jev_guide) {
       this.enemy_guide.start();
     }
 
@@ -409,10 +410,15 @@ export class BattleFieldScene extends Scene {
       ];
       const enemy_tank_types = [StupidTank, FishTank, FoolTank, StrongTank];
       const randomed = Math.floor(Math.random() * enemy_tank_types.length);
-      this.map.add_tank(
+      const tank = this.map.add_tank(
         enemy_tank_types[randomed],
         enemy_born_areas[this.last_enemy_born_area_index]
       );
+      const difficulty = this.game.difficulty();
+      tank.commander.shoot_on_sight = difficulty.shoot_on_sight;
+      if (difficulty.extra_enemy_hp > 0) {
+        tank.hp_up(difficulty.extra_enemy_hp);
+      }
       this.last_enemy_born_area_index =
         (this.last_enemy_born_area_index + 1) % 3;
       return this.view.update_enemy_statuses(this.remain_enemy_counts);

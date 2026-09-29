@@ -362,12 +362,15 @@ class PathfindingCommander extends Commander {
 }
 
 export class EnemyAICommander extends PathfindingCommander {
+  // Turned off on EASY (see src/difficulty.js).
+  shoot_on_sight = true;
+
   next() {
     const wedged = this.note_progress();
 
     // A player in the line of fire gets shot at, whatever the objective.
     // Skipped while wedged so a blocked tank still falls through to routing.
-    const prey = wedged
+    const prey = wedged || !this.shoot_on_sight
       ? null
       : this._find_aligned_target(this.map.user_tanks().filter(t => !t.destroyed));
     if (prey) {

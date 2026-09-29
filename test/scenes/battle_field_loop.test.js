@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BattleFieldScene } from '../../src/scenes/battle_field_scene.js';
+import { DIFFICULTIES } from '../../src/difficulty.js';
 
 // Drives the scene's requestAnimationFrame loop by hand so we can count how
 // many independent loops are alive at once.
@@ -22,7 +23,7 @@ function makeScene() {
   const scene = Object.create(BattleFieldScene.prototype);
   scene.map = { missiles: [], gifts: [], tanks: [] };
   scene.view = { update_frame_rate: vi.fn() };
-  scene.game = { get_status: () => false };
+  scene.game = { get_status: () => false, difficulty: () => DIFFICULTIES[1] };
   scene.enemy_guide = { start: vi.fn(), stop: vi.fn() };
   scene.frame_rate = 0;
   return scene;
@@ -107,9 +108,12 @@ describe('BattleFieldScene enemy guide', () => {
     vi.useRealTimers();
   });
 
-  function makeGuidedScene({ demo = false } = {}) {
+  function makeGuidedScene({ demo = false, level = 1 } = {}) {
     const scene = makeScene();
-    scene.game = { get_status: key => (key === 'demo_mode' ? demo : undefined) };
+    scene.game = {
+      get_status: key => (key === 'demo_mode' ? demo : undefined),
+      difficulty: () => DIFFICULTIES[level]
+    };
     return scene;
   }
 
@@ -132,5 +136,41 @@ describe('BattleFieldScene enemy guide', () => {
     scene.stop_time_line();
 
     expect(scene.enemy_guide.start).not.toHaveBeenCalled();
+  });
+
+  it('leaves EASY to the built-in AI', () => {
+    const scene = makeGuidedScene({ level: 0 });
+    scene.running = true;
+
+    scene.start_time_line();
+    scene.stop_time_line();
+
+    expect(scene.enemy_guide.start).not.toHaveBeenCalled();
+  });
+});
+
+describe('BattleFieldScene enemy arrivals', () => {
+  function arrive(level) {
+    const scene = Object.create(BattleFieldScene.prototype);
+    const tank = { commander: { shoot_on_sight: true }, hp_up: vi.fn() };
+    scene.game = { difficulty: () => DIFFICULTIES[level] };
+    scene.map = { add_tank: () => tank };
+    scene.view = { update_enemy_statuses: vi.fn() };
+    scene.remain_enemy_counts = 1;
+    scene.last_enemy_born_area_index = 0;
+    scene.born_enemy_tank();
+    return tank;
+  }
+
+  it('sends EASY enemies in without shooting on sight', () => {
+    const tank = arrive(0);
+    expect(tank.commander.shoot_on_sight).toBe(false);
+    expect(tank.hp_up).not.toHaveBeenCalled();
+  });
+
+  it('sends HARD enemies in with extra hit points', () => {
+    const tank = arrive(2);
+    expect(tank.commander.shoot_on_sight).toBe(true);
+    expect(tank.hp_up).toHaveBeenCalledWith(2);
   });
 });
