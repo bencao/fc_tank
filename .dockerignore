@@ -1,0 +1,29 @@
+# Dependencies (reinstalled inside the build stage)
+node_modules
+
+# Build output (regenerated inside the build stage)
+dist
+
+# Version control
+.git
+.gitignore
+
+# Docs, tests, and source design assets — not needed to build or serve
+docs
+test
+*.psd
+*.ai
+
+# Editor / OS cruft
+.DS_Store
+.vscode
+.idea
+
+# Env / secrets
+.env
+.env.*
+*.local
+
+# Docker files themselves
+Dockerfile
+.dockerignore
