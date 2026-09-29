@@ -25,3 +25,20 @@ describe('BattleFieldView difficulty', () => {
     expect(nightmare).not.toBe(normal);
   });
 });
+
+describe('BattleFieldView enemy counter', () => {
+  // Kinetic's destroy() leaves a started sprite's timer and animation running
+  // for good, and the counter is redrawn every time an enemy arrives.
+  it('leaves nothing running behind the symbols it throws away', () => {
+    stubKinetic();
+    const view = new BattleFieldView(new Kinetic.Stage());
+    view.update_enemy_statuses(20);
+    const old_symbols = view.enemy_symbols;
+
+    view.update_enemy_statuses(19);
+
+    const still_running = old_symbols.filter(symbol =>
+      symbol.start.mock.calls.length > symbol.stop.mock.calls.length);
+    expect(still_running).toHaveLength(0);
+  });
+});

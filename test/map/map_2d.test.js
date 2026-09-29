@@ -50,6 +50,38 @@ describe('Map2D.random_gift', () => {
   });
 });
 
+describe('Map2D.weight', () => {
+  // A route search weighs thousands of steps; each should only look at the
+  // terrain around it, not every piece of wall on the map.
+  it('only looks at terrain near the step it is weighing', () => {
+    const map = new Map2D({ add: () => {} });
+    const near = map.add_terrain(BrickTerrain, new MapArea2D(40, 0, 80, 40));
+    const far = map.add_terrain(IronTerrain, new MapArea2D(400, 400, 440, 440));
+    let far_checked = 0;
+    const collide = far.area.collide.bind(far.area);
+    far.area.collide = area => { far_checked += 1; return collide(area); };
+    const from = map.vertexes_at(new MapArea2D(0, 0, 40, 40));
+    const to = map.vertexes_at(new MapArea2D(10, 0, 50, 40));
+
+    const weight = map.weight({ power: 1, ship: false }, from, to);
+
+    expect({ weight, far_checked }).toEqual({ weight: near.weight({ power: 1 }) / 4, far_checked: 0 });
+  });
+
+  it('sees terrain added and removed after the map was built', () => {
+    const map = new Map2D({ add: () => {} });
+    const from = map.vertexes_at(new MapArea2D(0, 0, 40, 40));
+    const to = map.vertexes_at(new MapArea2D(10, 0, 50, 40));
+    const tank = { power: 1, ship: false };
+
+    const iron = map.add_terrain(IronTerrain, new MapArea2D(40, 0, 80, 40));
+    expect(map.weight(tank, from, to)).toBe(map.infinity);
+
+    iron.destroy();
+    expect(map.weight(tank, from, to)).toBe(1);
+  });
+});
+
 describe('Map2D.shortest_path', () => {
   let map;
   const level_1_tank = { power: 1, ship: false };

@@ -25,6 +25,7 @@ export class MovableMapUnit2D extends MapUnit2D {
 
   new_display() {
     const center = this.area.center();
+    this.displayed_animation = this.animation_state();
     return this.display_object = new Kinetic.Sprite({
       x: center.x,
       y: center.y,
@@ -39,10 +40,17 @@ export class MovableMapUnit2D extends MapUnit2D {
     });
   }
 
+  // Kinetic rewinds a sprite to its first frame whenever its animation is set,
+  // even to the one already playing - so set it only when it changes, or a
+  // moving tank never gets past frame one and a guarded one never blinks.
   update_display() {
     if (this.destroyed) { return; }
-    this.display_object.setAnimation(this.animation_state());
-    this.display_object.setFrameRate(Animations.rate(this.animation_state()));
+    const state = this.animation_state();
+    if (state !== this.displayed_animation) {
+      this.displayed_animation = state;
+      this.display_object.setAnimation(state);
+      this.display_object.setFrameRate(Animations.rate(state));
+    }
     this.display_object.setRotationDeg(this.direction);
     const center = this.area.center();
     return this.display_object.setAbsolutePosition(center.x, center.y);
@@ -171,7 +179,7 @@ export class MovableMapUnit2D extends MapUnit2D {
   // Returns how far the unit actually travelled - 0 when it is blocked.
   // Walks a pixel at a time so nothing is ever stepped over: checking only the
   // landing spot lets a fast missile pass clean through a wall thinner than
-  // its stride.
+  // its stride. The sprite only needs to follow once, to where it ends up.
   move(offset) {
     let moved = 0;
     while (moved < offset) {
@@ -179,6 +187,7 @@ export class MovableMapUnit2D extends MapUnit2D {
       if (step === 0) { break; }
       moved += step;
     }
+    if (moved > 0) { this.update_display(); }
     return moved;
   }
 
@@ -191,7 +200,6 @@ export class MovableMapUnit2D extends MapUnit2D {
       target_x + this.width(), target_y + this.height());
     if (this.map.area_available(this, target_area)) {
       this.area = target_area;
-      this.update_display();
       return Math.abs(offset_x + offset_y);
     } else {
       return 0;

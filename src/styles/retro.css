@@ -688,6 +688,12 @@ body::after {
     max(12px, env(safe-area-inset-bottom))
     max(10px, env(safe-area-inset-left));
   touch-action: manipulation;
+  /* A held button is a long press, and iOS answers one by selecting the
+     nearest text it can find - the title - and parking its Copy / Look Up
+     bar over the pad. Nothing on the console is there to be selected. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 [data-input="touch"] .panel,

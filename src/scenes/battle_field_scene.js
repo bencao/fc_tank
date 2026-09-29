@@ -75,6 +75,7 @@ export class BattleFieldScene extends Scene {
 
   stop() {
     super.stop();
+    clearTimeout(this.finish_timeout);
     this.stop_time_line();
     return this.map.reset();
   }
@@ -292,11 +293,13 @@ export class BattleFieldScene extends Scene {
 
     // A backgrounded tab serves no frames, so the first one back can carry a
     // delta of many seconds. Cap it: better a skipped moment than tanks and
-    // missiles teleporting across the map in a single step.
-    const delta_time = Math.min(
+    // missiles teleporting across the map in a single step. A frame's stamp
+    // is when it began, which can be just before the time line started - and
+    // time must not run backwards.
+    const delta_time = Math.max(0, Math.min(
       Math.round(offset - this.startedAt),
       BattleFieldScene.max_delta_time
-    );
+    ));
 
     for (let m of this.map.missiles) {
       m.integration(delta_time);
@@ -444,8 +447,14 @@ export class BattleFieldScene extends Scene {
     }
   }
 
+  // Lives count only the tanks held in reserve - in a two-player game the
+  // other player can be out of lives and still fighting with their last tank.
   check_enemy_win() {
-    if (this.remain_user_p1_lives === 0 && this.remain_user_p2_lives === 0) {
+    if (
+      this.remain_user_p1_lives === 0 &&
+      this.remain_user_p2_lives === 0 &&
+      this.map.user_tanks().length === 0
+    ) {
       return this.enemy_win();
     }
   }
@@ -456,12 +465,12 @@ export class BattleFieldScene extends Scene {
     }
     this.winner = "user";
     if (this.is_demo_mode()) {
-      return setTimeout(() => {
+      return this.finish_after(() => {
         this.game.update_status('demo_mode', false);
         return this.game.switch_scene("welcome");
       }, 3000);
     }
-    return setTimeout(() => {
+    return this.finish_after(() => {
       this.save_user_status();
       return this.game.switch_scene("report");
     }, 3000);
@@ -473,17 +482,25 @@ export class BattleFieldScene extends Scene {
     }
     this.winner = "enemy";
     if (this.is_demo_mode()) {
-      return setTimeout(() => {
+      return this.finish_after(() => {
         this.game.update_status('demo_mode', false);
         return this.game.switch_scene("welcome");
       }, 3000);
     }
     this.disable_user_controls();
-    return setTimeout(() => {
+    return this.finish_after(() => {
       this.game.update_status("game_over", true);
       this.sound.play("lose");
       return this.game.switch_scene("report");
     }, 3000);
+  }
+
+  // The battle is decided; move on after a moment. Kept so that stopping the
+  // scene - the player leaving the demo, say - can call it off.
+  finish_after(next) {
+    clearTimeout(this.finish_timeout);
+    this.finish_timeout = setTimeout(next, 3000);
+    return this.finish_timeout;
   }
 
   increase_kill_score_by_user(tank, killed_by_tank) {
