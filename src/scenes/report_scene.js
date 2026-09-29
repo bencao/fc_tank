@@ -27,7 +27,7 @@ export class ReportScene extends Scene {
     this.view.update_hi_score(this.game.get_status("hi_score"));
     return setTimeout(() => {
       if (this.game.get_status("game_over")) {
-        return this.game.switch_scene(this.anyone_scored() ? "name_entry" : "welcome");
+        return this.game.switch_scene(this.anyone_scored() ? "name_entry" : this.game.home_scene());
       } else {
         this.game.next_stage();
         this.game.update_status("stage_autostart", true);

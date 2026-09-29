@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ReportScene } from '../../src/scenes/report_scene.js';
 
-function makeReport(given = {}) {
+function makeReport(given = {}, { home = 'welcome' } = {}) {
   const statuses = {
     players: 1, p1_score: 0, p2_score: 0, hi_score: 20000, game_over: true,
     p1_killed_enemies: [], p2_killed_enemies: [], ...given
@@ -13,6 +13,7 @@ function makeReport(given = {}) {
     get_config: key => ({ initial_hi_score: 20000 })[key] ?? 100,
     single_player_mode: () => statuses.players === 1,
     next_stage: vi.fn(),
+    home_scene: () => home,
     switch_scene: vi.fn()
   };
   scene.view = {
@@ -49,6 +50,15 @@ describe('ReportScene after a game over', () => {
     vi.advanceTimersByTime(5000);
 
     expect(scene.game.switch_scene).toHaveBeenCalledWith('welcome');
+  });
+
+  it('goes back to the friends lobby when nobody scored in friends play', () => {
+    vi.useFakeTimers();
+    const { scene } = makeReport({ players: 2 }, { home: 'lobby' });
+    scene.start();
+    vi.advanceTimersByTime(5000);
+
+    expect(scene.game.switch_scene).toHaveBeenCalledWith('lobby');
   });
 
   // The HI score may already be the board's best, well above this game.

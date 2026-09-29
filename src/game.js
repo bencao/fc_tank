@@ -10,12 +10,21 @@ import { BattleFieldView } from "./views/battle_field_view.js";
 import { ReportView } from "./views/report_view.js";
 import { NameEntryView } from "./views/name_entry_view.js";
 import { HighScoresView } from "./views/high_scores_view.js";
+import { LobbyScene } from "./scenes/lobby_scene.js";
+import { LobbyView } from "./views/lobby_view.js";
 import { LeaderboardClient } from "./leaderboard_client.js";
+import { RoomsClient } from "./friends/rooms_client.js";
+import { peer_connector } from "./friends/peer_link.js";
+import { mirror_views } from "./friends/view_mirror.js";
 import { DIFFICULTIES, DEFAULT_DIFFICULTY } from "./difficulty.js";
 
 export class Game {
-  constructor({ leaderboard = new LeaderboardClient() } = {}) {
+  // connector: sets up friends play's link to the other browser (peer_link.js).
+  constructor({ leaderboard = new LeaderboardClient(), connector = peer_connector(new RoomsClient()) } = {}) {
     this.leaderboard = leaderboard;
+    this.connector = connector;
+    // The FriendsSession while friends play is on (src/friends/session.js).
+    this.friends = null;
     this.canvas = new Kinetic.Stage({
       container: "canvas",
       width: 600,
@@ -32,11 +41,74 @@ export class Game {
       ),
       report: new ReportScene(this, new ReportView(this.canvas)),
       name_entry: new NameEntryScene(this, new NameEntryView(this.canvas)),
-      high_scores: new HighScoresScene(this, new HighScoresView(this.canvas))
+      high_scores: new HighScoresScene(this, new HighScoresView(this.canvas)),
+      lobby: new LobbyScene(this, new LobbyView(this.canvas))
     };
     this.current_scene = null;
     this.scene_change_listeners = [];
     this.difficulty_change_listeners = [];
+    this.invite_listeners = [];
+    this.friends_listeners = [];
+    // Hosting friends play, the friend's screen follows this one: what its
+    // views show and what its scenes play.
+    mirror_views(this, (type, payload) => this.broadcast(type, payload));
+    Object.values(this.scenes).forEach(scene => {
+      scene.sound.on_play = name => this.broadcast("sound", { name });
+    });
+  }
+
+  // listener(url) - the invitation link to show, or null to hide it.
+  on_invite(listener) {
+    return this.invite_listeners.push(listener);
+  }
+
+  show_invite(url) {
+    this.invite_listeners.forEach(listener => listener(url));
+  }
+
+  invite_url(code) {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("join", code);
+    return url.toString();
+  }
+
+  // listener(session) - friends play has started, or ended (null).
+  on_friends_change(listener) {
+    return this.friends_listeners.push(listener);
+  }
+
+  start_friends(session) {
+    this.friends = session;
+    this.friends_listeners.forEach(listener => listener(session));
+    session.on_close(() => {
+      if (this.friends === session) {
+        this.friends_listeners.forEach(listener => listener(null));
+        this.current_scene?.on_friend_left?.();
+      }
+    });
+  }
+
+  end_friends() {
+    this.friends?.close();
+    this.friends = null;
+  }
+
+  hosting_friends() {
+    return Boolean(this.friends?.is_host() && this.friends.connected);
+  }
+
+  // Tells the friend, when there is one to tell.
+  broadcast(type, payload) {
+    if (this.hosting_friends()) {
+      this.friends.send(type, payload);
+    }
+  }
+
+  // Where to go when a game is done: back to the friend, or the title screen.
+  home_scene() {
+    return this.hosting_friends() ? "lobby" : "welcome";
   }
 
   on_scene_change(listener) {
@@ -105,8 +177,21 @@ export class Game {
       // The runs just posted to the leaderboard, for the high scores to mark.
       high_score_ranks: [],
       high_score_entries: null,
-      difficulty: DEFAULT_DIFFICULTY
+      difficulty: DEFAULT_DIFFICULTY,
+      // The welcome menu's row: 1 PLAYER, 2 PLAYERS or FRIENDS PLAY.
+      mode: 0
     };
+  }
+
+  // Both players start over: scores, lives and tanks as a new game has them.
+  reset_run() {
+    this.update_status("game_over", false);
+    for (const player of ["p1", "p2"]) {
+      this.update_status(`${player}_score`, this.get_config(`initial_${player}_score`));
+      this.update_status(`${player}_lives`, this.get_config(`initial_${player}_lives`));
+      this.update_status(`${player}_level`, this.get_config(`initial_${player}_level`));
+      this.update_status(`${player}_ship`, this.get_config(`initial_${player}_ship`));
+    }
   }
 
   kick_off() {
@@ -180,6 +265,8 @@ export class Game {
     if (this.current_scene) {
       this.current_scene.on_stop();
     }
+    // First, so the friend is on the same scene before its views change.
+    this.broadcast("scene", { name: type });
     target_scene.on_start();
     this.current_scene = target_scene;
     this.scene_change_listeners.forEach(listener => listener(type));

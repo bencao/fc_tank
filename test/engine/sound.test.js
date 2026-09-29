@@ -74,4 +74,19 @@ describe('Sound', () => {
       expect(sound.bgms.start_stage.play).toHaveBeenCalledTimes(2);
     });
   });
+
+  // Friends play: the friend hears what the host hears - once, not once a frame.
+  it('tells its listener about each sound it actually plays', () => {
+    vi.useFakeTimers();
+    const sound = new Sound();
+    const heard = [];
+    sound.on_play = name => heard.push(name);
+
+    sound.play('fire');
+    sound.play('fire');
+    sound.play('no_such_sound');
+
+    expect(heard).toEqual(['fire']);
+    vi.useRealTimers();
+  });
 });

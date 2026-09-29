@@ -17,6 +17,8 @@ export class Sound {
   constructor() {
     this.bgms       = {};
     this.busy_until = {};
+    // Told the name of every sound as it starts - friends play passes them on.
+    this.on_play    = null;
 
     this.supported_events().forEach(event_name => {
       this.bgms[event_name] = new Howl({
@@ -53,6 +55,7 @@ export class Sound {
     const now = Date.now();
     if (now < (this.busy_until[event_name] ?? 0)) { return; }
     this.busy_until[event_name] = now + (howl.duration() * 1000 || UNKNOWN_DURATION);
+    this.on_play?.(event_name);
     return howl.play();
   }
 }

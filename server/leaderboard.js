@@ -62,7 +62,8 @@ export class Leaderboard {
 // Rebuilds a posted run field by field, so nothing else rides along.
 export function parse_entry(body) {
   const name = body?.name;
-  if (typeof name !== "string" || !/^[A-Z]{3}$/.test(name)) throw new Error("expected three initials");
+  // One player's initials, or a friends play team's: "ABC&XYZ".
+  if (typeof name !== "string" || !/^[A-Z]{3}(&[A-Z]{3})?$/.test(name)) throw new Error("expected three initials");
   const score = body.score;
   // Every kill and power-up is worth a whole number of hundreds.
   if (!Number.isInteger(score) || score <= 0 || score > MAX_SCORE || score % 100 !== 0) {

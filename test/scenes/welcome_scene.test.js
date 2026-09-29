@@ -6,7 +6,7 @@ function makeWelcome() {
   const handlers = {};
   const scene = Object.create(WelcomeScene.prototype);
   let level = 1;
-  let players = 1;
+  const statuses = { players: 1, mode: 0 };
   scene.keyboard = {
     on_key_down(keys, callback) {
       [].concat(keys).forEach(key => { handlers[key] = callback; });
@@ -16,13 +16,15 @@ function makeWelcome() {
     difficulty: () => DIFFICULTIES[level],
     harder: () => { level = Math.min(level + 1, 2); },
     easier: () => { level = Math.max(level - 1, 0); },
-    single_player_mode: () => players === 1,
-    update_status: (key, value) => { if (key === 'players') players = value; }
+    single_player_mode: () => statuses.players === 1,
+    get_status: key => statuses[key],
+    update_status: (key, value) => { statuses[key] = value; },
+    switch_scene: vi.fn()
   };
   scene.view = { update_difficulty: vi.fn(), update_player_mode: vi.fn() };
   scene.enable_selection_control();
   const press = key => handlers[key]();
-  return { scene, press, players: () => players };
+  return { scene, press, players: () => statuses.players, mode: () => statuses.mode };
 }
 
 describe('WelcomeScene selection controls', () => {
@@ -49,6 +51,53 @@ describe('WelcomeScene selection controls', () => {
     expect(players()).toBe(1);
     press('SPACE');
     expect(players()).toBe(2);
+  });
+
+  // Third on the menu: two players, each in their own browser.
+  it('offers friends play under 2 players, as a two-player game', () => {
+    vi.useFakeTimers();
+    const { scene, press, players, mode } = makeWelcome();
+
+    press('DOWN');
+    press('DOWN');
+    expect(mode()).toBe(2);
+    expect(players()).toBe(2);
+    expect(scene.view.update_player_mode).toHaveBeenLastCalledWith(2);
+
+    press('DOWN');
+    expect(mode()).toBe(2);
+  });
+
+  it('cycles 1P, 2P, friends play with select', () => {
+    vi.useFakeTimers();
+    const { press, mode, players } = makeWelcome();
+
+    press('SPACE');
+    press('SPACE');
+    expect(mode()).toBe(2);
+    press('SPACE');
+    expect(mode()).toBe(0);
+    expect(players()).toBe(1);
+  });
+
+  it('opens the friends lobby on start when friends play is picked', () => {
+    vi.useFakeTimers();
+    const { scene, press } = makeWelcome();
+
+    press('SPACE');
+    press('SPACE');
+    press('ENTER');
+
+    expect(scene.game.switch_scene).toHaveBeenCalledWith('lobby');
+  });
+
+  it('starts an ordinary game otherwise', () => {
+    vi.useFakeTimers();
+    const { scene, press } = makeWelcome();
+
+    press('ENTER');
+
+    expect(scene.game.switch_scene).toHaveBeenCalledWith('stage');
   });
 });
 

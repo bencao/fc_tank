@@ -25,6 +25,15 @@ export function reflect_difficulty(root, game) {
   return show;
 }
 
+// Friends play puts each friend at a keyboard of their own, both on the 1P
+// keys - the page shows just those while it's on, and says whose they are.
+export function reflect_friends(root, game) {
+  const show = session => { root.dataset.friends = session?.role ?? ""; };
+  game.on_friends_change(show);
+  show(null);
+  return show;
+}
+
 export function install_screen_scaling(root, screen) {
   const apply = () => {
     // Two passes: the first resizes the screen, the second re-measures the

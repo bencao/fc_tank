@@ -6,10 +6,13 @@ const AMBER = "#FF9B3B";
 const RED = "#DB2B00";
 const GREY = "#999";
 
+// Room for a friends play team's initials, "ABC&XYZ".
+const NAME_WIDTH = 7;
+
 // One leaderboard line in fixed columns - the canvas font is monospaced.
 export function format_high_score_row({ rank, name, score, stage, difficulty }) {
   const place = ordinal(rank).padStart(4);
-  return `${place}  ${name} ${String(score).padStart(7)}  ST${String(stage).padStart(2)}  ${difficulty}`;
+  return `${place}  ${name.padEnd(NAME_WIDTH)} ${String(score).padStart(7)}  ST${String(stage).padStart(2)}  ${difficulty}`;
 }
 
 function ordinal(rank) {
@@ -30,7 +33,8 @@ export class HighScoresView extends View {
     this.layer.add(text({ x: 0, y: 36, width: 600, align: "center", fontSize: 26, text: "HIGH SCORES", fill: RED }));
     this.rows = [];
     for (let i = 0; i < TOP_ENTRIES; i++) {
-      const row = text({ x: 90, y: 100 + i * 32, text: "" });
+      // The widest row, 38 characters, centred.
+      const row = text({ x: 72, y: 100 + i * 32, text: "" });
       this.rows.push(row);
       this.layer.add(row);
     }

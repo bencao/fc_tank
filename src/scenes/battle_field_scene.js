@@ -1,4 +1,6 @@
 import { Scene } from "../engine/scene.js";
+import { Keyboard } from "../engine/keyboard.js";
+import { FrameRecorder } from "../friends/frame_recorder.js";
 import { Map2D } from "../map/map_2d.js";
 import { MapArea2D } from "../map/map_area_2d.js";
 import { TiledMapBuilder } from "../map/tiled_map_builder.js";
@@ -16,9 +18,27 @@ import {
 import { DemoAICommander } from "../objects/commanders.js";
 import { EnemyGuide } from "../ai/enemy_guide.js";
 
+const P1_CONTROLS = {
+  UP: "up",
+  DOWN: "down",
+  LEFT: "left",
+  RIGHT: "right",
+  Z: "fire"
+};
+
+const P2_CONTROLS = {
+  W: "up",
+  S: "down",
+  A: "left",
+  D: "right",
+  J: "fire"
+};
+
 export class BattleFieldScene extends Scene {
   // Longest step the physics will take in one frame, in ms.
   static max_delta_time = 100;
+  // Friends play: how often the friend is sent the battle field, in ms.
+  static frame_interval = 33;
 
   constructor(game, view) {
     super(game, view);
@@ -65,6 +85,7 @@ export class BattleFieldScene extends Scene {
     super.start();
     this.load_config_variables();
     this.start_map();
+    this.connect_friend();
     if (!this.is_demo_mode()) {
       this.enable_user_control();
     }
@@ -75,6 +96,7 @@ export class BattleFieldScene extends Scene {
 
   stop() {
     super.stop();
+    this.remote_keyboard?.reset();
     clearTimeout(this.finish_timeout);
     this.stop_time_line();
     return this.map.reset();
@@ -200,45 +222,43 @@ export class BattleFieldScene extends Scene {
     return this.map.trigger("map_ready");
   }
 
+  // Friends play, hosting: the friend's keys arrive on a keyboard of their
+  // own, and the battle goes out to them frame by frame.
+  connect_friend() {
+    if (!this.game.hosting_friends?.()) {
+      this.remote_keyboard = null;
+      this.recorder = null;
+      return;
+    }
+    this.remote_keyboard = new Keyboard(this.game.friends.remote_keys);
+    this.recorder = new FrameRecorder(this.map);
+    this.last_frame_sent = -Infinity;
+  }
+
+  // Sharing a keyboard, P1 has the arrows and P2 has WASD. Each at a keyboard
+  // of their own - friends play - either set drives that player's tank.
   enable_user_control() {
-    const p1_control_mappings = {
-      UP: "up",
-      DOWN: "down",
-      LEFT: "left",
-      RIGHT: "right",
-      Z: "fire"
-    };
+    const p1_tank = () => this.map.p1_tank();
+    const p2_tank = () => this.map.p2_tank();
+    if (this.remote_keyboard) {
+      const either = { ...P1_CONTROLS, ...P2_CONTROLS };
+      this.bind_controls(this.keyboard, either, p1_tank);
+      return this.bind_controls(this.remote_keyboard, either, p2_tank);
+    }
+    this.bind_controls(this.keyboard, P1_CONTROLS, p1_tank);
+    return this.bind_controls(this.keyboard, P2_CONTROLS, p2_tank);
+  }
 
-    const p2_control_mappings = {
-      W: "up",
-      S: "down",
-      A: "left",
-      D: "right",
-      J: "fire"
-    };
-
-    Object.entries(p1_control_mappings).forEach(([physical_key, virtual_command]) => {
-      this.keyboard.on_key_down(physical_key, event => {
-        if (this.map.p1_tank()) {
-          return this.map.p1_tank().commander.on_command_start(virtual_command);
+  bind_controls(keyboard, mappings, tank) {
+    Object.entries(mappings).forEach(([physical_key, virtual_command]) => {
+      keyboard.on_key_down(physical_key, event => {
+        if (tank()) {
+          return tank().commander.on_command_start(virtual_command);
         }
       });
-      this.keyboard.on_key_up(physical_key, event => {
-        if (this.map.p1_tank()) {
-          return this.map.p1_tank().commander.on_command_end(virtual_command);
-        }
-      });
-    });
-
-    Object.entries(p2_control_mappings).forEach(([physical_key, virtual_command]) => {
-      this.keyboard.on_key_down(physical_key, event => {
-        if (this.map.p2_tank()) {
-          return this.map.p2_tank().commander.on_command_start(virtual_command);
-        }
-      });
-      this.keyboard.on_key_up(physical_key, event => {
-        if (this.map.p2_tank()) {
-          return this.map.p2_tank().commander.on_command_end(virtual_command);
+      keyboard.on_key_up(physical_key, event => {
+        if (tank()) {
+          return tank().commander.on_command_end(virtual_command);
         }
       });
     });
@@ -250,13 +270,15 @@ export class BattleFieldScene extends Scene {
         return this.exit_demo();
       });
     }
-    return this.keyboard.on_key_down("ENTER", event => {
+    const toggle_pause = event => {
       if (this.running) {
         return this.pause();
       } else {
         return this.rescue();
       }
-    });
+    };
+    this.remote_keyboard?.on_key_down("ENTER", toggle_pause);
+    return this.keyboard.on_key_down("ENTER", toggle_pause);
   }
 
   exit_demo() {
@@ -272,6 +294,7 @@ export class BattleFieldScene extends Scene {
 
   disable_user_controls() {
     this.keyboard.reset();
+    this.remote_keyboard?.reset();
     if (this.map.p1_tank()) {
       this.map.p1_tank().commander.reset();
     }
@@ -313,8 +336,19 @@ export class BattleFieldScene extends Scene {
 
     this.frame_rate += 1;
     this.startedAt = offset;
+    this.send_frame(offset);
 
     requestAnimationFrame(next => this.integration(next, loop_id));
+  }
+
+  // At most one frame per frame_interval: plenty to watch, and it keeps the
+  // link from filling up.
+  send_frame(now) {
+    if (!this.recorder || now - this.last_frame_sent < BattleFieldScene.frame_interval) {
+      return;
+    }
+    this.last_frame_sent = now;
+    return this.game.broadcast("frame", this.recorder.record());
   }
 
   start_time_line() {

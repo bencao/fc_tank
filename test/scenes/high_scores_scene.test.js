@@ -3,7 +3,7 @@ import { HighScoresScene } from '../../src/scenes/high_scores_scene.js';
 
 const row = (rank, score) => ({ rank, name: 'ABC', score, stage: 4, difficulty: 'NORMAL' });
 
-function makeScene({ statuses: given = {}, top } = {}) {
+function makeScene({ statuses: given = {}, top, home = 'welcome' } = {}) {
   const handlers = {};
   const statuses = { hi_score: 20000, high_score_ranks: [], high_score_entries: null, ...given };
   const scene = Object.create(HighScoresScene.prototype);
@@ -15,6 +15,7 @@ function makeScene({ statuses: given = {}, top } = {}) {
     leaderboard: { top: vi.fn(top ?? (async () => [row(1, 30000), row(2, 900)])) },
     get_status: key => statuses[key],
     update_status: (key, value) => { statuses[key] = value; },
+    home_scene: () => home,
     switch_scene: vi.fn()
   };
   scene.view = { show_loading: vi.fn(), show_entries: vi.fn(), show_offline: vi.fn() };
@@ -82,6 +83,17 @@ describe('HighScoresScene', () => {
     second.scene.start();
     second.press('ENTER');
     expect(second.scene.game.switch_scene).toHaveBeenCalledWith('welcome');
+  });
+
+  // Friends play: the two of them go back to the lobby to play again.
+  it('goes back to the friends lobby while the friend is still here', () => {
+    vi.useFakeTimers();
+    const { scene, press } = makeScene({ home: 'lobby' });
+    scene.start();
+
+    press('ENTER');
+
+    expect(scene.game.switch_scene).toHaveBeenCalledWith('lobby');
   });
 
   it('ignores a fetch that lands after the scene has been left', async () => {

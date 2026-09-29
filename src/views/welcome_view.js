@@ -2,6 +2,10 @@ import { View } from "../engine/view.js";
 import { Animations } from "../constants.js";
 import { MapArea2D } from "../map/map_area_2d.js";
 
+// The menu rows - players, difficulty dial, copyright - from the top down.
+const MENU_TOP = 320;
+const MENU_STEP = 36;
+
 export class WelcomeView extends View {
   init_view() {
     this.static_group = new Kinetic.Group();
@@ -18,12 +22,9 @@ export class WelcomeView extends View {
     return this.score_label.setText(`I- ${p1_score}  II- ${p2_score}  HI- ${hi_score}`);
   }
 
-  update_player_mode(single_player_mode) {
-    if (single_player_mode) {
-      return this.selection_tank.setAbsolutePosition(170, 350);
-    } else {
-      return this.selection_tank.setAbsolutePosition(170, 390);
-    }
+  // mode: the menu row picked - 1 PLAYER, 2 PLAYERS, FRIENDS PLAY.
+  update_player_mode(mode) {
+    return this.selection_tank.setAbsolutePosition(170, MENU_TOP + 10 + mode * MENU_STEP);
   }
 
   update_difficulty(name) {
@@ -161,30 +162,23 @@ export class WelcomeView extends View {
   }
 
   init_player_mode_selection_text() {
-    this.static_group.add(new Kinetic.Text({
-      x         : 210,
-      y         : 340,
-      fontSize  : 22,
-      fontStyle : "bold",
-      fontFamily: "Courier",
-      text      : "1 PLAYER",
-      fill      : "#fff"
-    }));
-    return this.static_group.add(new Kinetic.Text({
-      x         : 210,
-      y         : 380,
-      fontSize  : 22,
-      fontStyle : "bold",
-      fontFamily: "Courier",
-      text      : "2 PLAYERS",
-      fill      : "#fff"
-    }));
+    ["1 PLAYER", "2 PLAYERS", "FRIENDS PLAY"].forEach((text, row) => {
+      this.static_group.add(new Kinetic.Text({
+        x         : 210,
+        y         : MENU_TOP + row * MENU_STEP,
+        fontSize  : 22,
+        fontStyle : "bold",
+        fontFamily: "Courier",
+        text,
+        fill      : "#fff"
+      }));
+    });
   }
 
   init_difficulty_dial() {
     this.difficulty_label = new Kinetic.Text({
       x         : 210,
-      y         : 420,
+      y         : MENU_TOP + 3 * MENU_STEP,
       fontSize  : 22,
       fontStyle : "bold",
       fontFamily: "Courier",
@@ -197,7 +191,7 @@ export class WelcomeView extends View {
   init_copy_right_text() {
     return this.static_group.add(new Kinetic.Text({
       x         : 210,
-      y         : 460,
+      y         : MENU_TOP + 4 * MENU_STEP,
       fontSize  : 22,
       fontStyle : "bold",
       fontFamily: "Courier",
@@ -211,7 +205,7 @@ export class WelcomeView extends View {
     const image = document.getElementById('tank_sprite');
     this.selection_tank = new Kinetic.Sprite({
       x: 170,
-      y: 350,
+      y: MENU_TOP + 10,
       image,
       animation: 'user_p1_lv1',
       animations: Animations.movables,

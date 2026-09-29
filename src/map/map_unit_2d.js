@@ -24,6 +24,8 @@ export class MapUnit2D {
 
   destroy_display() {
     if (this.bom_on_destroy) {
+      // Friends play shows the friend the same explosion (frame_recorder.js).
+      this.map.trigger("unit_exploded", this);
       this.display_object.setOffset(20, 20);
       this.display_object.setAnimations(Animations.movables);
       this.display_object.setAnimation('bom');

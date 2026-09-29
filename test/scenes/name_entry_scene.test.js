@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { NameEntryScene } from '../../src/scenes/name_entry_scene.js';
+import { FriendsSession } from '../../src/friends/session.js';
 
-function makeScene({ players = 1, p1_score = 1200, p2_score = 0, submit } = {}) {
+function makeScene({ players = 1, p1_score = 1200, p2_score = 0, submit, friend = false } = {}) {
   const handlers = {};
   const statuses = { players, p1_score, p2_score, current_stage: 7 };
   const scene = Object.create(NameEntryScene.prototype);
@@ -15,11 +16,17 @@ function makeScene({ players = 1, p1_score = 1200, p2_score = 0, submit } = {}) 
     update_status: (key, value) => { statuses[key] = value; },
     single_player_mode: () => statuses.players === 1,
     difficulty: () => ({ name: 'HARD' }),
-    switch_scene: vi.fn()
+    switch_scene: vi.fn(),
+    hosting_friends: () => friend && session.connected,
+    broadcast: vi.fn()
   };
-  scene.view = { show_player: vi.fn(), show_initials: vi.fn(), show_saving: vi.fn() };
+  const session = new FriendsSession({ send() {}, close() {} }, 'host');
+  scene.game.friends = friend ? session : null;
+  scene.view = { show_player: vi.fn(), show_initials: vi.fn(), show_saving: vi.fn(), show_waiting: vi.fn() };
   const press = key => handlers[key]?.();
-  return { scene, press, statuses, handlers };
+  // The friend's initials, as they arrive from their browser.
+  const friend_enters = name => session.receive(JSON.stringify({ t: 'initials', name }));
+  return { scene, press, statuses, handlers, session, friend_enters };
 }
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -128,6 +135,99 @@ describe('NameEntryScene', () => {
 
     expect(scene.game.leaderboard.submit).toHaveBeenCalledWith(expect.objectContaining({ name: 'AAA' }));
   });
+
+  it('forgets its wait when stopped', async () => {
+    vi.useFakeTimers();
+    const { scene } = makeScene();
+    scene.start();
+    scene.stop();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(scene.game.leaderboard.submit).not.toHaveBeenCalled();
+  });
+});
+
+describe('NameEntryScene in friends play', () => {
+  afterEach(() => vi.useRealTimers());
+
+  const friends = () => makeScene({ players: 2, p1_score: 1200, p2_score: 800, friend: true });
+
+  it('takes one turn for the team, on the team score, and asks the friend for theirs', () => {
+    const { scene } = friends();
+    scene.start();
+
+    expect(scene.view.show_player).toHaveBeenCalledTimes(1);
+    expect(scene.view.show_player).toHaveBeenCalledWith('TEAM 1P', 2000);
+    expect(scene.game.broadcast).toHaveBeenCalledWith('name_entry', { score: 2000 });
+  });
+
+  it('waits for the friend, then posts both sets of initials as one run', async () => {
+    const { scene, press, friend_enters } = friends();
+    scene.start();
+    press('UP');
+    press('ENTER');
+    await settle();
+    expect(scene.view.show_waiting).toHaveBeenCalled();
+    expect(scene.game.leaderboard.submit).not.toHaveBeenCalled();
+
+    friend_enters('XYZ');
+    await settle();
+
+    expect(scene.game.leaderboard.submit).toHaveBeenCalledWith({ name: 'BAA&XYZ', score: 2000, stage: 7, difficulty: 'HARD' });
+    expect(scene.game.switch_scene).toHaveBeenCalledWith('high_scores');
+  });
+
+  it('posts straight away when the friend was quicker', async () => {
+    const { scene, press, friend_enters } = friends();
+    scene.start();
+    friend_enters('XYZ');
+
+    press('ENTER');
+    await settle();
+
+    expect(scene.game.leaderboard.submit).toHaveBeenCalledWith(expect.objectContaining({ name: 'AAA&XYZ' }));
+  });
+
+  it('pays no mind to initials that are not initials', async () => {
+    const { scene, press, friend_enters } = friends();
+    scene.start();
+    friend_enters('<script>');
+    friend_enters('abc');
+
+    press('ENTER');
+    await settle();
+
+    expect(scene.game.leaderboard.submit).not.toHaveBeenCalled();
+  });
+
+  it("posts the host's initials alone once the friend has gone", async () => {
+    const { scene, press } = friends();
+    scene.start();
+    press('ENTER');
+
+    scene.on_friend_left();
+    await settle();
+
+    expect(scene.game.leaderboard.submit).toHaveBeenCalledWith(expect.objectContaining({ name: 'AAA', score: 2000 }));
+  });
+
+  it('stops waiting on a friend who never answers', async () => {
+    vi.useFakeTimers();
+    const { scene, press } = friends();
+    scene.start();
+    press('ENTER');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(scene.game.leaderboard.submit).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(40_000);
+
+    expect(scene.game.leaderboard.submit).toHaveBeenCalledWith(expect.objectContaining({ name: 'AAA' }));
+  });
+});
+
+describe('NameEntryScene when stopped mid-wait', () => {
+  afterEach(() => vi.useRealTimers());
 
   it('forgets its wait when stopped', async () => {
     vi.useFakeTimers();

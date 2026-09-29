@@ -878,3 +878,89 @@ body::after {
     animation: none;
   }
 }
+
+/* ---------------------------- friends invite ---------------------------- */
+
+/* The friends play lobby's invitation link, under the TV while a room waits
+   for a friend. */
+.invite {
+  width: min(var(--screen-w), 100%);
+  margin: 14px auto 0;
+  display: grid;
+  /* The column must not grow to fit the link box's own idea of its width. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.invite[hidden] {
+  display: none;
+}
+
+.invite__label {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--amber);
+  text-align: center;
+}
+
+.invite__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.invite__link {
+  /* On a phone the buttons drop below the link rather than squeeze it. */
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 10px;
+  font: inherit;
+  font-size: 10px;
+  color: var(--paper);
+  background: #101013;
+  border: 3px solid var(--steel-dark);
+  border-top-color: #262626;
+  border-left-color: #262626;
+}
+
+.invite__button {
+  flex: none;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--ink);
+  background: var(--amber);
+  border: 0;
+  box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.invite__button--share {
+  background: var(--jungle);
+}
+
+.invite__button:active {
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.invite__link:focus-visible,
+.invite__button:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 2px;
+}
+
+/* Friends play: each friend drives their own tank with the 1P keys. */
+.card__title--friends,
+[data-friends="host"] .card__title--solo,
+[data-friends="guest"] .card__title--solo,
+[data-friends="host"] .card--p2,
+[data-friends="guest"] .card--p2 {
+  display: none;
+}
+
+[data-friends="host"] .card__title--friends,
+[data-friends="guest"] .card__title--friends {
+  display: inline;
+}

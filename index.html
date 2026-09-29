@@ -21,7 +21,7 @@
         <h1 class="marquee__title"><em>FC</em> TANK</h1>
         <hr class="brickline" />
         <hr class="brickline" />
-        <p class="marquee__sub">8-BIT COMBAT &middot; 1 OR 2 PLAYERS &middot; 50 STAGES</p>
+        <p class="marquee__sub">8-BIT COMBAT &middot; 1 OR 2 PLAYERS &middot; PLAY WITH FRIENDS &middot; 50 STAGES</p>
       </header>
 
       <main class="deck">
@@ -41,6 +41,15 @@
               <span class="tv__power">
                 <span class="tv__led" aria-hidden="true"></span>POWER
               </span>
+            </div>
+          </section>
+
+          <section class="invite" id="invite" aria-label="Friends play invitation" hidden>
+            <p class="invite__label">SEND THIS LINK TO A FRIEND</p>
+            <div class="invite__row">
+              <input class="invite__link" data-invite-link type="text" readonly aria-label="Invitation link" />
+              <button type="button" class="invite__button" data-invite-copy>COPY LINK</button>
+              <button type="button" class="invite__button invite__button--share" data-invite-share hidden>SHARE</button>
             </div>
           </section>
         </div>
@@ -66,7 +75,10 @@
 
         <aside class="panel" aria-label="Controls">
           <section class="card card--p1">
-            <h2 class="card__title">1P CONTROL</h2>
+            <h2 class="card__title">
+              <span class="card__title--solo">1P CONTROL</span>
+              <span class="card__title--friends">YOUR CONTROLS</span>
+            </h2>
             <dl class="controls">
               <dt>
                 <span class="dpad" role="img" aria-label="Arrow keys">
@@ -103,7 +115,7 @@
             <h2 class="card__title">SYSTEM</h2>
             <dl class="controls">
               <dt><kbd class="key key--wide">SPACE</kbd></dt>
-              <dd>1P / 2P MODE</dd>
+              <dd>1P / 2P / FRIENDS</dd>
               <dt><kbd class="key key--arrow key--left" aria-label="Left arrow"></kbd> <kbd class="key key--arrow key--right" aria-label="Right arrow"></kbd></dt>
               <dd>DIFFICULTY</dd>
               <dt><kbd class="key key--wide">ENTER</kbd></dt>

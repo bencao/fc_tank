@@ -9,7 +9,7 @@ export function stubKinetic() {
       start: vi.fn(), stop: vi.fn(), destroy: vi.fn(), play: vi.fn(),
       setAbsolutePosition: vi.fn(), setText: vi.fn(), setFill: vi.fn(), setAnimation: vi.fn(),
       setAnimations: vi.fn(), setFrameRate: vi.fn(), setRotationDeg: vi.fn(),
-      setOffset: vi.fn(), afterFrame: vi.fn()
+      setOffset: vi.fn(), afterFrame: vi.fn(), batchDraw: vi.fn(), setX: vi.fn()
     };
     obj.clone = vi.fn(() => node());
     return obj;
