@@ -20,6 +20,11 @@ describe('compute_scale', () => {
     expect(compute_scale(300, 1000, 600, 520)).toBeCloseTo(0.5);
   });
 
+  it('once already shrunk for width, shrinks further to fit a short screen', () => {
+    // A landscape phone: the pad takes the sides, so height is the limit.
+    expect(compute_scale(390, 260, 600, 520)).toBeCloseTo(0.5);
+  });
+
   it('lets a short window scroll rather than shrinking the picture', () => {
     expect(compute_scale(1400, 260, 600, 520)).toBe(1);
   });

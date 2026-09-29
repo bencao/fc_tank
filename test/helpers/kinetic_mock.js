@@ -7,7 +7,7 @@ export function stubKinetic() {
     const obj = {
       add: vi.fn(), hide: vi.fn(), show: vi.fn(), draw: vi.fn(), move: vi.fn(),
       start: vi.fn(), stop: vi.fn(), destroy: vi.fn(), play: vi.fn(),
-      setAbsolutePosition: vi.fn(), setText: vi.fn(), setAnimation: vi.fn(),
+      setAbsolutePosition: vi.fn(), setText: vi.fn(), setFill: vi.fn(), setAnimation: vi.fn(),
       setAnimations: vi.fn(), setFrameRate: vi.fn(), setRotationDeg: vi.fn(),
       setOffset: vi.fn(), afterFrame: vi.fn()
     };

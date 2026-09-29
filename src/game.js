@@ -28,10 +28,15 @@ export class Game {
     };
     this.current_scene = null;
     this.scene_change_listeners = [];
+    this.difficulty_change_listeners = [];
   }
 
   on_scene_change(listener) {
     return this.scene_change_listeners.push(listener);
+  }
+
+  on_difficulty_change(listener) {
+    return this.difficulty_change_listeners.push(listener);
   }
 
   get_config(key) {
@@ -133,7 +138,9 @@ export class Game {
   _turn_difficulty(step) {
     const level = this.statuses["difficulty"] + step;
     this.statuses["difficulty"] = Math.min(Math.max(level, 0), DIFFICULTIES.length - 1);
-    return this.difficulty();
+    const difficulty = this.difficulty();
+    this.difficulty_change_listeners.forEach(listener => listener(difficulty));
+    return difficulty;
   }
 
   single_player_mode() {
