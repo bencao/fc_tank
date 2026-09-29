@@ -43,6 +43,11 @@
   --paper: #efe9dd;
 
   --screen-scale: 1;
+  /* Scanline spacing; the shell snaps these to the display's device pixels. */
+  --scan-pitch: 3px;
+  --scan-line: 1px;
+  --haze-pitch: 3px;
+  --haze-line: 1px;
   --screen-w: calc(600px * var(--screen-scale));
   --screen-h: calc(520px * var(--screen-scale));
 }
@@ -95,8 +100,8 @@ body::after {
   z-index: 999;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.16) 0 1px,
-    transparent 1px 3px
+    rgba(0, 0, 0, 0.16) 0 var(--haze-line),
+    transparent var(--haze-line) var(--haze-pitch)
   );
 }
 
@@ -242,8 +247,8 @@ body::after {
   pointer-events: none;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.26) 0 1px,
-    rgba(0, 0, 0, 0) 1px 3px
+    rgba(0, 0, 0, 0.26) 0 var(--scan-line),
+    rgba(0, 0, 0, 0) var(--scan-line) var(--scan-pitch)
   );
   mix-blend-mode: multiply;
 }

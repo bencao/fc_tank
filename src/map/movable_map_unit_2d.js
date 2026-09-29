@@ -141,17 +141,26 @@ export class MovableMapUnit2D extends MapUnit2D {
   }
 
   _adjust_x() {
-    const offset = (this.default_height/4) -
-      ((this.area.x1 + (this.default_height/4))%(this.default_height/2));
-    return this._try_adjust(new MapArea2D(this.area.x1 + offset, this.area.y1,
-      this.area.x2 + offset, this.area.y2));
+    return this._lattice_offsets(this.area.x1, this.default_width/2).some(offset =>
+      this._try_adjust(new MapArea2D(this.area.x1 + offset, this.area.y1,
+        this.area.x2 + offset, this.area.y2)));
   }
 
   _adjust_y() {
-    const offset = (this.default_width/4) -
-      ((this.area.y1 + (this.default_width/4))%(this.default_width/2));
-    return this._try_adjust(new MapArea2D(this.area.x1, this.area.y1 + offset,
-      this.area.x2, this.area.y2 + offset));
+    return this._lattice_offsets(this.area.y1, this.default_height/2).some(offset =>
+      this._try_adjust(new MapArea2D(this.area.x1, this.area.y1 + offset,
+        this.area.x2, this.area.y2 + offset)));
+  }
+
+  // Ways onto the half-tile lattice, nearest first. Shots chip walls back to
+  // lines off the lattice, so the nearest spot can be inside a wall while the
+  // one on the other side is open - refusing the turn then leaves the tank
+  // wedged somewhere that looks clear.
+  _lattice_offsets(position, cell) {
+    const below = -(((position % cell) + cell) % cell);
+    if (below === 0) { return [0]; }
+    const above = below + cell;
+    return -below < above ? [below, above] : [above, below];
   }
 
   _spend(offset) {

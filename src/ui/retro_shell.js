@@ -1,4 +1,4 @@
-import { compute_scale } from "./screen_scale.js";
+import { compute_scale, scanline_pitch, room_haze } from "./screen_scale.js";
 
 const BASE_WIDTH = 600;
 const BASE_HEIGHT = 520;
@@ -49,6 +49,19 @@ function fit(root, screen) {
   const available_height = stacked && !touch ? Infinity : viewport_room_for(screen);
   const scale = compute_scale(available_width, available_height, BASE_WIDTH, BASE_HEIGHT, MAX_SCALE);
   root.style.setProperty("--screen-scale", scale);
+  show_scanlines(root, scale);
+}
+
+// Line spacing for the scanlines over the picture and the fainter haze over
+// the room, both fitted to the display's pixels.
+function show_scanlines(root, scale) {
+  const dpr = window.devicePixelRatio || 1;
+  const picture = scanline_pitch(scale, dpr);
+  const room = room_haze(scale, dpr);
+  root.style.setProperty("--scan-pitch", `${picture.pitch}px`);
+  root.style.setProperty("--scan-line", `${picture.line}px`);
+  root.style.setProperty("--haze-pitch", `${room.pitch}px`);
+  root.style.setProperty("--haze-line", `${room.line}px`);
 }
 
 // The slot is a full-width grid cell; the set inside it shrink-wraps the
