@@ -81,6 +81,7 @@ export class Game {
 
   start_friends(session) {
     this.friends = session;
+    session.keep_alive();
     this.friends_listeners.forEach(listener => listener(session));
     session.on_close(() => {
       if (this.friends === session) {

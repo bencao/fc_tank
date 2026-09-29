@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { stubKinetic } from '../helpers/kinetic_mock.js';
 import { link_pair, flush } from '../helpers/link_pair.js';
 
@@ -145,5 +145,25 @@ describe('A friends play guest', () => {
 
     expect(game.current_scene).toBe(game.scenes.lobby);
     expect(lobby_screen(game).status).toBe('THE HOST LEFT');
+  });
+
+  // An iPhone that locked mid-game comes back to a link that died quietly: the
+  // screen must not sit on the last frame, and nobody actually walked out.
+  describe('when the host goes quiet', () => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('says the connection was lost instead of freezing', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      const { game, host, host_link } = await joining();
+      host.send('scene', { name: 'battle_field' });
+      await flush();
+      host_link.on_message = null;
+      host_link.send = () => {};
+
+      await vi.advanceTimersByTimeAsync(12000);
+
+      expect(game.current_scene).toBe(game.scenes.lobby);
+      expect(lobby_screen(game).status).toBe('CONNECTION LOST');
+    });
   });
 });

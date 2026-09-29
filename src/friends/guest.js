@@ -57,8 +57,11 @@ function follow_host(game, session, { page, win }) {
   session.on_close(detach);
 }
 
+// Gone, or just no longer heard from (see FriendsSession.keep_alive).
+const departure = game => (game.friends?.lost ? "lost" : "host_left");
+
 function host_left(game) {
-  game.scenes.lobby.trouble = "host_left";
+  game.scenes.lobby.trouble = departure(game);
   return game.switch_scene("lobby");
 }
 
@@ -125,7 +128,7 @@ class GuestLobbyScene extends Scene {
   }
 
   on_friend_left() {
-    return this.failed("host_left");
+    return this.failed(departure(this.game));
   }
 }
 

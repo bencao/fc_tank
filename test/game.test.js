@@ -210,6 +210,22 @@ describe('Game hosting friends play', () => {
     expect(game.scenes.report.on_friend_left).toHaveBeenCalled();
   });
 
+  // Paused, the battle sends nothing; the friend must still hear from us or
+  // it would take the quiet for a lost link.
+  it('keeps telling the friend it is still here', async () => {
+    vi.useFakeTimers();
+    try {
+      const { game, received } = hosting();
+
+      await vi.advanceTimersByTimeAsync(3000);
+
+      expect(received.filter(message => message.t === 'ping').length).toBeGreaterThanOrEqual(2);
+      game.end_friends();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('tells listeners when friends play starts and ends', async () => {
     const game = new Game();
     const seen = [];

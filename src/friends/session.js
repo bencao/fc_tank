@@ -15,6 +15,7 @@ import { map_key } from "../engine/keyboard.js";
 //                   frame      { units, terrain, booms } see frame_recorder.js
 //                   sound      { name }
 //                   name_entry { score }           time for the friend's initials
+//   both ways       ping       {}                  still here (see keep_alive)
 export class FriendsSession {
   constructor(link, role) {
     this.link = link;
@@ -25,6 +26,7 @@ export class FriendsSession {
     // The friend's keys, as key events a Keyboard can listen to.
     this.remote_keys = new EventTarget();
     this.held_keys = new Set();
+    this.last_heard = Date.now();
 
     this.on("key", ({ key, down }) => this.remote_key(key, down));
     link.on_message = text => this.receive(text);
@@ -68,7 +70,32 @@ export class FriendsSession {
     this.closed();
   }
 
+  // A link can die without saying so - an iPhone that locks or leaves Safari
+  // takes its end away quietly - and the friend's screen would then sit on
+  // its last frame for good. So each side says it is still here every `every`
+  // ms, even while the game is paused and nothing else is sent, and gives the
+  // other up once it has heard nothing for `lost_after` ms.
+  keep_alive({ every = 1000, lost_after = 10000 } = {}) {
+    let last_tick = Date.now();
+    this.last_heard = last_tick;
+    this.keep_alive_timer = setInterval(() => {
+      const now = Date.now();
+      // The page itself was put away and its timers stopped with it: silence
+      // over that time says nothing about the link, so listen afresh.
+      if (now - last_tick > 2 * every) {
+        this.last_heard = now;
+      }
+      last_tick = now;
+      if (now - this.last_heard > lost_after) {
+        this.lost = true;
+        return this.close();
+      }
+      this.send("ping");
+    }, every);
+  }
+
   receive(text) {
+    this.last_heard = Date.now();
     let message;
     try {
       message = JSON.parse(text);
@@ -105,6 +132,7 @@ export class FriendsSession {
       return;
     }
     this.connected = false;
+    clearInterval(this.keep_alive_timer);
     // A friend who drops mid-move would otherwise leave their tank driving.
     [...this.held_keys].forEach(key => this.remote_key(key, false));
     this.close_handlers.forEach(handler => handler());
