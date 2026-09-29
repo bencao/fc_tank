@@ -17,15 +17,17 @@ const FOLLOWED_SCENES = new Set(["lobby", "stage", "battle_field", "report", "na
 
 // Turns `game` into the guest of room `code`: swaps its scenes for mirrors
 // and joins. page/win are where keys come from and focus goes (injectable for
-// tests); go_to_title leaves friends play for a fresh title screen.
+// tests); go_to_title leaves friends play for a fresh title screen; touch
+// says whether this is a touch screen (see virtual_gamepad.js).
 export function become_guest(game, code, {
   page = document,
   win = window,
-  go_to_title = () => window.location.assign(window.location.pathname)
+  go_to_title = () => window.location.assign(window.location.pathname),
+  touch = () => document.documentElement.dataset.input === "touch"
 } = {}) {
   const scenes = game.scenes;
   const guest_scenes = {
-    lobby: new GuestLobbyScene(game, scenes.lobby.view, { code, page, win, go_to_title }),
+    lobby: new GuestLobbyScene(game, scenes.lobby.view, { code, page, win, go_to_title, touch }),
     stage: new MirrorScene(game, scenes.stage.view),
     battle_field: new MirrorBattleFieldScene(game, scenes.battle_field.view, scenes.battle_field.map),
     report: new MirrorScene(game, scenes.report.view),
@@ -57,14 +59,18 @@ function follow_host(game, session, { page, win }) {
   session.on_close(detach);
 }
 
+// Gone, or just no longer heard from (see FriendsSession.keep_alive).
+const departure = game => (game.friends?.lost ? "lost" : "host_left");
+
 function host_left(game) {
-  game.scenes.lobby.trouble = "host_left";
+  game.scenes.lobby.trouble = departure(game);
   return game.switch_scene("lobby");
 }
 
 class GuestLobbyScene extends Scene {
-  constructor(game, view, { code, page, win, go_to_title }) {
+  constructor(game, view, { code, page, win, go_to_title, touch }) {
     super(game, view);
+    this.touch = touch;
     this.code = code;
     this.page = page;
     this.win = win;
@@ -106,12 +112,14 @@ class GuestLobbyScene extends Scene {
     return this.connected();
   }
 
+  // A phone plays no sound before its first touch (see keep_audio_awake), and
+  // the stage's opening music comes before any touch the game itself asks for.
   connected() {
     return this.view.show_lobby({
       status: "CONNECTED!",
       code: this.code,
       message: "WAITING FOR THE HOST TO START",
-      hint: "YOU ARE 2P - ARROWS TO MOVE, Z TO FIRE"
+      hint: this.touch() ? "YOU ARE 2P - TAP THE SCREEN FOR SOUND" : "YOU ARE 2P - ARROWS TO MOVE, Z TO FIRE"
     });
   }
 
@@ -125,7 +133,7 @@ class GuestLobbyScene extends Scene {
   }
 
   on_friend_left() {
-    return this.failed("host_left");
+    return this.failed(departure(this.game));
   }
 }
 

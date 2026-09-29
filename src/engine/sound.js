@@ -1,5 +1,23 @@
 import { Howl } from 'howler';
 
+// iOS only lets audio start again from inside a touch or key press. Howler
+// tries to wake its mixer when a sound plays - which is rarely inside one -
+// so on an iPhone a mixer that dozed off after a quiet spell, or was
+// "interrupted" by the phone locking, would stay silent: first to go missing
+// is each stage's opening music. So the mixer never dozes, and any touch or
+// key wakes it if it has stopped.
+export function keep_audio_awake(howler, page = document) {
+  howler.autoSuspend = false;
+  const wake = () => {
+    if (howler.ctx && howler.ctx.state !== 'running') {
+      howler._autoResume();
+    }
+  };
+  for (const type of ['pointerdown', 'touchend', 'keydown']) {
+    page.addEventListener(type, wake, true);
+  }
+}
+
 // Mix levels (0-1) for sounds that shouldn't play at full volume. The enemy
 // rumble plays nonstop during a battle and at the same loudness as the
 // player's own engine, so it is pushed well back; power-ups are eased down.

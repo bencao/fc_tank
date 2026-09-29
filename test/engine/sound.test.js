@@ -90,3 +90,41 @@ describe('Sound', () => {
     vi.useRealTimers();
   });
 });
+
+const { keep_audio_awake } = await import('../../src/engine/sound.js');
+
+describe('keep_audio_awake', () => {
+  function setup(state) {
+    const howler = { ctx: { state }, autoSuspend: true, _autoResume: vi.fn() };
+    const page = new EventTarget();
+    keep_audio_awake(howler, page);
+    return { howler, page };
+  }
+
+  // Suspended after a quiet spell, iOS won't start it again without a touch -
+  // and the next thing to play is the stage's opening music.
+  it('never lets the mixer doze off between sounds', () => {
+    const { howler } = setup('running');
+
+    expect(howler.autoSuspend).toBe(false);
+  });
+
+  // A locked iPhone leaves the audio "interrupted", which Howler never wakes.
+  for (const state of ['suspended', 'interrupted']) {
+    it(`wakes the mixer from "${state}" on the next touch or key`, () => {
+      const { howler, page } = setup(state);
+
+      page.dispatchEvent(new Event('pointerdown'));
+
+      expect(howler._autoResume).toHaveBeenCalled();
+    });
+  }
+
+  it('leaves a running mixer alone', () => {
+    const { howler, page } = setup('running');
+
+    page.dispatchEvent(new Event('keydown'));
+
+    expect(howler._autoResume).not.toHaveBeenCalled();
+  });
+});

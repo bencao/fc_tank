@@ -12,7 +12,8 @@ export const TROUBLE = {
   unreachable: "COULDN'T CONNECT",
   offline: "CAN'T REACH THE SERVER",
   left: "YOUR FRIEND LEFT",
-  host_left: "THE HOST LEFT"
+  host_left: "THE HOST LEFT",
+  lost: "CONNECTION LOST"
 };
 
 const SCREENS = {

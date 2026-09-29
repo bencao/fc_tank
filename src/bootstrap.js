@@ -5,6 +5,7 @@ import { install_screen_scaling, reflect_current_scene, reflect_difficulty, refl
 import { SoundSwitch, install_sound_switch } from "./ui/sound_switch.js";
 import { install_invite_panel } from "./ui/invite_panel.js";
 import { become_guest } from "./friends/guest.js";
+import { keep_audio_awake } from "./engine/sound.js";
 
 // Reading localStorage itself throws when site data is blocked.
 function safe_local_storage() {
@@ -32,6 +33,7 @@ function safe_local_storage() {
     [...document.querySelectorAll("[data-sound-switch]")],
     new SoundSwitch(Howler, safe_local_storage())
   );
+  keep_audio_awake(Howler);
   install_invite_panel(document.documentElement, document.getElementById("invite"), game);
   // Opened from a friend's invitation: join their game instead.
   const room = new URLSearchParams(window.location.search).get("join");

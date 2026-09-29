@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { FriendsSession, forward_keys } from '../../src/friends/session.js';
 import { link_pair, flush } from '../helpers/link_pair.js';
 
@@ -97,6 +97,58 @@ describe('FriendsSession', () => {
     expect(closed).toHaveBeenCalled();
     expect(host.connected).toBe(false);
     expect(released).toEqual(['z']);
+  });
+
+  describe('keep_alive', () => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    // A phone that locks or leaves Safari can lose the link without the link
+    // ever saying so; the screen would then sit on its last frame for good.
+    it('gives the friend up once it has heard nothing for a while', async () => {
+      vi.useFakeTimers();
+      const { host, guest, host_link } = pair();
+      const closed = vi.fn();
+      guest.on_close(closed);
+      guest.keep_alive({ every: 1000, lost_after: 5000 });
+      host_link.on_message = null; // the host has stopped hearing, and speaking
+      host_link.send = () => {};
+
+      await vi.advanceTimersByTimeAsync(6000);
+
+      expect(closed).toHaveBeenCalled();
+      expect(guest.connected).toBe(false);
+    });
+
+    it('keeps a quiet but live link - a paused game sends nothing else', async () => {
+      vi.useFakeTimers();
+      const { host, guest } = pair();
+      const closed = vi.fn();
+      guest.on_close(closed);
+      host.keep_alive({ every: 1000, lost_after: 5000 });
+      guest.keep_alive({ every: 1000, lost_after: 5000 });
+
+      await vi.advanceTimersByTimeAsync(20000);
+
+      expect(closed).not.toHaveBeenCalled();
+      host.close();
+    });
+
+    // Its own timers stop too while the page is put away; waking up is no
+    // proof the link died, so the friend gets a fresh chance to be heard.
+    it('does not give up just because the page itself was asleep', async () => {
+      vi.useFakeTimers();
+      const { host, guest } = pair();
+      const closed = vi.fn();
+      guest.on_close(closed);
+      guest.keep_alive({ every: 1000, lost_after: 5000 });
+      host.keep_alive({ every: 1000, lost_after: 5000 });
+
+      vi.setSystemTime(Date.now() + 60000); // asleep for a minute
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(closed).not.toHaveBeenCalled();
+      host.close();
+    });
   });
 
   it('drops what is sent once the link is down, rather than throwing', async () => {
