@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Commander, UserCommander, MissileCommander, EnemyAICommander, DemoAICommander } from '../../src/objects/commanders.js';
 import { Direction } from '../../src/constants.js';
 import { MapArea2D } from '../../src/map/map_area_2d.js';
@@ -410,5 +410,64 @@ describe('DemoAICommander going for power-ups', () => {
     const { commander, map } = makeDemo({ gift_type: 'star', enemy_at: lined_up });
     expect(commander.next_commands()).toContainEqual({ type: 'fire' });
     expect(map.goals).toEqual([]);
+  });
+});
+
+describe('EnemyAICommander blunders', () => {
+  function makeBlunderer(random) {
+    const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
+    const map = {
+      home_vertex: here, random_vertex: () => here, vertexes_at: () => here,
+      gifts: [], user_tanks: () => [],
+      path_requests: 0,
+      shortest_path() { map.path_requests += 1; return []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 200, 240, 240), direction: Direction.UP, iq: 0,
+      delayed_commands: [], can_fire: () => false
+    };
+    vi.spyOn(Math, 'random').mockReturnValue(random);
+    return { commander: new EnemyAICommander(tank), map };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('sometimes sits idle instead of following a plan, then gets back to it', () => {
+    const { commander, map } = makeBlunderer(0);
+    commander.blunder_rate = 1;
+
+    const first = commander.next_commands();
+    expect(first).toContainEqual({ type: 'stop_move' });
+    expect(map.path_requests).toBe(0);
+
+    commander.blunder_rate = 0;
+    for (let i = 0; i < EnemyAICommander.blunder_frames; i++) commander.next_commands();
+    expect(map.path_requests).toBe(1);
+  });
+});
+
+describe('EnemyAICommander wrong-way blunders', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('sometimes rolls off in a random direction instead of following a plan', () => {
+    const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
+    const map = {
+      home_vertex: here, random_vertex: () => here, vertexes_at: () => here,
+      gifts: [], user_tanks: () => [], path_requests: 0,
+      shortest_path() { map.path_requests += 1; return []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 200, 240, 240), direction: Direction.UP, iq: 0,
+      delayed_commands: [], can_fire: () => false
+    };
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    const commander = new EnemyAICommander(tank);
+    commander.blunder_rate = 1;
+
+    const commands = commander.next_commands();
+
+    expect(commands).toContainEqual({ type: 'start_move', params: { offset: null } });
+    expect(commands).not.toContainEqual({ type: 'stop_move' });
+    expect(map.path_requests).toBe(0);
   });
 });

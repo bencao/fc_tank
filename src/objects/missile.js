@@ -49,6 +49,11 @@ export class Missile extends MovableMapUnit2D {
     this.commander = new MissileCommander(this);
   }
 
+  // Player missiles fly faster (see PLAYER_EDGE in tanks.js).
+  get speed() {
+    return super.speed * (this.parent.constructor.missile_speed_boost ?? 1);
+  }
+
   type() {
     return "missile";
   }

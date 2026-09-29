@@ -133,8 +133,13 @@ export class Tank extends MovableMapUnit2D {
   }
 }
 
+// Player tanks and their missiles move this much faster than they otherwise
+// would, at every difficulty - a small edge over the enemies.
+export const PLAYER_EDGE = 1.2;
+
 export class UserTank extends Tank {
-  static speed = 0.13;
+  static speed = 0.13 * PLAYER_EDGE;
+  static missile_speed_boost = PLAYER_EDGE;
 
   constructor(map, area) {
     super(map, area);

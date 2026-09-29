@@ -416,6 +416,7 @@ export class BattleFieldScene extends Scene {
       );
       const difficulty = this.game.difficulty();
       tank.commander.shoot_on_sight = difficulty.shoot_on_sight;
+      tank.commander.blunder_rate = difficulty.blunder_rate;
       if (difficulty.extra_enemy_hp > 0) {
         tank.hp_up(difficulty.extra_enemy_hp);
       }

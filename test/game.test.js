@@ -106,8 +106,11 @@ describe('Game difficulty', () => {
     game.harder();
     expect(game.difficulty().name).toBe('HARD');
     game.harder();
-    expect(game.difficulty().name).toBe('HARD');
+    expect(game.difficulty().name).toBe('NIGHTMARE');
+    game.harder();
+    expect(game.difficulty().name).toBe('NIGHTMARE');
 
+    game.easier();
     game.easier();
     game.easier();
     expect(game.difficulty().name).toBe('EASY');

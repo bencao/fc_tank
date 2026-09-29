@@ -13,23 +13,29 @@ npm install
 npm run dev
 ```
 
-Enemy tanks are guided by [TypeSafe](https://typesafe.ai)'s Jev model: every
-2 seconds the battle sends a snapshot to `/api/enemy-guide`, and Jev picks an
-objective for each enemy - grab a power-up, hunt a player, attack the base, or
-roam - preferring them in that order.
-
 Turn the difficulty dial on the start screen with LEFT / RIGHT (UP / DOWN or
-SPACE picks 1P / 2P). EASY is the classic built-in AI; NORMAL adds Jev guidance
-and enemies that shoot on sight; HARD also gives every enemy 2 extra hit
-points. The levels live in `src/difficulty.js`. Put your key
-in `.env.local` (git-ignored) - and in the Vercel project's environment for
-deploys:
+SPACE picks 1P / 2P):
+
+- **EASY / NORMAL** - the classic built-in AI, with enemies that often (EASY)
+  or sometimes (NORMAL) sit idle or head the wrong way
+- **HARD** - the classic AI without blunders; enemies shoot on sight and take
+  one extra hit
+- **NIGHTMARE** - enemies guided by [TypeSafe](https://typesafe.ai)'s Jev
+  model: every 2 seconds the battle sends a snapshot to `/api/enemy-guide`,
+  and Jev picks each enemy's objective - grab a power-up, hunt a player,
+  attack the base, or roam
+
+At every level, player tanks and their missiles get a 1.2x speed edge. The
+levels live in `src/difficulty.js`.
+
+NIGHTMARE needs a TypeSafe API key. Put it in `.env.local` (git-ignored) - and
+in the Vercel project's environment for deploys:
 
 ```bash
 TYPESAFE_API_KEY=...
 ```
 
-Without a key the endpoint fails and the enemies fall back to their built-in AI.
+Without a key the endpoint fails and NIGHTMARE enemies fall back to the classic AI.
 
 ## Test
 

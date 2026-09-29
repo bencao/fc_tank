@@ -106,8 +106,8 @@ describe('Tank (base)', () => {
 });
 
 describe('Tank speeds', () => {
-  it('UserTank speed is 0.13', () => {
-    expect(UserTank.speed).toBe(0.13);
+  it('player tanks move 1.2x as fast as the fastest enemy, whatever the difficulty', () => {
+    expect(UserTank.speed).toBeCloseTo(1.2 * FishTank.speed);
   });
 
   it('StupidTank speed is 0.07', () => {

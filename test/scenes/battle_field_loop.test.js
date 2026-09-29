@@ -117,8 +117,8 @@ describe('BattleFieldScene enemy guide', () => {
     return scene;
   }
 
-  it('asks Jev for guidance while the battle runs and stops when it pauses', () => {
-    const scene = makeGuidedScene();
+  it('asks Jev for guidance on NIGHTMARE while the battle runs and stops when it pauses', () => {
+    const scene = makeGuidedScene({ level: 3 });
     scene.running = true;
 
     scene.start_time_line();
@@ -129,7 +129,7 @@ describe('BattleFieldScene enemy guide', () => {
   });
 
   it('leaves the demo to the built-in AI', () => {
-    const scene = makeGuidedScene({ demo: true });
+    const scene = makeGuidedScene({ demo: true, level: 3 });
     scene.running = true;
 
     scene.start_time_line();
@@ -138,21 +138,23 @@ describe('BattleFieldScene enemy guide', () => {
     expect(scene.enemy_guide.start).not.toHaveBeenCalled();
   });
 
-  it('leaves EASY to the built-in AI', () => {
-    const scene = makeGuidedScene({ level: 0 });
-    scene.running = true;
+  it('leaves EASY, NORMAL and HARD to the classic built-in AI', () => {
+    for (const level of [0, 1, 2]) {
+      const scene = makeGuidedScene({ level });
+      scene.running = true;
 
-    scene.start_time_line();
-    scene.stop_time_line();
+      scene.start_time_line();
+      scene.stop_time_line();
 
-    expect(scene.enemy_guide.start).not.toHaveBeenCalled();
+      expect(scene.enemy_guide.start).not.toHaveBeenCalled();
+    }
   });
 });
 
 describe('BattleFieldScene enemy arrivals', () => {
   function arrive(level) {
     const scene = Object.create(BattleFieldScene.prototype);
-    const tank = { commander: { shoot_on_sight: true }, hp_up: vi.fn() };
+    const tank = { commander: { shoot_on_sight: true, blunder_rate: 0 }, hp_up: vi.fn() };
     scene.game = { difficulty: () => DIFFICULTIES[level] };
     scene.map = { add_tank: () => tank };
     scene.view = { update_enemy_statuses: vi.fn() };
@@ -162,15 +164,19 @@ describe('BattleFieldScene enemy arrivals', () => {
     return tank;
   }
 
-  it('sends EASY enemies in without shooting on sight', () => {
+  it('sends EASY enemies in blundering and without shooting on sight', () => {
     const tank = arrive(0);
+    expect(tank.commander.blunder_rate).toBe(0.5);
     expect(tank.commander.shoot_on_sight).toBe(false);
     expect(tank.hp_up).not.toHaveBeenCalled();
   });
 
-  it('sends HARD enemies in with extra hit points', () => {
-    const tank = arrive(2);
-    expect(tank.commander.shoot_on_sight).toBe(true);
-    expect(tank.hp_up).toHaveBeenCalledWith(2);
+  it('sends HARD and NIGHTMARE enemies in with one extra hit point', () => {
+    for (const level of [2, 3]) {
+      const tank = arrive(level);
+      expect(tank.commander.blunder_rate).toBe(0);
+      expect(tank.commander.shoot_on_sight).toBe(true);
+      expect(tank.hp_up).toHaveBeenCalledWith(1);
+    }
   });
 });

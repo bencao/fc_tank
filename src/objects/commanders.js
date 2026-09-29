@@ -362,8 +362,13 @@ class PathfindingCommander extends Commander {
 }
 
 export class EnemyAICommander extends PathfindingCommander {
-  // Turned off on EASY (see src/difficulty.js).
+  // How long a blunder lasts, in frames.
+  static blunder_frames = 60;
+
+  // Both set per difficulty (see src/difficulty.js).
   shoot_on_sight = true;
+  blunder_rate = 0;
+  blunder_frames_left = 0;
 
   next() {
     const wedged = this.note_progress();
@@ -382,8 +387,17 @@ export class EnemyAICommander extends PathfindingCommander {
       return (this.last_area = this.map_unit.area);
     }
 
+    // Mid-blunder: sitting idle, or rolling off the wrong way.
+    if (this.blunder_frames_left > 0) {
+      this.blunder_frames_left -= 1;
+      return this.act_out_blunder();
+    }
+
     // move towards home
     if (this.path.length === 0) {
+      if (this.may_plan_route() && Math.random() < this.blunder_rate) {
+        return this.start_blunder();
+      }
       if (this.may_plan_route()) {
         this.plan_route(this.goal_vertex());
         this.arm_repath_timer(2000 + Math.random() * 2000);
@@ -410,6 +424,25 @@ export class EnemyAICommander extends PathfindingCommander {
       }
     }
 
+    return (this.last_area = this.map_unit.area);
+  }
+
+  // Instead of planning, lose the plot for a while: stop dead, or pick a
+  // direction at random and roll off that way. Easier levels do this more.
+  start_blunder() {
+    this.blunder_kind = Math.random() < 0.5 ? "idle" : "wrong_way";
+    // This frame is the blunder's first.
+    this.blunder_frames_left = this.constructor.blunder_frames - 1;
+    this.wander_action = null;
+    return this.act_out_blunder();
+  }
+
+  act_out_blunder() {
+    if (this.blunder_kind === "idle") {
+      this.stop_move();
+    } else {
+      this.wander();
+    }
     return (this.last_area = this.map_unit.area);
   }
 
