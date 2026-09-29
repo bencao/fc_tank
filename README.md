@@ -18,15 +18,17 @@ SPACE picks 1P / 2P):
 
 - **EASY / NORMAL** - the classic built-in AI, with enemies that often (EASY)
   or sometimes (NORMAL) sit idle or head the wrong way
-- **HARD** - the classic AI without blunders; enemies shoot on sight and take
-  one extra hit
+- **HARD** - the classic AI without blunders; enemies shoot on sight (after a
+  300ms reaction) and take one extra hit, and you start in the level-2 tank
 - **NIGHTMARE** - enemies guided by [TypeSafe](https://typesafe.ai)'s Jev
   model: every 2 seconds the battle sends a snapshot to `/api/enemy-guide`,
   and Jev picks each enemy's objective - grab a power-up, hunt a player,
-  attack the base, or roam
+  attack the base, or roam - with HARD's other rules on top
 
 At every level, player tanks move, shoot and reload 1.2x faster than the
-enemies - enough to win a one-on-one, not to take on several at once. The
+enemies - enough to win a one-on-one, not to take on several at once. Hide in
+grass (a tank at least three quarters covered) and the enemies lose track of
+you: they can't see you to shoot or hunt you, and Jev isn't told where you are. The
 levels live in `src/difficulty.js`.
 
 Leave the start screen idle and a demo plays, with Jev steering the AI player

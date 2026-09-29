@@ -111,6 +111,21 @@ export class Map2D {
     return this.tanks.filter(tank => tank instanceof EnemyTank);
   }
 
+  // A tank at least three quarters under grass can't be seen by the other side.
+  hidden_in_grass(tank) {
+    const covered = this.terrains
+      .filter(terrain => terrain.type() === "grass")
+      .map(grass => grass.area.intersect(tank.area))
+      .filter(overlap => overlap.valid())
+      .reduce((sum, overlap) => sum + overlap.width() * overlap.height(), 0);
+    return covered >= 0.75 * tank.area.width() * tank.area.height();
+  }
+
+  // Player tanks the enemies can see: on the field and not hiding in grass.
+  visible_user_tanks() {
+    return this.user_tanks().filter(tank => !tank.destroyed && !this.hidden_in_grass(tank));
+  }
+
   units_at(area) {
     return this.map_units.filter(map_unit => map_unit.area.collide(area));
   }

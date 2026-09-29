@@ -374,6 +374,9 @@ class PathfindingCommander extends Commander {
 export class EnemyAICommander extends PathfindingCommander {
   // How long a blunder lasts, in frames.
   static blunder_frames = 60;
+  // How long a player has to stay lined up before this tank turns and fires,
+  // in ms - about a human's reaction, so neither side gets a free first shot.
+  static sight_reaction_ms = 300;
 
   // Both set per difficulty (see src/difficulty.js).
   shoot_on_sight = true;
@@ -385,9 +388,9 @@ export class EnemyAICommander extends PathfindingCommander {
 
     // A player in the line of fire gets shot at, whatever the objective.
     // Skipped while wedged so a blocked tank still falls through to routing.
-    const prey = wedged || !this.shoot_on_sight
+    const prey = this._react_to(wedged || !this.shoot_on_sight
       ? null
-      : this._find_aligned_target(this.map.user_tanks().filter(t => !t.destroyed));
+      : this._find_aligned_target(this.map.visible_user_tanks()));
     if (prey) {
       this.turn(this._direction_toward(prey));
       if (this.map_unit.can_fire()) {
@@ -437,6 +440,20 @@ export class EnemyAICommander extends PathfindingCommander {
     return (this.last_area = this.map_unit.area);
   }
 
+  // Only hands back a player that has been in sight for the reaction time.
+  _react_to(sighted) {
+    if (!sighted) {
+      this.sighted_since = null;
+      return null;
+    }
+    this.sighted_since ??= this.now();
+    return this.now() - this.sighted_since >= this.constructor.sight_reaction_ms ? sighted : null;
+  }
+
+  now() {
+    return performance.now();
+  }
+
   // Instead of planning, lose the plot for a while: stop dead, or pick a
   // direction at random and roll off that way. Easier levels do this more.
   start_blunder() {
@@ -484,8 +501,9 @@ export class EnemyAICommander extends PathfindingCommander {
   _nearest_user_tank() {
     const my = this.map_unit.area;
     const distance = tank => Math.abs(my.x1 - tank.area.x1) + Math.abs(my.y1 - tank.area.y1);
+    // Only the players it can see - one hiding in grass can't be hunted.
     return this.map
-      .user_tanks()
+      .visible_user_tanks()
       .reduce((nearest, tank) => (!nearest || distance(tank) < distance(nearest) ? tank : nearest), null);
   }
 

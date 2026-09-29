@@ -33,11 +33,16 @@ export function battlefield_snapshot(map, guide = { enemies: true, players: fals
   };
   const on_field = tanks => tanks.filter(tank => !tank.destroyed);
   const tile_of = tank => ({ x: tile(tank.area.x1), y: tile(tank.area.y1) });
+  // A player hiding in grass is reported without a position, and doesn't
+  // count towards any enemy's distance to the nearest player.
+  const visible = [];
   const players = on_field(map.user_tanks()).map(tank => {
     const at = tile_of(tank);
+    const hidden = map.hidden_in_grass(tank);
+    if (!hidden) visible.push(at);
     return {
       id: player_id(tank),
-      ...at,
+      ...(hidden ? { hidden_in_grass: true } : at),
       level: tank.level,
       distance_to_nearest_enemy: nearest(at, on_field(map.enemy_tanks()).map(tile_of)),
       distance_to_power_up: nearest(at, power_ups)
@@ -51,7 +56,7 @@ export function battlefield_snapshot(map, guide = { enemies: true, players: fals
       ...at,
       hp: tank.hp,
       distance_to_base: distance(at, base),
-      distance_to_nearest_player: nearest(at, players),
+      distance_to_nearest_player: nearest(at, visible),
       distance_to_power_up: nearest(at, power_ups)
     };
   });

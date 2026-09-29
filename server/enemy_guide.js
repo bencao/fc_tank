@@ -50,7 +50,7 @@ const PLAYER_PRIORITIES = [
 const RULES =
   "Battle City. Enemy tanks win by destroying the player's base or all player tanks. " +
   "The map is a 13x13 tile grid; x grows rightward, y grows downward, the base sits at the bottom centre. " +
-  "Distances are in tiles.";
+  "Distances are in tiles. A player tank hiding in grass can't be seen: its position is unknown to the enemies.";
 
 export function build_guide_request(snapshot) {
   const { guide, ...battlefield } = snapshot;
@@ -137,6 +137,18 @@ export function parse_snapshot(body) {
     return list.map(power_up => ({ type: power_up_type(power_up?.type), x: tile(power_up.x), y: tile(power_up.y) }));
   };
 
+  // A player hiding in grass comes without a position - and must not bring one.
+  const players = list => {
+    const shared = { level: tile, distance_to_nearest_enemy: tile, distance_to_power_up: tile };
+    return tanks(list, {}).map((player, i) => {
+      const raw = list[i];
+      if (raw.hidden_in_grass === true) {
+        if ("x" in raw || "y" in raw) throw new Error("a hidden player has no position");
+        return tanks([raw], { hidden_in_grass: flag, ...shared })[0];
+      }
+      return tanks([raw], { x: tile, y: tile, ...shared })[0];
+    });
+  };
   const flag = value => {
     if (typeof value !== "boolean") throw new Error("expected true or false");
     return value;
@@ -145,13 +157,7 @@ export function parse_snapshot(body) {
   return {
     guide: { enemies: flag(body?.guide?.enemies), players: flag(body?.guide?.players) },
     base: { x: tile(body?.base?.x), y: tile(body?.base?.y) },
-    players: tanks(body?.players, {
-      x: tile,
-      y: tile,
-      level: tile,
-      distance_to_nearest_enemy: tile,
-      distance_to_power_up: tile
-    }),
+    players: players(body?.players),
     power_ups: power_ups(body?.power_ups),
     enemies: tanks(body?.enemies, {
       type: word,

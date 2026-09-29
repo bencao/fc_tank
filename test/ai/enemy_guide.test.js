@@ -18,6 +18,7 @@ function makeMap() {
     players,
     gifts,
     home: () => ({ area: new MapArea2D(240, 480, 280, 520) }),
+    hidden_in_grass: () => false,
     enemy_tanks: () => enemies,
     user_tanks: () => players
   };
@@ -40,6 +41,20 @@ describe('battlefield_snapshot', () => {
     });
     // Ids stay the same from one snapshot to the next.
     expect(battlefield_snapshot(map).enemies.map(e => e.id)).toEqual(snapshot.enemies.map(e => e.id));
+  });
+});
+
+describe('battlefield_snapshot with a player hiding in grass', () => {
+  it('tells Jev the player is hiding, but not where', () => {
+    const map = makeMap();
+    map.hidden_in_grass = tank => tank === map.players[0];
+
+    const snapshot = battlefield_snapshot(map);
+
+    expect(snapshot.players).toEqual([
+      { id: 'p1', hidden_in_grass: true, level: 2, distance_to_nearest_enemy: 4, distance_to_power_up: 7 }
+    ]);
+    expect(snapshot.enemies.map(e => e.distance_to_nearest_player)).toEqual([99, 99]);
   });
 });
 

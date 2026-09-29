@@ -5,14 +5,16 @@
 //                    following its plan, each time it plans a route
 //   shoot_on_sight - enemies turn and fire on a player lined up with a clear shot
 //   extra_enemy_hp - hit points added to every enemy tank as it arrives
+//   player_level   - the lowest level a player tank arrives at (2 is the
+//                    intermediate tank: two missiles at once and an extra hit)
 //
 // Whatever the level, player tanks and their missiles move 1.2x faster than
 // they otherwise would (see UserTank in src/objects/tanks.js).
 export const DIFFICULTIES = [
-  { name: "EASY", jev_guide: false, blunder_rate: 0.5, shoot_on_sight: false, extra_enemy_hp: 0 },
-  { name: "NORMAL", jev_guide: false, blunder_rate: 0.25, shoot_on_sight: false, extra_enemy_hp: 0 },
-  { name: "HARD", jev_guide: false, blunder_rate: 0, shoot_on_sight: true, extra_enemy_hp: 1 },
-  { name: "NIGHTMARE", jev_guide: true, blunder_rate: 0, shoot_on_sight: true, extra_enemy_hp: 1 }
+  { name: "EASY", jev_guide: false, blunder_rate: 0.5, shoot_on_sight: false, extra_enemy_hp: 0, player_level: 1 },
+  { name: "NORMAL", jev_guide: false, blunder_rate: 0.25, shoot_on_sight: false, extra_enemy_hp: 0, player_level: 1 },
+  { name: "HARD", jev_guide: false, blunder_rate: 0, shoot_on_sight: true, extra_enemy_hp: 1, player_level: 2 },
+  { name: "NIGHTMARE", jev_guide: true, blunder_rate: 0, shoot_on_sight: true, extra_enemy_hp: 1, player_level: 2 }
 ];
 
 export const DEFAULT_DIFFICULTY = 1;

@@ -86,6 +86,13 @@ describe('parse_snapshot', () => {
     expect(parse_snapshot(snapshot)).toEqual(snapshot);
   });
 
+  it('accepts a player hiding in grass, reported without a position', () => {
+    const hiding = { id: 'p1', hidden_in_grass: true, level: 1, distance_to_nearest_enemy: 11, distance_to_power_up: 7 };
+
+    expect(parse_snapshot({ ...snapshot, players: [hiding] }).players).toEqual([hiding]);
+    expect(() => parse_snapshot({ ...snapshot, players: [{ ...hiding, x: 4, y: 12 }] })).toThrow();
+  });
+
   it('rejects bodies that are not a battlefield snapshot', () => {
     expect(() => parse_snapshot(null)).toThrow();
     expect(() => parse_snapshot({ ...snapshot, enemies: 'lots' })).toThrow();

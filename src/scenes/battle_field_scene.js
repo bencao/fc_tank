@@ -378,7 +378,7 @@ export class BattleFieldScene extends Scene {
         UserP1Tank,
         new MapArea2D(160, 480, 200, 520)
       );
-      p1_tank.level_up(this.game.get_status("p1_level") - 1);
+      p1_tank.level_up(this.arrival_level("p1_level") - 1);
       p1_tank.on_ship(this.game.get_status("p1_ship"));
       if (this.is_demo_mode()) {
         p1_tank.commander = new DemoAICommander(p1_tank);
@@ -394,13 +394,18 @@ export class BattleFieldScene extends Scene {
         UserP2Tank,
         new MapArea2D(320, 480, 360, 520)
       );
-      p2_tank.level_up(this.game.get_status("p2_level") - 1);
+      p2_tank.level_up(this.arrival_level("p2_level") - 1);
       p2_tank.on_ship(this.game.get_status("p2_ship"));
       if (this.is_demo_mode()) {
         p2_tank.commander = new DemoAICommander(p2_tank);
       }
       return this.view.update_p2_lives(this.remain_user_p2_lives);
     }
+  }
+
+  // A player tank arrives at the level it had, or the difficulty's minimum.
+  arrival_level(status_key) {
+    return Math.max(this.game.get_status(status_key), this.game.difficulty().player_level);
   }
 
   born_enemy_tank() {

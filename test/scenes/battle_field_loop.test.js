@@ -182,3 +182,30 @@ describe('BattleFieldScene enemy arrivals', () => {
     }
   });
 });
+
+describe('BattleFieldScene player arrivals', () => {
+  function spawn(level, saved_level = 1) {
+    const scene = Object.create(BattleFieldScene.prototype);
+    const tank = { level_up: vi.fn(), on_ship: vi.fn() };
+    scene.game = {
+      difficulty: () => DIFFICULTIES[level],
+      get_status: key => ({ p1_level: saved_level, p1_ship: false, demo_mode: false })[key]
+    };
+    scene.map = { add_tank: () => tank };
+    scene.view = { update_p1_lives: vi.fn() };
+    scene.remain_user_p1_lives = 1;
+    scene.born_p1_tank();
+    return tank;
+  }
+
+  it('starts the player in the intermediate tank on HARD and NIGHTMARE', () => {
+    expect(spawn(0).level_up).toHaveBeenCalledWith(0);
+    expect(spawn(1).level_up).toHaveBeenCalledWith(0);
+    expect(spawn(2).level_up).toHaveBeenCalledWith(1);
+    expect(spawn(3).level_up).toHaveBeenCalledWith(1);
+  });
+
+  it('keeps a level the player already earned above that', () => {
+    expect(spawn(2, 3).level_up).toHaveBeenCalledWith(2);
+  });
+});

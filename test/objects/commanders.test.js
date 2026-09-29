@@ -111,6 +111,7 @@ describe('EnemyAICommander', () => {
       random_vertex: () => map.home_vertex,
       vertexes_at: () => here,
       user_tanks: () => [],
+      visible_user_tanks: () => [],
       path_requests: 0,
       shortest_path() {
         map.path_requests += 1;
@@ -170,6 +171,7 @@ describe('EnemyAICommander with nowhere to go', () => {
       random_vertex: () => here,
       vertexes_at: () => here,
       user_tanks: () => [],
+      visible_user_tanks: () => [],
       shortest_path: () => []
     };
     const tank = {
@@ -196,6 +198,7 @@ describe('EnemyAICommander route backoff', () => {
       random_vertex: () => here,
       vertexes_at: () => here,
       user_tanks: () => [],
+      visible_user_tanks: () => [],
       path_requests: 0,
       shortest_path() { map.path_requests += 1; return []; }
     };
@@ -227,6 +230,7 @@ describe('EnemyAICommander following Jev guidance', () => {
       gifts: [{ area: new MapArea2D(120, 120, 160, 160), destroyed: false }],
       vertexes_at: area => (area.x1 === 200 && area.y1 === 200 ? here : area.x1 === 120 ? power_up : area.x1 === 160 ? near_player : far_player),
       user_tanks: () => [{ area: new MapArea2D(480, 480, 520, 520) }, { area: new MapArea2D(160, 240, 200, 280) }],
+      visible_user_tanks: () => map.user_tanks(),
       goals: [],
       shortest_path(tank, start, end) { map.goals.push(end); return []; }
     };
@@ -244,6 +248,17 @@ describe('EnemyAICommander following Jev guidance', () => {
     commander.next_commands();
 
     expect(map.goals).toEqual([near_player]);
+  });
+
+  it('cannot hunt players that are all hiding in grass', () => {
+    const { commander, map, home, near_player } = makeGuided();
+    map.visible_user_tanks = () => [];
+
+    commander.follow('hunt_player');
+    commander.next_commands();
+
+    expect(map.goals).not.toContainEqual(near_player);
+    expect(map.goals).toEqual([home]); // its own iq takes over
   });
 
   it('heads somewhere else on the map when told to roam', () => {
@@ -309,6 +324,7 @@ describe('EnemyAICommander attacking players', () => {
       vertexes_at: () => here,
       gifts: [],
       user_tanks: () => [player],
+      visible_user_tanks: () => [player],
       units_at: () => (blocked ? [wall] : []),
       shortest_path: () => []
     };
@@ -319,11 +335,25 @@ describe('EnemyAICommander attacking players', () => {
     return new EnemyAICommander(tank);
   }
 
-  it('turns on a player it has lined up with and fires', () => {
-    const commands = makeFacingPlayer().next_commands();
+  it('turns on a player it has lined up with and fires, after a human-like reaction time', () => {
+    const commander = makeFacingPlayer();
+    let now = 1000;
+    commander.now = () => now;
+    const orig = Math.random;
+    Math.random = () => 0.5; // rule out the random potshot
+    try {
+      const turned_and_fired = commands =>
+        commands.some(c => c.type === 'direction' && c.params.direction === Direction.DOWN) &&
+        commands.some(c => c.type === 'fire');
 
-    expect(commands).toContainEqual({ type: 'direction', params: { direction: Direction.DOWN } });
-    expect(commands).toContainEqual({ type: 'fire' });
+      expect(turned_and_fired(commander.next_commands())).toBe(false);
+      now += EnemyAICommander.sight_reaction_ms - 1;
+      expect(turned_and_fired(commander.next_commands())).toBe(false);
+      now += 1;
+      expect(turned_and_fired(commander.next_commands())).toBe(true);
+    } finally {
+      Math.random = orig;
+    }
   });
 
   it('leaves lined-up players alone when shooting on sight is off', () => {
@@ -332,6 +362,22 @@ describe('EnemyAICommander attacking players', () => {
     const orig = Math.random;
     Math.random = () => 0.5; // rule out the random potshot
     try {
+      expect(commander.next_commands()).not.toContainEqual({ type: 'fire' });
+    } finally {
+      Math.random = orig;
+    }
+  });
+
+  it('cannot see a player hiding in grass', () => {
+    const commander = makeFacingPlayer();
+    commander.map.visible_user_tanks = () => [];
+    let now = 1000;
+    commander.now = () => now;
+    const orig = Math.random;
+    Math.random = () => 0.5; // rule out the random potshot
+    try {
+      commander.next_commands();
+      now += EnemyAICommander.sight_reaction_ms;
       expect(commander.next_commands()).not.toContainEqual({ type: 'fire' });
     } finally {
       Math.random = orig;
@@ -418,7 +464,7 @@ describe('EnemyAICommander blunders', () => {
     const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
     const map = {
       home_vertex: here, random_vertex: () => here, vertexes_at: () => here,
-      gifts: [], user_tanks: () => [],
+      gifts: [], user_tanks: () => [], visible_user_tanks: () => [],
       path_requests: 0,
       shortest_path() { map.path_requests += 1; return []; }
     };
@@ -453,7 +499,7 @@ describe('EnemyAICommander wrong-way blunders', () => {
     const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
     const map = {
       home_vertex: here, random_vertex: () => here, vertexes_at: () => here,
-      gifts: [], user_tanks: () => [], path_requests: 0,
+      gifts: [], user_tanks: () => [], visible_user_tanks: () => [], path_requests: 0,
       shortest_path() { map.path_requests += 1; return []; }
     };
     const tank = {
