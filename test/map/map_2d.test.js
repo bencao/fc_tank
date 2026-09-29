@@ -6,6 +6,7 @@ stubKinetic();
 const { Map2D } = await import('../../src/map/map_2d.js');
 const { IronTerrain, BrickTerrain } = await import('../../src/map/terrains.js');
 const { MapArea2D } = await import('../../src/map/map_area_2d.js');
+const { ClockGift, LandMineGift, StarGift } = await import('../../src/objects/gifts.js');
 
 describe('Map2D.random_vertex', () => {
   it('picks somewhere the tank could actually be', () => {
@@ -114,5 +115,31 @@ describe('Map2D.shortest_path', () => {
     const here = map.vertexes_at(new MapArea2D(200, 320, 240, 360));
 
     expect(map.shortest_path(level_1_tank, here, here)).toEqual([]);
+  });
+});
+
+describe('Map2D.random_gift placement', () => {
+  // Rows above and below the middle row of the map, on an open map.
+  function sides(gift_class, drops = 3000) {
+    const map = new Map2D({ add: () => {} });
+    let top = 0, bottom = 0;
+    for (let i = 0; i < drops; i++) {
+      const gift = map.random_gift(gift_class);
+      if (gift.area.y1 < 240) top++;
+      if (gift.area.y1 > 240) bottom++;
+    }
+    return bottom / top;
+  }
+
+  it("drops clocks and land mines on the player's half 1.2 times as often", () => {
+    expect(sides(ClockGift)).toBeGreaterThan(1.08);
+    expect(sides(ClockGift)).toBeLessThan(1.32);
+    expect(sides(LandMineGift)).toBeGreaterThan(1.08);
+    expect(sides(LandMineGift)).toBeLessThan(1.32);
+  });
+
+  it('spreads other power-ups evenly', () => {
+    expect(sides(StarGift)).toBeGreaterThan(0.88);
+    expect(sides(StarGift)).toBeLessThan(1.12);
   });
 });

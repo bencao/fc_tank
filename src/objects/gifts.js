@@ -15,8 +15,24 @@ export function getGiftClasses() {
   ];
 }
 
+// Picks which power-up drops next, weighted by each class's `weight`.
+export function pickGiftClass(random = Math.random) {
+  const classes = getGiftClasses();
+  const total = classes.reduce((sum, cls) => sum + cls.weight, 0);
+  let roll = random() * total;
+  for (const cls of classes) {
+    roll -= cls.weight;
+    if (roll < 0) return cls;
+  }
+  return classes[classes.length - 1];
+}
+
 export class Gift extends MapUnit2D {
   static group = "gift";
+  // Relative chance of this power-up dropping.
+  static weight = 1;
+  // Whether it hits the whole of the other side at once.
+  static game_changer = false;
 
   accept(map_unit) {
     return true;
@@ -58,7 +74,12 @@ export class Gift extends MapUnit2D {
   }
 }
 
+// Clearing or freezing a whole side is worth far more to the enemies, who
+// field many tanks, than to the player's one - so these drop half as often.
 export class LandMineGift extends Gift {
+  static weight = 0.5;
+  static game_changer = true;
+
   apply(tank) {
     if (tank instanceof EnemyTank) {
       this.map.user_tanks().forEach(t => {
@@ -150,6 +171,9 @@ export class HatGift extends Gift {
 }
 
 export class ClockGift extends Gift {
+  static weight = 0.5;
+  static game_changer = true;
+
   apply(tank) {
     if (tank instanceof EnemyTank) {
       this.map.user_tanks().forEach(t => t.freeze());
