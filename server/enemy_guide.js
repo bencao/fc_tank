@@ -171,8 +171,21 @@ export function parse_snapshot(body) {
   };
 }
 
+// True only for requests the game's own front end made: a cross-site caller
+// (or a script hitting the endpoint directly) sends no Origin header, or one
+// that doesn't match this deployment - either way it is turned away before
+// any Jev budget is spent on it.
+function same_origin(request) {
+  const origin = request.headers.get("origin");
+  return origin !== null && origin === new URL(request.url).origin;
+}
+
 // budget: a JevBudget (server/jev_budget.js) - every Jev call is charged to it.
 export async function handle_guide_request(request, client, budget) {
+  if (!same_origin(request)) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   let snapshot;
   try {
     snapshot = parse_snapshot(await request.json());
