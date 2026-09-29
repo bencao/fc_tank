@@ -4,7 +4,8 @@ import { stubKinetic } from '../helpers/kinetic_mock.js';
 stubKinetic();
 
 const { Map2D } = await import('../../src/map/map_2d.js');
-const { IronTerrain, BrickTerrain, GrassTerrain } = await import('../../src/map/terrains.js');
+const { IronTerrain, BrickTerrain, GrassTerrain, HomeTerrain } = await import('../../src/map/terrains.js');
+const { EnemyTank } = await import('../../src/objects/tanks.js');
 const { MapArea2D } = await import('../../src/map/map_area_2d.js');
 const { ClockGift, LandMineGift, StarGift } = await import('../../src/objects/gifts.js');
 
@@ -147,6 +148,30 @@ describe('Map2D.shortest_path', () => {
     const here = map.vertexes_at(new MapArea2D(200, 320, 240, 360));
 
     expect(map.shortest_path(level_1_tank, here, here)).toEqual([]);
+  });
+
+  // A player-side tank - the demo tank - can't drive through the eagle, so a
+  // route over it only wedges the tank there, shooting at its own base.
+  it('does not route a player tank through its own base', () => {
+    const home = new MapArea2D(240, 480, 280, 520);
+    map.add_terrain(HomeTerrain, home);
+    const start = map.vertexes_at(new MapArea2D(160, 480, 200, 520));
+    const goal = map.vertexes_at(new MapArea2D(320, 480, 360, 520));
+
+    const path = map.shortest_path(level_1_tank, start, goal);
+
+    expect(path.length).toBeGreaterThan(0);
+    expect(path.some(vertex => vertex.collide(home))).toBe(false);
+  });
+
+  it('still lets an enemy tank route onto the base it is attacking', () => {
+    map.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520));
+    const enemy = Object.assign(Object.create(EnemyTank.prototype), { power: 1, ship: false });
+    const start = map.vertexes_at(new MapArea2D(240, 320, 280, 360));
+
+    const path = map.shortest_path(enemy, start, map.home_vertex);
+
+    expect(path.at(-1)).toBe(map.home_vertex);
   });
 });
 
