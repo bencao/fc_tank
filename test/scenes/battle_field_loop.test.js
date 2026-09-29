@@ -22,6 +22,8 @@ function makeScene() {
   const scene = Object.create(BattleFieldScene.prototype);
   scene.map = { missiles: [], gifts: [], tanks: [] };
   scene.view = { update_frame_rate: vi.fn() };
+  scene.game = { get_status: () => false };
+  scene.enemy_guide = { start: vi.fn(), stop: vi.fn() };
   scene.frame_rate = 0;
   return scene;
 }
@@ -92,5 +94,43 @@ describe('BattleFieldScene time line', () => {
     expect(harness.frame(64)).toBe(1);
 
     scene.stop_time_line();
+  });
+});
+
+describe('BattleFieldScene enemy guide', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    makeLoopHarness();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function makeGuidedScene({ demo = false } = {}) {
+    const scene = makeScene();
+    scene.game = { get_status: key => (key === 'demo_mode' ? demo : undefined) };
+    return scene;
+  }
+
+  it('asks Jev for guidance while the battle runs and stops when it pauses', () => {
+    const scene = makeGuidedScene();
+    scene.running = true;
+
+    scene.start_time_line();
+    expect(scene.enemy_guide.start).toHaveBeenCalledTimes(1);
+
+    scene.stop_time_line();
+    expect(scene.enemy_guide.stop).toHaveBeenCalled();
+  });
+
+  it('leaves the demo to the built-in AI', () => {
+    const scene = makeGuidedScene({ demo: true });
+    scene.running = true;
+
+    scene.start_time_line();
+    scene.stop_time_line();
+
+    expect(scene.enemy_guide.start).not.toHaveBeenCalled();
   });
 });

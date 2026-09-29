@@ -14,7 +14,12 @@
     "type": "git",
     "url": "https://github.com/bencao/fc_tank.git"
   },
-  "keywords": ["fc", "tank", "battle-city", "game"],
+  "keywords": [
+    "fc",
+    "tank",
+    "battle-city",
+    "game"
+  ],
   "author": "Ben Cao",
   "license": "MIT",
   "devDependencies": {
@@ -22,6 +27,7 @@
     "vitest": "^3"
   },
   "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0",
     "howler": "^2.2.4"
   }
 }

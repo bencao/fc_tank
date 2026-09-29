@@ -13,6 +13,18 @@ npm install
 npm run dev
 ```
 
+Enemy tanks are guided by [TypeSafe](https://typesafe.ai)'s Jev model: every
+2 seconds the battle sends a snapshot to `/api/enemy-guide`, and Jev picks an
+objective for each enemy (attack the base, hunt a player, or roam). Put your key
+in `.env.local` (git-ignored) - and in the Vercel project's environment for
+deploys:
+
+```bash
+TYPESAFE_API_KEY=...
+```
+
+Without a key the endpoint fails and the enemies fall back to their built-in AI.
+
 ## Test
 
 ```bash

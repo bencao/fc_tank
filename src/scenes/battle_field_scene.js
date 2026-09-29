@@ -14,6 +14,7 @@ import {
   FoolTank
 } from "../objects/tanks.js";
 import { DemoAICommander } from "../objects/commanders.js";
+import { EnemyGuide } from "../ai/enemy_guide.js";
 
 export class BattleFieldScene extends Scene {
   // Longest step the physics will take in one frame, in ms.
@@ -24,6 +25,7 @@ export class BattleFieldScene extends Scene {
     this.layer = this.view.layer;
     this.map = new Map2D(this.layer);
     this.builder = new TiledMapBuilder(this.map, terrainsJson);
+    this.enemy_guide = new EnemyGuide(this.map);
     this.reset_config_variables();
   }
 
@@ -317,6 +319,12 @@ export class BattleFieldScene extends Scene {
     const loop_id = this.next_loop_id();
     requestAnimationFrame(offset => this.integration(offset, loop_id));
 
+    // Jev picks each enemy's objective every couple of seconds. The demo plays
+    // unattended on the welcome screen, so it sticks to the built-in AI.
+    if (!this.is_demo_mode()) {
+      this.enemy_guide.start();
+    }
+
     // show frame rate
     this.frame_timeline = setInterval(() => {
       this.view.update_frame_rate(this.frame_rate);
@@ -328,6 +336,7 @@ export class BattleFieldScene extends Scene {
     this.running = false;
     this.startedAt = null;
     this.next_loop_id();
+    this.enemy_guide.stop();
 
     return clearInterval(this.frame_timeline);
   }

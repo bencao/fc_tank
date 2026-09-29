@@ -337,10 +337,40 @@ export class EnemyAICommander extends PathfindingCommander {
     return (this.last_area = this.map_unit.area);
   }
 
+  // Objective chosen by Jev (see src/ai/enemy_guide.js). Until guidance
+  // arrives - or if it never does - the tank's own iq decides.
+  follow(objective) {
+    if (objective === this.objective) {
+      return;
+    }
+    this.objective = objective;
+    this.reset_path();
+  }
+
   goal_vertex() {
+    if (this.objective === "attack_base") {
+      return this.map.home_vertex;
+    }
+    if (this.objective === "hunt_player") {
+      const prey = this._nearest_user_tank();
+      if (prey) {
+        return this.map.vertexes_at(prey.area);
+      }
+    }
+    if (this.objective === "roam") {
+      return this.map.random_vertex(this.map_unit);
+    }
     return Math.random() * 100 <= this.map_unit.iq
       ? this.map.home_vertex
       : this.map.random_vertex(this.map_unit);
+  }
+
+  _nearest_user_tank() {
+    const my = this.map_unit.area;
+    const distance = tank => Math.abs(my.x1 - tank.area.x1) + Math.abs(my.y1 - tank.area.y1);
+    return this.map
+      .user_tanks()
+      .reduce((nearest, tank) => (!nearest || distance(tank) < distance(nearest) ? tank : nearest), null);
   }
 
   in_attack_range(area) {

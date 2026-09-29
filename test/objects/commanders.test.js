@@ -209,3 +209,67 @@ describe('EnemyAICommander route backoff', () => {
     expect(map.path_requests).toBeLessThanOrEqual(2);
   });
 });
+
+describe('EnemyAICommander following Jev guidance', () => {
+  function makeGuided() {
+    const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
+    const home = Object.assign(new MapArea2D(240, 480, 280, 520), { vx: 24, vy: 48 });
+    const near_player = Object.assign(new MapArea2D(160, 240, 200, 280), { vx: 16, vy: 24 });
+    const far_player = Object.assign(new MapArea2D(480, 480, 520, 520), { vx: 48, vy: 48 });
+    const roam_spot = Object.assign(new MapArea2D(0, 0, 40, 40), { vx: 0, vy: 0 });
+    const map = {
+      home_vertex: home,
+      random_vertex: () => roam_spot,
+      vertexes_at: area => (area.x1 === 200 && area.y1 === 200 ? here : area.x1 === 160 ? near_player : far_player),
+      user_tanks: () => [{ area: new MapArea2D(480, 480, 520, 520) }, { area: new MapArea2D(160, 240, 200, 280) }],
+      goals: [],
+      shortest_path(tank, start, end) { map.goals.push(end); return []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 200, 240, 240), direction: 180, iq: 100,
+      delayed_commands: [], can_fire: () => false
+    };
+    return { commander: new EnemyAICommander(tank), map, tank, home, near_player, roam_spot };
+  }
+
+  it('heads for the nearest player tank when told to hunt', () => {
+    const { commander, map, near_player } = makeGuided();
+
+    commander.follow('hunt_player');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([near_player]);
+  });
+
+  it('heads somewhere else on the map when told to roam', () => {
+    const { commander, map, roam_spot } = makeGuided();
+
+    commander.follow('roam');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([roam_spot]);
+  });
+
+  it('heads for the base when told to attack it, whatever its own iq', () => {
+    const { commander, map, tank, home } = makeGuided();
+    tank.iq = 0;
+
+    commander.follow('attack_base');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([home]);
+  });
+
+  it('drops its route when the objective changes, but not when it is repeated', () => {
+    const { commander } = makeGuided();
+    const route = () => [Object.assign(new MapArea2D(200, 160, 240, 200), { vx: 20, vy: 16 })];
+
+    commander.follow('attack_base');
+    commander.path = route();
+    commander.follow('attack_base');
+    expect(commander.path).toHaveLength(1);
+
+    commander.follow('hunt_player');
+    expect(commander.path).toHaveLength(0);
+  });
+});
