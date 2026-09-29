@@ -82,13 +82,16 @@ describe('SpriteMirror', () => {
     expect(sprites_made()).toHaveLength(0);
   });
 
-  it('takes away the sprite of a unit the host no longer has', () => {
+  // A started sprite keeps its own timer and animation running until it is
+  // stopped - destroyed alone, every missile ever fired would go on ticking.
+  it('stops and takes away the sprite of a unit the host no longer has', () => {
     const { mirror: m } = mirror();
     m.apply({ units: [[7, 't', 'user_p2_lv1', 340, 500, 0]] });
     const [{ sprite }] = sprites_made();
 
     m.apply({ units: [] });
 
+    expect(sprite.stop).toHaveBeenCalled();
     expect(sprite.destroy).toHaveBeenCalled();
   });
 
@@ -109,6 +112,7 @@ describe('SpriteMirror', () => {
 
     m.clear();
 
+    expect(sprite.stop).toHaveBeenCalled();
     expect(sprite.destroy).toHaveBeenCalled();
     expect(map.terrains).toHaveLength(0);
   });

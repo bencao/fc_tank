@@ -24,6 +24,13 @@ const animations_for = kind => (kind === "g" ? Animations.gifts : Animations.mov
 // Half a tank and half a missile: they're placed by their centre.
 const HALF_SIZE = { t: 20, m: 10 };
 
+// A started sprite has a timer and an animation of its own that outlive it
+// unless stopped - as MapUnit2D.destroy_display does on the host.
+function remove(sprite) {
+  sprite.stop();
+  sprite.destroy();
+}
+
 export class SpriteMirror {
   constructor(map, layer) {
     this.map = map;
@@ -75,7 +82,7 @@ export class SpriteMirror {
     });
     for (const [id, unit] of this.units) {
       if (!seen.has(id)) {
-        unit.sprite.destroy();
+        remove(unit.sprite);
         this.units.delete(id);
       }
     }
@@ -133,7 +140,7 @@ export class SpriteMirror {
   }
 
   clear() {
-    this.units.forEach(unit => unit.sprite.destroy());
+    this.units.forEach(unit => remove(unit.sprite));
     this.units.clear();
     this.terrains.clear();
     this.map.reset();
