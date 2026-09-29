@@ -9,9 +9,11 @@ function makeMap() {
   });
   const enemies = [enemy('fish', 0, 0, 2), enemy('strong', 240, 400, 4)];
   const players = [{ type: () => 'user_p1', area: new MapArea2D(160, 480, 200, 520), level: 2, destroyed: false }];
+  const gifts = [{ type: () => 'star', area: new MapArea2D(120, 240, 160, 280), destroyed: false }];
   return {
     enemies,
     players,
+    gifts,
     home: () => ({ area: new MapArea2D(240, 480, 280, 520) }),
     enemy_tanks: () => enemies,
     user_tanks: () => players
@@ -26,9 +28,10 @@ describe('battlefield_snapshot', () => {
 
     expect(snapshot.base).toEqual({ x: 6, y: 12 });
     expect(snapshot.players).toEqual([{ id: 'p1', x: 4, y: 12, level: 2 }]);
+    expect(snapshot.power_ups).toEqual([{ type: 'star', x: 3, y: 6 }]);
     expect(snapshot.enemies).toHaveLength(2);
     expect(snapshot.enemies[1]).toMatchObject({
-      type: 'strong', x: 6, y: 10, hp: 4, distance_to_base: 2, distance_to_nearest_player: 4
+      type: 'strong', x: 6, y: 10, hp: 4, distance_to_base: 2, distance_to_nearest_player: 4, distance_to_power_up: 7
     });
     // Ids stay the same from one snapshot to the next.
     expect(battlefield_snapshot(map).enemies.map(e => e.id)).toEqual(snapshot.enemies.map(e => e.id));

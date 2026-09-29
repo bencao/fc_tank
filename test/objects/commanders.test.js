@@ -110,6 +110,7 @@ describe('EnemyAICommander', () => {
       home_vertex: Object.assign(new MapArea2D(240, 480, 280, 520), { vx: 24, vy: 48 }),
       random_vertex: () => map.home_vertex,
       vertexes_at: () => here,
+      user_tanks: () => [],
       path_requests: 0,
       shortest_path() {
         map.path_requests += 1;
@@ -168,6 +169,7 @@ describe('EnemyAICommander with nowhere to go', () => {
       home_vertex: here,
       random_vertex: () => here,
       vertexes_at: () => here,
+      user_tanks: () => [],
       shortest_path: () => []
     };
     const tank = {
@@ -193,6 +195,7 @@ describe('EnemyAICommander route backoff', () => {
       home_vertex: here,
       random_vertex: () => here,
       vertexes_at: () => here,
+      user_tanks: () => [],
       path_requests: 0,
       shortest_path() { map.path_requests += 1; return []; }
     };
@@ -217,10 +220,12 @@ describe('EnemyAICommander following Jev guidance', () => {
     const near_player = Object.assign(new MapArea2D(160, 240, 200, 280), { vx: 16, vy: 24 });
     const far_player = Object.assign(new MapArea2D(480, 480, 520, 520), { vx: 48, vy: 48 });
     const roam_spot = Object.assign(new MapArea2D(0, 0, 40, 40), { vx: 0, vy: 0 });
+    const power_up = Object.assign(new MapArea2D(120, 120, 160, 160), { vx: 12, vy: 12 });
     const map = {
       home_vertex: home,
       random_vertex: () => roam_spot,
-      vertexes_at: area => (area.x1 === 200 && area.y1 === 200 ? here : area.x1 === 160 ? near_player : far_player),
+      gifts: [{ area: new MapArea2D(120, 120, 160, 160), destroyed: false }],
+      vertexes_at: area => (area.x1 === 200 && area.y1 === 200 ? here : area.x1 === 120 ? power_up : area.x1 === 160 ? near_player : far_player),
       user_tanks: () => [{ area: new MapArea2D(480, 480, 520, 520) }, { area: new MapArea2D(160, 240, 200, 280) }],
       goals: [],
       shortest_path(tank, start, end) { map.goals.push(end); return []; }
@@ -229,7 +234,7 @@ describe('EnemyAICommander following Jev guidance', () => {
       map, area: new MapArea2D(200, 200, 240, 240), direction: 180, iq: 100,
       delayed_commands: [], can_fire: () => false
     };
-    return { commander: new EnemyAICommander(tank), map, tank, home, near_player, roam_spot };
+    return { commander: new EnemyAICommander(tank), map, tank, home, near_player, roam_spot, power_up };
   }
 
   it('heads for the nearest player tank when told to hunt', () => {
@@ -271,5 +276,64 @@ describe('EnemyAICommander following Jev guidance', () => {
 
     commander.follow('hunt_player');
     expect(commander.path).toHaveLength(0);
+  });
+
+  it('heads for the power-up when told to get it', () => {
+    const { commander, map, power_up } = makeGuided();
+
+    commander.follow('get_power_up');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([power_up]);
+  });
+
+  it('goes after the players instead once the power-up has been taken', () => {
+    const { commander, map, near_player } = makeGuided();
+    map.gifts = [];
+
+    commander.follow('get_power_up');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([near_player]);
+  });
+});
+
+describe('EnemyAICommander attacking players', () => {
+  function makeFacingPlayer({ blocked = false } = {}) {
+    const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
+    const player = { area: new MapArea2D(200, 400, 240, 440), destroyed: false };
+    const wall = { type: () => 'iron', area: new MapArea2D(200, 300, 240, 340) };
+    const map = {
+      home_vertex: here,
+      random_vertex: () => here,
+      vertexes_at: () => here,
+      gifts: [],
+      user_tanks: () => [player],
+      units_at: () => (blocked ? [wall] : []),
+      shortest_path: () => []
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 200, 240, 240), direction: Direction.UP, iq: 0, power: 1,
+      delayed_commands: [], can_fire: () => true
+    };
+    return new EnemyAICommander(tank);
+  }
+
+  it('turns on a player it has lined up with and fires', () => {
+    const commands = makeFacingPlayer().next_commands();
+
+    expect(commands).toContainEqual({ type: 'direction', params: { direction: Direction.DOWN } });
+    expect(commands).toContainEqual({ type: 'fire' });
+  });
+
+  it('holds fire when an iron wall is in the way', () => {
+    const commander = makeFacingPlayer({ blocked: true });
+    const orig = Math.random;
+    Math.random = () => 0.5; // rule out the random potshot
+    try {
+      expect(commander.next_commands()).not.toContainEqual({ type: 'fire' });
+    } finally {
+      Math.random = orig;
+    }
   });
 });

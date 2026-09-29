@@ -4,9 +4,10 @@ import { build_guide_request, guide_enemies, parse_snapshot, handle_guide_reques
 const snapshot = {
   base: { x: 6, y: 12 },
   players: [{ id: 'p1', x: 4, y: 12, level: 1 }],
+  power_ups: [{ type: 'star', x: 3, y: 6 }],
   enemies: [
-    { id: 'e1', type: 'fish', x: 0, y: 0, hp: 2, distance_to_base: 18, distance_to_nearest_player: 16 },
-    { id: 'e2', type: 'strong', x: 6, y: 3, hp: 4, distance_to_base: 9, distance_to_nearest_player: 11 }
+    { id: 'e1', type: 'fish', x: 0, y: 0, hp: 2, distance_to_base: 18, distance_to_nearest_player: 16, distance_to_power_up: 9 },
+    { id: 'e2', type: 'strong', x: 6, y: 3, hp: 4, distance_to_base: 9, distance_to_nearest_player: 11, distance_to_power_up: 6 }
   ]
 };
 
@@ -16,8 +17,21 @@ describe('build_guide_request', () => {
 
     expect(Object.keys(questions)).toEqual(['e1', 'e2']);
     expect(questions.e2.type).toBe('choice');
-    expect(Object.keys(questions.e2.criteria)).toEqual(['attack_base', 'hunt_player', 'roam']);
+    expect(Object.keys(questions.e2.criteria)).toEqual(['get_power_up', 'hunt_player', 'attack_base', 'roam']);
     expect(JSON.stringify(questions.e2.instructions)).toContain('`enemies[1]`');
+  });
+
+  it('tells Jev the enemy side puts power-ups first, then the players, then the base', () => {
+    const { state } = build_guide_request(snapshot);
+
+    expect(state.power_ups).toEqual([
+      { type: 'star', x: 3, y: 6, effect: expect.stringMatching(/upgrade/i) }
+    ]);
+    expect(state.enemy_priorities).toEqual([
+      expect.stringMatching(/power-up/),
+      expect.stringMatching(/player tanks/),
+      expect.stringMatching(/base/)
+    ]);
   });
 });
 
@@ -59,6 +73,7 @@ describe('parse_snapshot', () => {
   it('rejects bodies that are not a battlefield snapshot', () => {
     expect(() => parse_snapshot(null)).toThrow();
     expect(() => parse_snapshot({ ...snapshot, enemies: 'lots' })).toThrow();
+    expect(() => parse_snapshot({ ...snapshot, power_ups: [{ type: 'ignore_all_rules', x: 3, y: 6 }] })).toThrow();
     expect(() => parse_snapshot({ ...snapshot, enemies: [{ id: 'e1', x: 'far' }] })).toThrow();
     const horde = Array.from({ length: 50 }, (_, i) => ({ ...snapshot.enemies[0], id: `e${i}` }));
     expect(() => parse_snapshot({ ...snapshot, enemies: horde })).toThrow();

@@ -300,138 +300,11 @@ class PathfindingCommander extends Commander {
   current_vertex() {
     return this.map.vertexes_at(this.map_unit.area);
   }
-}
 
-export class EnemyAICommander extends PathfindingCommander {
-  next() {
-    this.note_progress();
-
-    // move towards home
-    if (this.path.length === 0) {
-      if (this.may_plan_route()) {
-        this.plan_route(this.goal_vertex());
-        this.arm_repath_timer(2000 + Math.random() * 2000);
-      }
-      if (this.path.length === 0) {
-        this.wander();
-      }
-    } else {
-      this.advance_along_route();
-    }
-
-    // more chance to fire if can't move
-    if (
-      this.map_unit.can_fire() &&
-      this.last_area &&
-      this.last_area.equals(this.map_unit.area)
-    ) {
-      if (Math.random() < 0.08) {
-        this.fire();
-      }
-    } else {
-      if (Math.random() < 0.01) {
-        this.fire();
-      }
-    }
-
-    return (this.last_area = this.map_unit.area);
-  }
-
-  // Objective chosen by Jev (see src/ai/enemy_guide.js). Until guidance
-  // arrives - or if it never does - the tank's own iq decides.
-  follow(objective) {
-    if (objective === this.objective) {
-      return;
-    }
-    this.objective = objective;
-    this.reset_path();
-  }
-
-  goal_vertex() {
-    if (this.objective === "attack_base") {
-      return this.map.home_vertex;
-    }
-    if (this.objective === "hunt_player") {
-      const prey = this._nearest_user_tank();
-      if (prey) {
-        return this.map.vertexes_at(prey.area);
-      }
-    }
-    if (this.objective === "roam") {
-      return this.map.random_vertex(this.map_unit);
-    }
-    return Math.random() * 100 <= this.map_unit.iq
-      ? this.map.home_vertex
-      : this.map.random_vertex(this.map_unit);
-  }
-
-  _nearest_user_tank() {
-    const my = this.map_unit.area;
-    const distance = tank => Math.abs(my.x1 - tank.area.x1) + Math.abs(my.y1 - tank.area.y1);
-    return this.map
-      .user_tanks()
-      .reduce((nearest, tank) => (!nearest || distance(tank) < distance(nearest) ? tank : nearest), null);
-  }
-
-  in_attack_range(area) {
-    return (
-      this.map_unit.area.x1 === area.x1 || this.map_unit.area.y1 === area.y1
-    );
-  }
-}
-
-export class DemoAICommander extends PathfindingCommander {
-  next() {
-    const enemies = this.map.enemy_tanks().filter(t => !t.destroyed && !t.initializing);
-    if (enemies.length === 0) {
-      return;
-    }
-
-    const wedged = this.note_progress();
-
-    // Priority 1: if aligned with an enemy AND we have a clear shot, face it
-    // and fire. Skipped while wedged so we always fall through to pathfinding.
-    const aligned = wedged ? null : this._find_aligned_enemy(enemies);
-    if (aligned) {
-      this.turn(this._direction_toward(aligned));
-      if (this.map_unit.can_fire()) {
-        this.fire();
-      }
-      this.start_move();
-      this.last_area = this.map_unit.area;
-      return;
-    }
-
-    // Priority 2: pathfind toward nearest enemy
-    if (this.path.length === 0) {
-      const nearest = this._find_nearest_enemy(enemies);
-      if (nearest && this.may_plan_route()) {
-        this.plan_route(this.map.vertexes_at(nearest.area));
-        this.arm_repath_timer(1000 + Math.random() * 1000);
-      }
-      if (this.path.length === 0) {
-        this.wander();
-      }
-    } else {
-      this.advance_along_route();
-    }
-
-    // Fire if stuck
-    if (
-      this.map_unit.can_fire() &&
-      this.last_area &&
-      this.last_area.equals(this.map_unit.area)
-    ) {
-      if (Math.random() < 0.08) {
-        this.fire();
-      }
-    }
-
-    this.last_area = this.map_unit.area;
-  }
-
-  _find_aligned_enemy(enemies) {
-    for (const enemy of enemies) {
+  // Line of sight: a target in the same row or column with nothing
+  // bullet-proof between us.
+  _find_aligned_target(targets) {
+    for (const enemy of targets) {
       const same_col = this.map_unit.area.x1 === enemy.area.x1;
       const same_row = this.map_unit.area.y1 === enemy.area.y1;
       if ((same_col || same_row) && this._has_clear_shot(enemy)) {
@@ -485,6 +358,156 @@ export class DemoAICommander extends PathfindingCommander {
     } else {
       return their.x1 < my.x1 ? "left" : "right";
     }
+  }
+}
+
+export class EnemyAICommander extends PathfindingCommander {
+  next() {
+    const wedged = this.note_progress();
+
+    // A player in the line of fire gets shot at, whatever the objective.
+    // Skipped while wedged so a blocked tank still falls through to routing.
+    const prey = wedged
+      ? null
+      : this._find_aligned_target(this.map.user_tanks().filter(t => !t.destroyed));
+    if (prey) {
+      this.turn(this._direction_toward(prey));
+      if (this.map_unit.can_fire()) {
+        this.fire();
+      }
+      this.start_move();
+      return (this.last_area = this.map_unit.area);
+    }
+
+    // move towards home
+    if (this.path.length === 0) {
+      if (this.may_plan_route()) {
+        this.plan_route(this.goal_vertex());
+        this.arm_repath_timer(2000 + Math.random() * 2000);
+      }
+      if (this.path.length === 0) {
+        this.wander();
+      }
+    } else {
+      this.advance_along_route();
+    }
+
+    // more chance to fire if can't move
+    if (
+      this.map_unit.can_fire() &&
+      this.last_area &&
+      this.last_area.equals(this.map_unit.area)
+    ) {
+      if (Math.random() < 0.08) {
+        this.fire();
+      }
+    } else {
+      if (Math.random() < 0.01) {
+        this.fire();
+      }
+    }
+
+    return (this.last_area = this.map_unit.area);
+  }
+
+  // Objective chosen by Jev (see src/ai/enemy_guide.js). Until guidance
+  // arrives - or if it never does - the tank's own iq decides.
+  follow(objective) {
+    if (objective === this.objective) {
+      return;
+    }
+    this.objective = objective;
+    this.reset_path();
+  }
+
+  goal_vertex() {
+    if (this.objective === "attack_base") {
+      return this.map.home_vertex;
+    }
+    if (this.objective === "get_power_up") {
+      const power_up = this.map.gifts.find(gift => !gift.destroyed);
+      if (power_up) {
+        return this.map.vertexes_at(power_up.area);
+      }
+    }
+    // A power-up someone else got first leaves the players as the next target.
+    if (this.objective === "hunt_player" || this.objective === "get_power_up") {
+      const prey = this._nearest_user_tank();
+      if (prey) {
+        return this.map.vertexes_at(prey.area);
+      }
+    }
+    if (this.objective === "roam") {
+      return this.map.random_vertex(this.map_unit);
+    }
+    return Math.random() * 100 <= this.map_unit.iq
+      ? this.map.home_vertex
+      : this.map.random_vertex(this.map_unit);
+  }
+
+  _nearest_user_tank() {
+    const my = this.map_unit.area;
+    const distance = tank => Math.abs(my.x1 - tank.area.x1) + Math.abs(my.y1 - tank.area.y1);
+    return this.map
+      .user_tanks()
+      .reduce((nearest, tank) => (!nearest || distance(tank) < distance(nearest) ? tank : nearest), null);
+  }
+
+  in_attack_range(area) {
+    return (
+      this.map_unit.area.x1 === area.x1 || this.map_unit.area.y1 === area.y1
+    );
+  }
+}
+
+export class DemoAICommander extends PathfindingCommander {
+  next() {
+    const enemies = this.map.enemy_tanks().filter(t => !t.destroyed && !t.initializing);
+    if (enemies.length === 0) {
+      return;
+    }
+
+    const wedged = this.note_progress();
+
+    // Priority 1: if aligned with an enemy AND we have a clear shot, face it
+    // and fire. Skipped while wedged so we always fall through to pathfinding.
+    const aligned = wedged ? null : this._find_aligned_target(enemies);
+    if (aligned) {
+      this.turn(this._direction_toward(aligned));
+      if (this.map_unit.can_fire()) {
+        this.fire();
+      }
+      this.start_move();
+      this.last_area = this.map_unit.area;
+      return;
+    }
+
+    // Priority 2: pathfind toward nearest enemy
+    if (this.path.length === 0) {
+      const nearest = this._find_nearest_enemy(enemies);
+      if (nearest && this.may_plan_route()) {
+        this.plan_route(this.map.vertexes_at(nearest.area));
+        this.arm_repath_timer(1000 + Math.random() * 1000);
+      }
+      if (this.path.length === 0) {
+        this.wander();
+      }
+    } else {
+      this.advance_along_route();
+    }
+
+    // Fire if stuck
+    if (
+      this.map_unit.can_fire() &&
+      this.last_area &&
+      this.last_area.equals(this.map_unit.area)
+    ) {
+      if (Math.random() < 0.08) {
+        this.fire();
+      }
+    }
+
+    this.last_area = this.map_unit.area;
   }
 
   _find_nearest_enemy(enemies) {

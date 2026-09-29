@@ -31,23 +31,30 @@ export function battlefield_snapshot(map) {
       y: tile(tank.area.y1),
       level: tank.level
     }));
+  const power_ups = map.gifts
+    .filter(gift => !gift.destroyed)
+    .map(gift => ({ type: gift.type(), x: tile(gift.area.x1), y: tile(gift.area.y1) }));
+  const nearest = (from, targets) => {
+    const closest = Math.min(...targets.map(target => distance(from, target)));
+    // Nothing there - say so with a distance larger than the map.
+    return Number.isFinite(closest) ? closest : 99;
+  };
   const enemies = map
     .enemy_tanks()
     .filter(tank => !tank.destroyed)
     .map(tank => {
       const at = { x: tile(tank.area.x1), y: tile(tank.area.y1) };
-      const nearest_player = Math.min(...players.map(player => distance(at, player)));
       return {
         id: id_of(tank),
         type: tank.type(),
         ...at,
         hp: tank.hp,
         distance_to_base: distance(at, base),
-        // No player on the field - say so with a distance larger than the map.
-        distance_to_nearest_player: Number.isFinite(nearest_player) ? nearest_player : 99
+        distance_to_nearest_player: nearest(at, players),
+        distance_to_power_up: nearest(at, power_ups)
       };
     });
-  return { base, players, enemies };
+  return { base, players, power_ups, enemies };
 }
 
 export class EnemyGuide {
