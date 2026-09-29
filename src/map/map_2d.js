@@ -176,14 +176,27 @@ export class Map2D {
   }
   // The overlap test goes first: it is plain arithmetic, and for all but a
   // few units it settles the question without asking accept().
+  // Something the unit already overlaps - an enemy born on top of a player,
+  // say - only stops it going deeper in; otherwise every step out would still
+  // collide and the two would be wedged together for good.
   area_available(unit, area) {
     return this.map_units.every(map_unit => {
       return (
         map_unit === unit ||
         !map_unit.area.collide(area) ||
-        map_unit.accept(unit)
+        map_unit.accept(unit) ||
+        this._not_deeper(map_unit.area, unit.area, area)
       );
     });
+  }
+
+  _not_deeper(other, from, to) {
+    if (!other.collide(from)) { return false; }
+    const overlap = a => {
+      const shared = other.intersect(a);
+      return shared.width() * shared.height();
+    };
+    return overlap(to) <= overlap(from);
   }
 
   init_vertexes() {

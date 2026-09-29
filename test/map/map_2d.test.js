@@ -5,7 +5,7 @@ stubKinetic();
 
 const { Map2D } = await import('../../src/map/map_2d.js');
 const { IronTerrain, BrickTerrain, GrassTerrain, HomeTerrain } = await import('../../src/map/terrains.js');
-const { EnemyTank } = await import('../../src/objects/tanks.js');
+const { EnemyTank, UserP1Tank, StupidTank } = await import('../../src/objects/tanks.js');
 const { MapArea2D } = await import('../../src/map/map_area_2d.js');
 const { ClockGift, LandMineGift, StarGift } = await import('../../src/objects/gifts.js');
 
@@ -225,5 +225,27 @@ describe('Map2D.hidden_in_grass', () => {
     map.user_tanks = () => [hiding, exposed];
 
     expect(map.visible_user_tanks()).toEqual([exposed]);
+  });
+});
+
+describe('Map2D.area_available for tanks that overlap', () => {
+  // Enemies arrive at their birth spots whoever is standing there, so a player
+  // parked on one ends up sharing it. Neither tank may then refuse the other
+  // every step, or both stand wedged together for good.
+  it('lets a tank drive out of one it overlaps', () => {
+    const map = new Map2D({ add: () => {} });
+    const user = map.add_tank(UserP1Tank, new MapArea2D(230, 0, 270, 40));
+    map.add_tank(StupidTank, new MapArea2D(240, 0, 280, 40));
+
+    expect(map.area_available(user, new MapArea2D(230, 1, 270, 41))).toBe(true);
+    expect(map.area_available(user, new MapArea2D(229, 0, 269, 40))).toBe(true);
+  });
+
+  it('still stops it driving deeper in', () => {
+    const map = new Map2D({ add: () => {} });
+    const user = map.add_tank(UserP1Tank, new MapArea2D(230, 0, 270, 40));
+    map.add_tank(StupidTank, new MapArea2D(240, 0, 280, 40));
+
+    expect(map.area_available(user, new MapArea2D(231, 0, 271, 40))).toBe(false);
   });
 });
