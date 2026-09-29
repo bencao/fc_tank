@@ -74,7 +74,10 @@ export class Missile extends MovableMapUnit2D {
     const moved = super.move(offset);
     // Standing still because the frame was worth less than a pixel is not the
     // same as running into something - only the latter sets a missile off.
-    if (offset > 0 && moved === 0) {
+    // Being stopped short counts too: chasing a tank that is driving away, the
+    // missile gains a few pixels every frame before it bumps into it, and
+    // waiting for a frame with no progress at all meant it never went off.
+    if (offset > 0 && moved < offset) {
       this.attack();
     }
     return moved;

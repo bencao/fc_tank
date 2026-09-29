@@ -52,3 +52,26 @@ describe('Reloading in the game loop', () => {
     expect(user.can_fire()).toBe(true);
   });
 });
+
+describe('A missile catching up with a tank driving away from it', () => {
+  it('hits it, rather than trailing along behind it', () => {
+    const map = new Map2D({ add: () => {} });
+    const user = map.add_tank(UserP1Tank, new MapArea2D(200, 440, 240, 480));
+    const enemy = map.add_tank(StupidTank, new MapArea2D(200, 300, 240, 340));
+    enemy.hp = 1;
+    for (const tank of [user, enemy]) {
+      tank.initializing = false;
+      tank.direction = Direction.UP;
+    }
+    user.commander = { next_commands: () => [] };
+    enemy.commander = { next_commands: () => [{ type: 'start_move', params: { offset: null } }] };
+    user.fire();
+
+    for (let frame = 0; frame < 60 && !enemy.destroyed; frame++) {
+      for (const missile of [...map.missiles]) missile.integration(16);
+      enemy.integration(16);
+    }
+
+    expect(enemy.destroyed).toBe(true);
+  });
+});
