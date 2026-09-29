@@ -407,6 +407,7 @@ describe('DemoAICommander going for power-ups', () => {
       gifts: gift_type ? [gift] : [],
       enemy_tanks: () => [enemy],
       units_at: () => [],
+      home: () => undefined,
       vertexes_at: area => (area.x1 === 400 ? gift_spot : area.x1 === 200 ? here : enemy_spot),
       goals: [],
       routes: [],
@@ -567,5 +568,51 @@ describe('DemoAICommander following Jev guidance', () => {
     commander.next_commands();
 
     expect(map.goals).toEqual([spots[400]]);
+  });
+});
+
+describe('DemoAICommander near its own base', () => {
+  // Wedged at the guard post, facing the eagle across its brick wall.
+  function makeWedgedAtGuardPost(direction) {
+    const here = Object.assign(new MapArea2D(160, 480, 200, 520), { vx: 16, vy: 48 });
+    const home = { type: () => 'home', area: new MapArea2D(240, 480, 280, 520), destroyed: false };
+    const map = {
+      gifts: [],
+      enemy_tanks: () => [{ area: new MapArea2D(0, 0, 40, 40), destroyed: false, initializing: false }],
+      units_at: () => [],
+      home: () => home,
+      vertexes_at: () => here,
+      shortest_path: () => []
+    };
+    const tank = {
+      map, area: new MapArea2D(160, 480, 200, 520), direction, power: 1,
+      delayed_commands: [], can_fire: () => true
+    };
+    const commander = new DemoAICommander(tank);
+    // Stuck in place, keeping its facing.
+    commander.wander = () => {};
+    return commander;
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('never shoots toward its own base when stuck', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const commander = makeWedgedAtGuardPost(Direction.RIGHT);
+
+    const fired = Array.from({ length: 50 }, () => commander.next_commands())
+      .some(commands => commands.some(c => c.type === 'fire'));
+
+    expect(fired).toBe(false);
+  });
+
+  it('still shoots its way out when facing away from the base', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const commander = makeWedgedAtGuardPost(Direction.UP);
+
+    const fired = Array.from({ length: 50 }, () => commander.next_commands())
+      .some(commands => commands.some(c => c.type === 'fire'));
+
+    expect(fired).toBe(true);
   });
 });

@@ -2,7 +2,7 @@ import { Animations } from "../constants.js";
 import { MapUnit2D } from "./map_unit_2d.js";
 import { MapArea2D } from "./map_area_2d.js";
 import { Missile } from "../objects/missile.js";
-import { Tank } from "../objects/tanks.js";
+import { Tank, EnemyTank } from "../objects/tanks.js";
 
 export class Terrain extends MapUnit2D {
   accept(map_unit) {
@@ -138,8 +138,10 @@ export class HomeTerrain extends Terrain {
     }
     return false;
   }
+  // Enemies route onto the eagle - it is what they are there to take. No
+  // player-side tank can ever drive through it, so for them it is a wall.
   weight(tank) {
-    return 0;
+    return tank instanceof EnemyTank ? 0 : this.map.infinity;
   }
   new_display() {
     return (this.display_object = new Kinetic.Sprite({

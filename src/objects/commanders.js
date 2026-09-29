@@ -568,11 +568,13 @@ export class DemoAICommander extends PathfindingCommander {
       this.advance_along_route();
     }
 
-    // Fire if stuck
+    // Fire if stuck - but never into our own base, which is what a tank
+    // wedged beside it would otherwise blast its way through.
     if (
       this.map_unit.can_fire() &&
       this.last_area &&
-      this.last_area.equals(this.map_unit.area)
+      this.last_area.equals(this.map_unit.area) &&
+      !this._facing_own_base()
     ) {
       if (Math.random() < 0.08) {
         this.fire();
@@ -580,6 +582,32 @@ export class DemoAICommander extends PathfindingCommander {
     }
 
     this.last_area = this.map_unit.area;
+  }
+
+  // Whether a shot fired now would fly toward the eagle. Any turn queued
+  // this frame is applied before the shot, so it is the heading that counts.
+  _facing_own_base() {
+    const home = this.map.home();
+    if (!home || home.destroyed) {
+      return false;
+    }
+    const turn = this.commands.findLast(command => command.type === "direction");
+    const direction = turn ? turn.params.direction : this.map_unit.direction;
+    const me = this.map_unit.area;
+    const them = home.area;
+    const same_column = them.x1 < me.x2 && them.x2 > me.x1;
+    const same_row = them.y1 < me.y2 && them.y2 > me.y1;
+    switch (direction) {
+      case Direction.UP:
+        return same_column && them.y2 <= me.y1;
+      case Direction.DOWN:
+        return same_column && them.y1 >= me.y2;
+      case Direction.LEFT:
+        return same_row && them.x2 <= me.x1;
+      case Direction.RIGHT:
+        return same_row && them.x1 >= me.x2;
+    }
+    return false;
   }
 
   _route_target(enemies, power_up) {
