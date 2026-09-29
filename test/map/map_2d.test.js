@@ -49,6 +49,28 @@ describe('Map2D.random_gift', () => {
     expect(gift.area.x1).toBe(200);
     expect(gift.area.y1).toBe(200);
   });
+
+  // Getting it would mean shooting through the wall round the eagle.
+  it('never drops the gift on the wall round the base', () => {
+    const map = new Map2D({ add: () => {} });
+    const home = map.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520));
+    home.add_defend_terrains(BrickTerrain);
+    // Iron everywhere but one clearing and the squares half on the wall.
+    for (let x = 0; x < 520; x += 40) {
+      for (let y = 0; y < 520; y += 40) {
+        if ((x === 200 && y === 200) || y === 480 || (y === 440 && x >= 200 && x <= 280)) { continue; }
+        map.add_terrain(IronTerrain, new MapArea2D(x, y, x + 40, y + 40));
+      }
+    }
+    for (let x = 0; x < 520; x += 40) {
+      if (x < 200 || x > 280) { map.add_terrain(IronTerrain, new MapArea2D(x, 480, x + 40, 520)); }
+    }
+
+    for (let i = 0; i < 50; i++) {
+      const gift = map.random_gift(StarGift);
+      expect(gift.area.collide(HomeTerrain.defend_area)).toBe(false);
+    }
+  });
 });
 
 describe('Map2D.weight', () => {
@@ -162,6 +184,21 @@ describe('Map2D.shortest_path', () => {
 
     expect(path.length).toBeGreaterThan(0);
     expect(path.some(vertex => vertex.collide(home))).toBe(false);
+  });
+
+  // Nor through the wall round it: a player never shoots toward its own
+  // eagle, so a route through that wall parks the tank against it for good.
+  it('does not route a player tank through the wall round its base', () => {
+    const home = map.add_terrain(HomeTerrain, new MapArea2D(240, 480, 280, 520));
+    home.add_defend_terrains(BrickTerrain);
+    const wall = new MapArea2D(220, 460, 300, 520);
+    const start = map.vertexes_at(new MapArea2D(160, 480, 200, 520));
+    const goal = map.vertexes_at(new MapArea2D(320, 480, 360, 520));
+
+    const path = map.shortest_path(level_1_tank, start, goal);
+
+    expect(path.length).toBeGreaterThan(0);
+    expect(path.some(vertex => vertex.collide(wall))).toBe(false);
   });
 
   it('still lets an enemy tank route onto the base it is attacking', () => {

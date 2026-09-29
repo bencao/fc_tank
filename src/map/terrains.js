@@ -129,6 +129,9 @@ export class GrassTerrain extends Terrain {
 }
 
 export class HomeTerrain extends Terrain {
+  // The wall round the eagle - brick, or iron while a shovel lasts.
+  static defend_area = new MapArea2D(220, 460, 300, 520);
+
   type() {
     return "home";
   }
@@ -168,8 +171,7 @@ export class HomeTerrain extends Terrain {
   }
 
   defend_terrains() {
-    const home_defend_area = new MapArea2D(220, 460, 300, 520);
-    return this.map.units_at(home_defend_area).filter(
+    return this.map.units_at(HomeTerrain.defend_area).filter(
       unit => !(unit instanceof HomeTerrain) && !(unit instanceof Tank)
     );
   }
