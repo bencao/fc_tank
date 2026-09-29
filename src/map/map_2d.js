@@ -1,7 +1,7 @@
 import { BinomialHeap, BinomialHeapNode } from "../engine/data_structures.js";
 import { MapArea2DVertex } from "./map_area_2d_vertex.js";
 import { Missile } from "../objects/missile.js";
-import { Terrain } from "./terrains.js";
+import { Terrain, HomeTerrain } from "./terrains.js";
 import { Gift, pickGiftClass } from "../objects/gifts.js";
 import { Tank, UserTank, EnemyTank } from "../objects/tanks.js";
 
@@ -296,7 +296,7 @@ export class Map2D {
 
   can_occupy(tank, area) {
     return this.terrains_at(area).every(
-      terrain => terrain.weight(tank) < this.infinity
+      terrain => this.terrain_weight(terrain, tank) < this.infinity
     );
   }
 
@@ -319,7 +319,7 @@ export class Map2D {
     if (terrain_units.length === 0) {
       return 1;
     }
-    const weights = terrain_units.map(terrain_unit => terrain_unit.weight(tank));
+    const weights = terrain_units.map(terrain_unit => this.terrain_weight(terrain_unit, tank));
     const max_weight = Math.max(...weights);
     // Terrain this tank simply cannot enter stays impassable. Scaling it down
     // by the size of the step would turn "never" into "expensive", and the
@@ -332,6 +332,15 @@ export class Map2D {
       sub_area.width() *
       sub_area.height()
     );
+  }
+
+  // A player never shoots toward its own eagle, so the wall round it is one
+  // no player-side tank gets through: routed into it, the tank parks there.
+  terrain_weight(terrain, tank) {
+    if (!(tank instanceof EnemyTank) && terrain.area.collide(HomeTerrain.defend_area)) {
+      return this.infinity;
+    }
+    return terrain.weight(tank);
   }
 
   // Tanks sit on a half-tile lattice, so a vertex offset half a tile in both
