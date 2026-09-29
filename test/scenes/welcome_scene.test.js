@@ -136,3 +136,30 @@ describe('WelcomeScene when left idle', () => {
     expect(scene.game.switch_scene).toHaveBeenLastCalledWith('high_scores');
   });
 });
+
+describe('WelcomeScene stopped before its opening animation ends', () => {
+  afterEach(() => vi.useRealTimers());
+
+  // The set switched off mid-animation must stay dark: no menu keys, no demo.
+  it('neither takes keys nor starts the attract loop', async () => {
+    vi.useFakeTimers();
+    const { scene } = makeWelcome();
+    let finish_animation;
+    scene.keyboard = { on_key_down: vi.fn(), reset() {} };
+    scene.view = {
+      ...scene.view,
+      play_start_animation: done => { finish_animation = done; },
+      update_scores: vi.fn()
+    };
+    scene.game.reset_run = vi.fn();
+    scene.game.get_config = () => 1;
+    scene.start();
+    scene.stop();
+
+    finish_animation();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(scene.keyboard.on_key_down).not.toHaveBeenCalled();
+    expect(scene.game.switch_scene).not.toHaveBeenCalled();
+  });
+});

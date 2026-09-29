@@ -254,11 +254,12 @@ export class Game {
     return (this.statuses["p2_score"] += score);
   }
 
-  reset() {
-    Object.values(this.scenes).forEach(scene => scene.stop());
+  // The set's power switch: nothing runs until it comes back on (see
+  // src/ui/power_switch.js), and a friend is hung up on.
+  power_off() {
+    this.current_scene?.on_stop();
     this.current_scene = null;
-    this.init_default_config();
-    return this.kick_off();
+    this.end_friends();
   }
 
   switch_scene(type) {

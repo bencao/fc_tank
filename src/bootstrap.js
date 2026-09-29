@@ -3,6 +3,7 @@ import { Game } from "./game.js";
 import { install_virtual_gamepad } from "./ui/virtual_gamepad.js";
 import { install_screen_scaling, reflect_current_scene, reflect_difficulty, reflect_friends } from "./ui/retro_shell.js";
 import { SoundSwitch, install_sound_switch } from "./ui/sound_switch.js";
+import { install_power_switch } from "./ui/power_switch.js";
 import { install_invite_panel } from "./ui/invite_panel.js";
 import { become_guest } from "./friends/guest.js";
 import { keep_audio_awake } from "./engine/sound.js";
@@ -34,6 +35,14 @@ function safe_local_storage() {
     new SoundSwitch(Howler, safe_local_storage())
   );
   keep_audio_awake(Howler);
+  install_power_switch(document.documentElement, document.querySelector("[data-power-switch]"), {
+    off: () => {
+      game.power_off();
+      Howler.stop();
+    },
+    // Back on, the set starts from scratch - at the title, not an invitation.
+    on: () => window.location.assign(window.location.pathname)
+  });
   install_invite_panel(document.documentElement, document.getElementById("invite"), game);
   // Opened from a friend's invitation: join their game instead.
   const room = new URLSearchParams(window.location.search).get("join");

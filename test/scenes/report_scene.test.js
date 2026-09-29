@@ -70,3 +70,18 @@ describe('ReportScene after a game over', () => {
     expect(statuses.hi_score).toBe(90000);
   });
 });
+
+describe('ReportScene when stopped early', () => {
+  afterEach(() => vi.useRealTimers());
+
+  // The set switched off during the report stays off.
+  it('moves on to nothing once stopped', () => {
+    vi.useFakeTimers();
+    const { scene } = makeReport({ p1_score: 1200 });
+    scene.start();
+    scene.stop();
+    vi.advanceTimersByTime(5000);
+
+    expect(scene.game.switch_scene).not.toHaveBeenCalled();
+  });
+});

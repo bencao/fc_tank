@@ -263,3 +263,30 @@ describe('Game.reset_run', () => {
     expect(game.get_status('game_over')).toBe(false);
   });
 });
+
+describe('Game.power_off', () => {
+  it('stops the scene on screen and leaves nothing running', () => {
+    const game = new Game();
+    game.switch_scene('stage');
+    const stop = vi.spyOn(game.scenes.stage, 'on_stop');
+
+    game.power_off();
+
+    expect(stop).toHaveBeenCalled();
+    expect(game.current_scene).toBeNull();
+  });
+
+  it('hangs up on a friend', async () => {
+    const game = new Game();
+    const [host_link, guest_link] = link_pair();
+    const closed = vi.fn();
+    guest_link.on_close = closed;
+    game.start_friends(new FriendsSession(host_link, 'host'));
+
+    game.power_off();
+    await flush();
+
+    expect(game.friends).toBeNull();
+    expect(closed).toHaveBeenCalled();
+  });
+});

@@ -9,7 +9,10 @@ export class WelcomeScene extends Scene {
   start() {
     super.start();
     this.demo_timer = null;
+    // Stopped mid-animation (the set switched off), the menu never comes on.
+    const showing = (this.showing = {});
     this.view.play_start_animation(() => {
+      if (showing !== this.showing) { return; }
       this.view.update_player_mode(this.mode());
       this.view.update_difficulty(this.game.difficulty().name);
       this.enable_selection_control();
@@ -23,6 +26,7 @@ export class WelcomeScene extends Scene {
   }
 
   stop() {
+    this.showing = null;
     this.clear_demo_timer();
     super.stop();
     return this.prepare_for_game_scene();
