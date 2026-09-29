@@ -6,6 +6,7 @@ import { WelcomeView } from "./views/welcome_view.js";
 import { StageView } from "./views/stage_view.js";
 import { BattleFieldView } from "./views/battle_field_view.js";
 import { ReportView } from "./views/report_view.js";
+import { DIFFICULTIES, DEFAULT_DIFFICULTY } from "./difficulty.js";
 
 export class Game {
   constructor() {
@@ -85,7 +86,8 @@ export class Game {
       p2_lives: 2,
       p1_killed_enemies: [],
       p2_killed_enemies: [],
-      demo_mode: false
+      demo_mode: false,
+      difficulty: DEFAULT_DIFFICULTY
     };
   }
 
@@ -114,6 +116,24 @@ export class Game {
     } else {
       return (current_stage + total_stages + adjustment) % total_stages;
     }
+  }
+
+  difficulty() {
+    return DIFFICULTIES[this.statuses["difficulty"]];
+  }
+
+  harder() {
+    return this._turn_difficulty(1);
+  }
+
+  easier() {
+    return this._turn_difficulty(-1);
+  }
+
+  _turn_difficulty(step) {
+    const level = this.statuses["difficulty"] + step;
+    this.statuses["difficulty"] = Math.min(Math.max(level, 0), DIFFICULTIES.length - 1);
+    return this.difficulty();
   }
 
   single_player_mode() {

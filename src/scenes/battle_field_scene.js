@@ -14,6 +14,7 @@ import {
   FoolTank
 } from "../objects/tanks.js";
 import { DemoAICommander } from "../objects/commanders.js";
+import { EnemyGuide } from "../ai/enemy_guide.js";
 
 export class BattleFieldScene extends Scene {
   // Longest step the physics will take in one frame, in ms.
@@ -24,6 +25,7 @@ export class BattleFieldScene extends Scene {
     this.layer = this.view.layer;
     this.map = new Map2D(this.layer);
     this.builder = new TiledMapBuilder(this.map, terrainsJson);
+    this.enemy_guide = new EnemyGuide(this.map);
     this.reset_config_variables();
   }
 
@@ -317,6 +319,16 @@ export class BattleFieldScene extends Scene {
     const loop_id = this.next_loop_id();
     requestAnimationFrame(offset => this.integration(offset, loop_id));
 
+    // Jev picks objectives every couple of seconds: for the enemies on
+    // NIGHTMARE, and always for the AI-driven player tank in the demo.
+    const guided = {
+      enemies: this.game.difficulty().jev_guide,
+      players: Boolean(this.is_demo_mode())
+    };
+    if (guided.enemies || guided.players) {
+      this.enemy_guide.start(guided);
+    }
+
     // show frame rate
     this.frame_timeline = setInterval(() => {
       this.view.update_frame_rate(this.frame_rate);
@@ -328,6 +340,7 @@ export class BattleFieldScene extends Scene {
     this.running = false;
     this.startedAt = null;
     this.next_loop_id();
+    this.enemy_guide.stop();
 
     return clearInterval(this.frame_timeline);
   }
@@ -365,7 +378,7 @@ export class BattleFieldScene extends Scene {
         UserP1Tank,
         new MapArea2D(160, 480, 200, 520)
       );
-      p1_tank.level_up(this.game.get_status("p1_level") - 1);
+      p1_tank.level_up(this.arrival_level("p1_level") - 1);
       p1_tank.on_ship(this.game.get_status("p1_ship"));
       if (this.is_demo_mode()) {
         p1_tank.commander = new DemoAICommander(p1_tank);
@@ -381,13 +394,18 @@ export class BattleFieldScene extends Scene {
         UserP2Tank,
         new MapArea2D(320, 480, 360, 520)
       );
-      p2_tank.level_up(this.game.get_status("p2_level") - 1);
+      p2_tank.level_up(this.arrival_level("p2_level") - 1);
       p2_tank.on_ship(this.game.get_status("p2_ship"));
       if (this.is_demo_mode()) {
         p2_tank.commander = new DemoAICommander(p2_tank);
       }
       return this.view.update_p2_lives(this.remain_user_p2_lives);
     }
+  }
+
+  // A player tank arrives at the level it had, or the difficulty's minimum.
+  arrival_level(status_key) {
+    return Math.max(this.game.get_status(status_key), this.game.difficulty().player_level);
   }
 
   born_enemy_tank() {
@@ -400,10 +418,16 @@ export class BattleFieldScene extends Scene {
       ];
       const enemy_tank_types = [StupidTank, FishTank, FoolTank, StrongTank];
       const randomed = Math.floor(Math.random() * enemy_tank_types.length);
-      this.map.add_tank(
+      const tank = this.map.add_tank(
         enemy_tank_types[randomed],
         enemy_born_areas[this.last_enemy_born_area_index]
       );
+      const difficulty = this.game.difficulty();
+      tank.commander.shoot_on_sight = difficulty.shoot_on_sight;
+      tank.commander.blunder_rate = difficulty.blunder_rate;
+      if (difficulty.extra_enemy_hp > 0) {
+        tank.hp_up(difficulty.extra_enemy_hp);
+      }
       this.last_enemy_born_area_index =
         (this.last_enemy_born_area_index + 1) % 3;
       return this.view.update_enemy_statuses(this.remain_enemy_counts);

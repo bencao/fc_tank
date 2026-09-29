@@ -3,6 +3,10 @@ import { UserCommander, EnemyAICommander } from "./commanders.js";
 import { Missile } from "./missile.js";
 
 export class Tank extends MovableMapUnit2D {
+  // Time between shots, in ms. Without it a tank could refire the instant its
+  // missile was cancelled, and whoever reacts first would win every duel.
+  static reload_time = 300;
+
   constructor(map, area) {
     super(map, area);
     this.hp = 1;
@@ -50,8 +54,11 @@ export class Tank extends MovableMapUnit2D {
     return this.update_display();
   }
 
+  // Not negative damage: taking a hit also costs a level and, for an enemy
+  // carrying one, drops a power-up - neither should happen on a heal.
   hp_up(lives) {
-    return this.hp_down(-lives);
+    this.hp += lives;
+    return this.update_display();
   }
 
   hp_down(lives) {
@@ -73,11 +80,16 @@ export class Tank extends MovableMapUnit2D {
     if (!this.can_fire()) {
       return;
     }
+    this.reload_left = this.constructor.reload_time;
     return this.missiles.push(this.map.add_missile(this));
   }
 
   can_fire() {
-    return this.missiles.length < this.max_missile;
+    return this.missiles.length < this.max_missile && !(this.reload_left > 0);
+  }
+
+  reload(delta_time) {
+    this.reload_left = Math.max((this.reload_left ?? 0) - delta_time, 0);
   }
 
   freeze() {
@@ -112,6 +124,7 @@ export class Tank extends MovableMapUnit2D {
     if (this.initializing || this.destroyed) {
       return;
     }
+    this.reload(delta_time);
     super.integration(delta_time);
     this.commands.forEach(cmd => this.handle_fire(cmd));
   }
@@ -133,8 +146,14 @@ export class Tank extends MovableMapUnit2D {
   }
 }
 
+// Player tanks move, shoot and reload this much faster than they otherwise
+// would, at every difficulty - enough to win a one-on-one, not a crowd.
+export const PLAYER_EDGE = 1.2;
+
 export class UserTank extends Tank {
-  static speed = 0.13;
+  static speed = 0.13 * PLAYER_EDGE;
+  static missile_speed_boost = PLAYER_EDGE;
+  static reload_time = Tank.reload_time / PLAYER_EDGE;
 
   constructor(map, area) {
     super(map, area);

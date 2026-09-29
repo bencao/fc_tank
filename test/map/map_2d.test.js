@@ -4,8 +4,9 @@ import { stubKinetic } from '../helpers/kinetic_mock.js';
 stubKinetic();
 
 const { Map2D } = await import('../../src/map/map_2d.js');
-const { IronTerrain, BrickTerrain } = await import('../../src/map/terrains.js');
+const { IronTerrain, BrickTerrain, GrassTerrain } = await import('../../src/map/terrains.js');
 const { MapArea2D } = await import('../../src/map/map_area_2d.js');
+const { ClockGift, LandMineGift, StarGift } = await import('../../src/objects/gifts.js');
 
 describe('Map2D.random_vertex', () => {
   it('picks somewhere the tank could actually be', () => {
@@ -114,5 +115,58 @@ describe('Map2D.shortest_path', () => {
     const here = map.vertexes_at(new MapArea2D(200, 320, 240, 360));
 
     expect(map.shortest_path(level_1_tank, here, here)).toEqual([]);
+  });
+});
+
+describe('Map2D.random_gift placement', () => {
+  // Rows above and below the middle row of the map, on an open map.
+  function sides(gift_class, drops = 3000) {
+    const map = new Map2D({ add: () => {} });
+    let top = 0, bottom = 0;
+    for (let i = 0; i < drops; i++) {
+      const gift = map.random_gift(gift_class);
+      if (gift.area.y1 < 240) top++;
+      if (gift.area.y1 > 240) bottom++;
+    }
+    return bottom / top;
+  }
+
+  it("drops clocks and land mines on the player's half 1.2 times as often", () => {
+    expect(sides(ClockGift)).toBeGreaterThan(1.08);
+    expect(sides(ClockGift)).toBeLessThan(1.32);
+    expect(sides(LandMineGift)).toBeGreaterThan(1.08);
+    expect(sides(LandMineGift)).toBeLessThan(1.32);
+  });
+
+  it('spreads other power-ups evenly', () => {
+    expect(sides(StarGift)).toBeGreaterThan(0.88);
+    expect(sides(StarGift)).toBeLessThan(1.12);
+  });
+});
+
+describe('Map2D.hidden_in_grass', () => {
+  function tank_under_grass(grass_tiles) {
+    const map = new Map2D({ add: () => {} });
+    for (const [x, y] of grass_tiles) map.add_terrain(GrassTerrain, new MapArea2D(x, y, x + 20, y + 20));
+    return { map, tank: { area: new MapArea2D(200, 200, 240, 240) } };
+  }
+
+  it('hides a tank that is at least three quarters under grass', () => {
+    const { map, tank } = tank_under_grass([[200, 200], [220, 200], [200, 220]]);
+    expect(map.hidden_in_grass(tank)).toBe(true);
+  });
+
+  it('does not hide a tank that is only half under grass', () => {
+    const { map, tank } = tank_under_grass([[200, 200], [220, 200]]);
+    expect(map.hidden_in_grass(tank)).toBe(false);
+  });
+
+  it('leaves hidden players out of the ones enemies can see', () => {
+    const { map } = tank_under_grass([[200, 200], [220, 200], [200, 220], [220, 220]]);
+    const hiding = { area: new MapArea2D(200, 200, 240, 240), destroyed: false };
+    const exposed = { area: new MapArea2D(0, 0, 40, 40), destroyed: false };
+    map.user_tanks = () => [hiding, exposed];
+
+    expect(map.visible_user_tanks()).toEqual([exposed]);
   });
 });

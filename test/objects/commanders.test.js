@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Commander, UserCommander, MissileCommander, EnemyAICommander } from '../../src/objects/commanders.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Commander, UserCommander, MissileCommander, EnemyAICommander, DemoAICommander } from '../../src/objects/commanders.js';
 import { Direction } from '../../src/constants.js';
 import { MapArea2D } from '../../src/map/map_area_2d.js';
 
@@ -110,6 +110,8 @@ describe('EnemyAICommander', () => {
       home_vertex: Object.assign(new MapArea2D(240, 480, 280, 520), { vx: 24, vy: 48 }),
       random_vertex: () => map.home_vertex,
       vertexes_at: () => here,
+      user_tanks: () => [],
+      visible_user_tanks: () => [],
       path_requests: 0,
       shortest_path() {
         map.path_requests += 1;
@@ -168,6 +170,8 @@ describe('EnemyAICommander with nowhere to go', () => {
       home_vertex: here,
       random_vertex: () => here,
       vertexes_at: () => here,
+      user_tanks: () => [],
+      visible_user_tanks: () => [],
       shortest_path: () => []
     };
     const tank = {
@@ -193,6 +197,8 @@ describe('EnemyAICommander route backoff', () => {
       home_vertex: here,
       random_vertex: () => here,
       vertexes_at: () => here,
+      user_tanks: () => [],
+      visible_user_tanks: () => [],
       path_requests: 0,
       shortest_path() { map.path_requests += 1; return []; }
     };
@@ -207,5 +213,359 @@ describe('EnemyAICommander route backoff', () => {
     // A search of a walled-off map is the most expensive one there is; a tank
     // that cannot get anywhere must not keep paying for it.
     expect(map.path_requests).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('EnemyAICommander following Jev guidance', () => {
+  function makeGuided() {
+    const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
+    const home = Object.assign(new MapArea2D(240, 480, 280, 520), { vx: 24, vy: 48 });
+    const near_player = Object.assign(new MapArea2D(160, 240, 200, 280), { vx: 16, vy: 24 });
+    const far_player = Object.assign(new MapArea2D(480, 480, 520, 520), { vx: 48, vy: 48 });
+    const roam_spot = Object.assign(new MapArea2D(0, 0, 40, 40), { vx: 0, vy: 0 });
+    const power_up = Object.assign(new MapArea2D(120, 120, 160, 160), { vx: 12, vy: 12 });
+    const map = {
+      home_vertex: home,
+      random_vertex: () => roam_spot,
+      gifts: [{ area: new MapArea2D(120, 120, 160, 160), destroyed: false }],
+      vertexes_at: area => (area.x1 === 200 && area.y1 === 200 ? here : area.x1 === 120 ? power_up : area.x1 === 160 ? near_player : far_player),
+      user_tanks: () => [{ area: new MapArea2D(480, 480, 520, 520) }, { area: new MapArea2D(160, 240, 200, 280) }],
+      visible_user_tanks: () => map.user_tanks(),
+      goals: [],
+      shortest_path(tank, start, end) { map.goals.push(end); return []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 200, 240, 240), direction: 180, iq: 100,
+      delayed_commands: [], can_fire: () => false
+    };
+    return { commander: new EnemyAICommander(tank), map, tank, home, near_player, roam_spot, power_up };
+  }
+
+  it('heads for the nearest player tank when told to hunt', () => {
+    const { commander, map, near_player } = makeGuided();
+
+    commander.follow('hunt_player');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([near_player]);
+  });
+
+  it('cannot hunt players that are all hiding in grass', () => {
+    const { commander, map, home, near_player } = makeGuided();
+    map.visible_user_tanks = () => [];
+
+    commander.follow('hunt_player');
+    commander.next_commands();
+
+    expect(map.goals).not.toContainEqual(near_player);
+    expect(map.goals).toEqual([home]); // its own iq takes over
+  });
+
+  it('heads somewhere else on the map when told to roam', () => {
+    const { commander, map, roam_spot } = makeGuided();
+
+    commander.follow('roam');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([roam_spot]);
+  });
+
+  it('heads for the base when told to attack it, whatever its own iq', () => {
+    const { commander, map, tank, home } = makeGuided();
+    tank.iq = 0;
+
+    commander.follow('attack_base');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([home]);
+  });
+
+  it('drops its route when the objective changes, but not when it is repeated', () => {
+    const { commander } = makeGuided();
+    const route = () => [Object.assign(new MapArea2D(200, 160, 240, 200), { vx: 20, vy: 16 })];
+
+    commander.follow('attack_base');
+    commander.path = route();
+    commander.follow('attack_base');
+    expect(commander.path).toHaveLength(1);
+
+    commander.follow('hunt_player');
+    expect(commander.path).toHaveLength(0);
+  });
+
+  it('heads for the power-up when told to get it', () => {
+    const { commander, map, power_up } = makeGuided();
+
+    commander.follow('get_power_up');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([power_up]);
+  });
+
+  it('goes after the players instead once the power-up has been taken', () => {
+    const { commander, map, near_player } = makeGuided();
+    map.gifts = [];
+
+    commander.follow('get_power_up');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([near_player]);
+  });
+});
+
+describe('EnemyAICommander attacking players', () => {
+  function makeFacingPlayer({ blocked = false } = {}) {
+    const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
+    const player = { area: new MapArea2D(200, 400, 240, 440), destroyed: false };
+    const wall = { type: () => 'iron', area: new MapArea2D(200, 300, 240, 340) };
+    const map = {
+      home_vertex: here,
+      random_vertex: () => here,
+      vertexes_at: () => here,
+      gifts: [],
+      user_tanks: () => [player],
+      visible_user_tanks: () => [player],
+      units_at: () => (blocked ? [wall] : []),
+      shortest_path: () => []
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 200, 240, 240), direction: Direction.UP, iq: 0, power: 1,
+      delayed_commands: [], can_fire: () => true
+    };
+    return new EnemyAICommander(tank);
+  }
+
+  it('turns on a player it has lined up with and fires, after a human-like reaction time', () => {
+    const commander = makeFacingPlayer();
+    let now = 1000;
+    commander.now = () => now;
+    const orig = Math.random;
+    Math.random = () => 0.5; // rule out the random potshot
+    try {
+      const turned_and_fired = commands =>
+        commands.some(c => c.type === 'direction' && c.params.direction === Direction.DOWN) &&
+        commands.some(c => c.type === 'fire');
+
+      expect(turned_and_fired(commander.next_commands())).toBe(false);
+      now += EnemyAICommander.sight_reaction_ms - 1;
+      expect(turned_and_fired(commander.next_commands())).toBe(false);
+      now += 1;
+      expect(turned_and_fired(commander.next_commands())).toBe(true);
+    } finally {
+      Math.random = orig;
+    }
+  });
+
+  it('leaves lined-up players alone when shooting on sight is off', () => {
+    const commander = makeFacingPlayer();
+    commander.shoot_on_sight = false;
+    const orig = Math.random;
+    Math.random = () => 0.5; // rule out the random potshot
+    try {
+      expect(commander.next_commands()).not.toContainEqual({ type: 'fire' });
+    } finally {
+      Math.random = orig;
+    }
+  });
+
+  it('cannot see a player hiding in grass', () => {
+    const commander = makeFacingPlayer();
+    commander.map.visible_user_tanks = () => [];
+    let now = 1000;
+    commander.now = () => now;
+    const orig = Math.random;
+    Math.random = () => 0.5; // rule out the random potshot
+    try {
+      commander.next_commands();
+      now += EnemyAICommander.sight_reaction_ms;
+      expect(commander.next_commands()).not.toContainEqual({ type: 'fire' });
+    } finally {
+      Math.random = orig;
+    }
+  });
+
+  it('holds fire when an iron wall is in the way', () => {
+    const commander = makeFacingPlayer({ blocked: true });
+    const orig = Math.random;
+    Math.random = () => 0.5; // rule out the random potshot
+    try {
+      expect(commander.next_commands()).not.toContainEqual({ type: 'fire' });
+    } finally {
+      Math.random = orig;
+    }
+  });
+});
+
+describe('DemoAICommander going for power-ups', () => {
+  function makeDemo({ gift_type = 'star', enemy_at = new MapArea2D(0, 0, 40, 40) } = {}) {
+    const here = Object.assign(new MapArea2D(200, 400, 240, 440), { vx: 20, vy: 40 });
+    const gift_spot = Object.assign(new MapArea2D(400, 400, 440, 440), { vx: 40, vy: 40 });
+    const enemy_spot = Object.assign(new MapArea2D(0, 0, 40, 40), { vx: 0, vy: 0 });
+    const gift = { type: () => gift_type, area: new MapArea2D(400, 400, 440, 440), destroyed: false };
+    const enemy = { area: enemy_at, destroyed: false, initializing: false };
+    const map = {
+      gifts: gift_type ? [gift] : [],
+      enemy_tanks: () => [enemy],
+      units_at: () => [],
+      vertexes_at: area => (area.x1 === 400 ? gift_spot : area.x1 === 200 ? here : enemy_spot),
+      goals: [],
+      routes: [],
+      shortest_path(tank, start, end) { map.goals.push(end); return map.routes.shift() ?? []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 400, 240, 440), direction: Direction.UP, power: 1,
+      delayed_commands: [], can_fire: () => true
+    };
+    return { commander: new DemoAICommander(tank), map, gift, gift_spot, enemy_spot };
+  }
+
+  it('heads for a power-up before chasing enemies', () => {
+    const { commander, map, gift_spot } = makeDemo();
+
+    commander.next_commands();
+
+    expect(map.goals).toEqual([gift_spot]);
+  });
+
+  it('drops its route to an enemy as soon as a power-up appears', () => {
+    const { commander, map, gift, gift_spot, enemy_spot } = makeDemo({ gift_type: null });
+    map.routes.push([
+      Object.assign(new MapArea2D(200, 360, 240, 400), { vx: 20, vy: 36 }),
+      Object.assign(new MapArea2D(200, 320, 240, 360), { vx: 20, vy: 32 }),
+      Object.assign(new MapArea2D(200, 280, 240, 320), { vx: 20, vy: 28 })
+    ]);
+    commander.next_commands();
+    expect(map.goals).toEqual([enemy_spot]);
+
+    map.gifts.push(gift);
+    // Long enough for a route search to be allowed, too short to count as wedged.
+    for (let i = 0; i <= DemoAICommander.repath_cooldown; i++) commander.next_commands();
+
+    expect(map.goals.at(-1)).toEqual(gift_spot);
+  });
+
+  it('rushes a clock or land mine rather than stopping to shoot', () => {
+    const lined_up = new MapArea2D(200, 0, 240, 40);
+    for (const gift_type of ['clock', 'land_mine']) {
+      const { commander, map, gift_spot } = makeDemo({ gift_type, enemy_at: lined_up });
+      commander.next_commands();
+      expect(map.goals).toEqual([gift_spot]);
+    }
+
+    // Anything less can wait for the shot.
+    const { commander, map } = makeDemo({ gift_type: 'star', enemy_at: lined_up });
+    expect(commander.next_commands()).toContainEqual({ type: 'fire' });
+    expect(map.goals).toEqual([]);
+  });
+});
+
+describe('EnemyAICommander blunders', () => {
+  function makeBlunderer(random) {
+    const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
+    const map = {
+      home_vertex: here, random_vertex: () => here, vertexes_at: () => here,
+      gifts: [], user_tanks: () => [], visible_user_tanks: () => [],
+      path_requests: 0,
+      shortest_path() { map.path_requests += 1; return []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 200, 240, 240), direction: Direction.UP, iq: 0,
+      delayed_commands: [], can_fire: () => false
+    };
+    vi.spyOn(Math, 'random').mockReturnValue(random);
+    return { commander: new EnemyAICommander(tank), map };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('sometimes sits idle instead of following a plan, then gets back to it', () => {
+    const { commander, map } = makeBlunderer(0);
+    commander.blunder_rate = 1;
+
+    const first = commander.next_commands();
+    expect(first).toContainEqual({ type: 'stop_move' });
+    expect(map.path_requests).toBe(0);
+
+    commander.blunder_rate = 0;
+    for (let i = 0; i < EnemyAICommander.blunder_frames; i++) commander.next_commands();
+    expect(map.path_requests).toBe(1);
+  });
+});
+
+describe('EnemyAICommander wrong-way blunders', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('sometimes rolls off in a random direction instead of following a plan', () => {
+    const here = Object.assign(new MapArea2D(200, 200, 240, 240), { vx: 20, vy: 20 });
+    const map = {
+      home_vertex: here, random_vertex: () => here, vertexes_at: () => here,
+      gifts: [], user_tanks: () => [], visible_user_tanks: () => [], path_requests: 0,
+      shortest_path() { map.path_requests += 1; return []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 200, 240, 240), direction: Direction.UP, iq: 0,
+      delayed_commands: [], can_fire: () => false
+    };
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    const commander = new EnemyAICommander(tank);
+    commander.blunder_rate = 1;
+
+    const commands = commander.next_commands();
+
+    expect(commands).toContainEqual({ type: 'start_move', params: { offset: null } });
+    expect(commands).not.toContainEqual({ type: 'stop_move' });
+    expect(map.path_requests).toBe(0);
+  });
+});
+
+describe('DemoAICommander following Jev guidance', () => {
+  function makeGuidedDemo(gift_type) {
+    const here = Object.assign(new MapArea2D(200, 400, 240, 440), { vx: 20, vy: 40 });
+    const spots = {
+      400: Object.assign(new MapArea2D(400, 400, 440, 440), { vx: 40, vy: 40 }),
+      160: Object.assign(new MapArea2D(160, 480, 200, 520), { vx: 16, vy: 48 }),
+      0: Object.assign(new MapArea2D(0, 0, 40, 40), { vx: 0, vy: 0 }),
+      200: here
+    };
+    const map = {
+      gifts: gift_type ? [{ type: () => gift_type, area: new MapArea2D(400, 400, 440, 440), destroyed: false }] : [],
+      enemy_tanks: () => [{ area: new MapArea2D(0, 0, 40, 40), destroyed: false, initializing: false }],
+      units_at: () => [],
+      vertexes_at: area => spots[area.x1],
+      goals: [],
+      shortest_path(tank, start, end) { map.goals.push(end); return []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 400, 240, 440), direction: Direction.UP, power: 1,
+      delayed_commands: [], can_fire: () => true
+    };
+    return { commander: new DemoAICommander(tank), map, spots };
+  }
+
+  it('chases the enemy when told to hunt, even with a power-up about', () => {
+    const { commander, map, spots } = makeGuidedDemo('star');
+
+    commander.follow('hunt_enemy');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([spots[0]]);
+  });
+
+  it('falls back beside the base when told to defend it', () => {
+    const { commander, map, spots } = makeGuidedDemo(null);
+
+    commander.follow('defend_base');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([spots[160]]);
+  });
+
+  it('still rushes a clock whatever Jev says', () => {
+    const { commander, map, spots } = makeGuidedDemo('clock');
+
+    commander.follow('hunt_enemy');
+    commander.next_commands();
+
+    expect(map.goals).toEqual([spots[400]]);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Tank, UserTank, StupidTank, FoolTank, FishTank, StrongTank } from '../../src/objects/tanks.js';
 
 describe('Tank (base)', () => {
@@ -95,6 +95,20 @@ describe('Tank (base)', () => {
     expect(t.can_fire()).toBe(false);
   });
 
+  it('has to reload before firing again, even once its missile is gone', () => {
+    const t = makeTank();
+    t.map = { add_missile: () => ({}) };
+
+    t.fire();
+    t.missiles = []; // e.g. cancelled by an enemy missile straight away
+    expect(t.can_fire()).toBe(false);
+
+    t.reload(Tank.reload_time - 1);
+    expect(t.can_fire()).toBe(false);
+    t.reload(1);
+    expect(t.can_fire()).toBe(true);
+  });
+
   it('delete_missile removes from list', () => {
     const t = makeTank();
     const m1 = { id: 1 };
@@ -106,8 +120,12 @@ describe('Tank (base)', () => {
 });
 
 describe('Tank speeds', () => {
-  it('UserTank speed is 0.13', () => {
-    expect(UserTank.speed).toBe(0.13);
+  it('player tanks reload 1.2x as fast as enemies', () => {
+    expect(UserTank.reload_time).toBeCloseTo(StupidTank.reload_time / 1.2);
+  });
+
+  it('player tanks move 1.2x as fast as the fastest enemy, whatever the difficulty', () => {
+    expect(UserTank.speed).toBeCloseTo(1.2 * FishTank.speed);
   });
 
   it('StupidTank speed is 0.07', () => {
@@ -146,5 +164,19 @@ describe('Tank types', () => {
   it('StrongTank type is strong', () => {
     const t = Object.create(StrongTank.prototype);
     expect(t.type()).toBe('strong');
+  });
+});
+
+describe('EnemyTank gaining hit points', () => {
+  it('drops no power-up and keeps its level - only a hit does that', () => {
+    const t = Object.create(StupidTank.prototype);
+    Object.assign(t, { hp: 2, level: 2, power: 1, max_missile: 1, gift_counts: 2 });
+    t.map = { random_gift: vi.fn() };
+    t.update_display = vi.fn();
+
+    t.hp_up(1);
+
+    expect(t.map.random_gift).not.toHaveBeenCalled();
+    expect({ hp: t.hp, level: t.level, gift_counts: t.gift_counts }).toEqual({ hp: 3, level: 2, gift_counts: 2 });
   });
 });

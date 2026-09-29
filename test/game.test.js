@@ -98,6 +98,27 @@ describe('Game', () => {
   });
 });
 
+describe('Game difficulty', () => {
+  it('starts on NORMAL and turns up or down one step at a time, stopping at either end', () => {
+    const game = new Game();
+    expect(game.difficulty().name).toBe('NORMAL');
+
+    game.harder();
+    expect(game.difficulty().name).toBe('HARD');
+    game.harder();
+    expect(game.difficulty().name).toBe('NIGHTMARE');
+    game.harder();
+    expect(game.difficulty().name).toBe('NIGHTMARE');
+
+    game.easier();
+    game.easier();
+    game.easier();
+    expect(game.difficulty().name).toBe('EASY');
+    game.easier();
+    expect(game.difficulty().name).toBe('EASY');
+  });
+});
+
 describe('Game scene change listeners', () => {
   it('notifies listeners with the name of the scene it switched to', () => {
     const game = new Game();

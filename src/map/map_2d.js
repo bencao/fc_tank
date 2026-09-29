@@ -2,7 +2,7 @@ import { BinomialHeap, BinomialHeapNode } from "../engine/data_structures.js";
 import { MapArea2DVertex } from "./map_area_2d_vertex.js";
 import { Missile } from "../objects/missile.js";
 import { Terrain } from "./terrains.js";
-import { Gift, getGiftClasses } from "../objects/gifts.js";
+import { Gift, pickGiftClass } from "../objects/gifts.js";
 import { Tank, UserTank, EnemyTank } from "../objects/tanks.js";
 
 export class Map2D {
@@ -71,17 +71,10 @@ export class Map2D {
     return missile;
   }
 
-  random_gift() {
+  random_gift(gift_class = pickGiftClass()) {
     this.gifts.forEach(gift => gift.destroy());
 
-    const gift_classes = getGiftClasses();
-    const gift_choice = Math.floor(Math.random() * gift_classes.length);
-    // Somewhere an ordinary tank could actually drive to - a gift sealed
-    // inside an iron block is a gift nobody ever collects.
-    const gift = new gift_classes[gift_choice](
-      this,
-      this.random_vertex({ power: 1, ship: false }).clone()
-    );
+    const gift = new gift_class(this, this._gift_vertex(gift_class).clone());
     gift.new_display();
     gift.after_new_display();
     this.gifts.push(gift);
@@ -116,6 +109,21 @@ export class Map2D {
   }
   enemy_tanks() {
     return this.tanks.filter(tank => tank instanceof EnemyTank);
+  }
+
+  // A tank at least three quarters under grass can't be seen by the other side.
+  hidden_in_grass(tank) {
+    const covered = this.terrains
+      .filter(terrain => terrain.type() === "grass")
+      .map(grass => grass.area.intersect(tank.area))
+      .filter(overlap => overlap.valid())
+      .reduce((sum, overlap) => sum + overlap.width() * overlap.height(), 0);
+    return covered >= 0.75 * tank.area.width() * tank.area.height();
+  }
+
+  // Player tanks the enemies can see: on the field and not hiding in grass.
+  visible_user_tanks() {
+    return this.user_tanks().filter(tank => !tank.destroyed && !this.hidden_in_grass(tank));
   }
 
   units_at(area) {
@@ -182,6 +190,27 @@ export class Map2D {
   // Somewhere to head for. Given a tank, it avoids squares that tank could
   // never enter - sending it after a spot inside an iron block just means no
   // route exists and the tank stands around instead of attacking.
+  // Somewhere an ordinary tank could actually drive to - a gift sealed inside
+  // an iron block is a gift nobody ever collects. Power-ups that hit a whole
+  // side at once favour the player's (bottom) half 1.2 : 1, as the player has
+  // one tank to reach them with against the enemies' many.
+  _gift_vertex(gift_class) {
+    const driver = { power: 1, ship: false };
+    if (!gift_class.game_changer) {
+      return this.random_vertex(driver);
+    }
+    const middle = this.max_y / 2 - this.default_height / 2;
+    const want_bottom = Math.random() < 1.2 / 2.2;
+    let vertex = this.random_vertex(driver);
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (want_bottom ? vertex.y1 > middle : vertex.y1 < middle) {
+        return vertex;
+      }
+      vertex = this.random_vertex(driver);
+    }
+    return vertex;
+  }
+
   random_vertex(tank) {
     let vertex = this._random_lattice_vertex();
     if (tank == null) {

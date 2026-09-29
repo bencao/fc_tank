@@ -225,6 +225,16 @@ class PathfindingCommander extends Commander {
     return this.start_move();
   }
 
+  // Objective chosen by Jev (see src/ai/enemy_guide.js). Until guidance
+  // arrives - or if it never does - the commander's own rules decide.
+  follow(objective) {
+    if (objective === this.objective) {
+      return;
+    }
+    this.objective = objective;
+    this.reset_path();
+  }
+
   may_plan_route() {
     return this.ticks_since_path >= this.repath_delay;
   }
@@ -300,108 +310,11 @@ class PathfindingCommander extends Commander {
   current_vertex() {
     return this.map.vertexes_at(this.map_unit.area);
   }
-}
 
-export class EnemyAICommander extends PathfindingCommander {
-  next() {
-    this.note_progress();
-
-    // move towards home
-    if (this.path.length === 0) {
-      if (this.may_plan_route()) {
-        this.plan_route(this.goal_vertex());
-        this.arm_repath_timer(2000 + Math.random() * 2000);
-      }
-      if (this.path.length === 0) {
-        this.wander();
-      }
-    } else {
-      this.advance_along_route();
-    }
-
-    // more chance to fire if can't move
-    if (
-      this.map_unit.can_fire() &&
-      this.last_area &&
-      this.last_area.equals(this.map_unit.area)
-    ) {
-      if (Math.random() < 0.08) {
-        this.fire();
-      }
-    } else {
-      if (Math.random() < 0.01) {
-        this.fire();
-      }
-    }
-
-    return (this.last_area = this.map_unit.area);
-  }
-
-  goal_vertex() {
-    return Math.random() * 100 <= this.map_unit.iq
-      ? this.map.home_vertex
-      : this.map.random_vertex(this.map_unit);
-  }
-
-  in_attack_range(area) {
-    return (
-      this.map_unit.area.x1 === area.x1 || this.map_unit.area.y1 === area.y1
-    );
-  }
-}
-
-export class DemoAICommander extends PathfindingCommander {
-  next() {
-    const enemies = this.map.enemy_tanks().filter(t => !t.destroyed && !t.initializing);
-    if (enemies.length === 0) {
-      return;
-    }
-
-    const wedged = this.note_progress();
-
-    // Priority 1: if aligned with an enemy AND we have a clear shot, face it
-    // and fire. Skipped while wedged so we always fall through to pathfinding.
-    const aligned = wedged ? null : this._find_aligned_enemy(enemies);
-    if (aligned) {
-      this.turn(this._direction_toward(aligned));
-      if (this.map_unit.can_fire()) {
-        this.fire();
-      }
-      this.start_move();
-      this.last_area = this.map_unit.area;
-      return;
-    }
-
-    // Priority 2: pathfind toward nearest enemy
-    if (this.path.length === 0) {
-      const nearest = this._find_nearest_enemy(enemies);
-      if (nearest && this.may_plan_route()) {
-        this.plan_route(this.map.vertexes_at(nearest.area));
-        this.arm_repath_timer(1000 + Math.random() * 1000);
-      }
-      if (this.path.length === 0) {
-        this.wander();
-      }
-    } else {
-      this.advance_along_route();
-    }
-
-    // Fire if stuck
-    if (
-      this.map_unit.can_fire() &&
-      this.last_area &&
-      this.last_area.equals(this.map_unit.area)
-    ) {
-      if (Math.random() < 0.08) {
-        this.fire();
-      }
-    }
-
-    this.last_area = this.map_unit.area;
-  }
-
-  _find_aligned_enemy(enemies) {
-    for (const enemy of enemies) {
+  // Line of sight: a target in the same row or column with nothing
+  // bullet-proof between us.
+  _find_aligned_target(targets) {
+    for (const enemy of targets) {
       const same_col = this.map_unit.area.x1 === enemy.area.x1;
       const same_row = this.map_unit.area.y1 === enemy.area.y1;
       if ((same_col || same_row) && this._has_clear_shot(enemy)) {
@@ -455,6 +368,225 @@ export class DemoAICommander extends PathfindingCommander {
     } else {
       return their.x1 < my.x1 ? "left" : "right";
     }
+  }
+}
+
+export class EnemyAICommander extends PathfindingCommander {
+  // How long a blunder lasts, in frames.
+  static blunder_frames = 60;
+  // How long a player has to stay lined up before this tank turns and fires,
+  // in ms - about a human's reaction, so neither side gets a free first shot.
+  static sight_reaction_ms = 300;
+
+  // Both set per difficulty (see src/difficulty.js).
+  shoot_on_sight = true;
+  blunder_rate = 0;
+  blunder_frames_left = 0;
+
+  next() {
+    const wedged = this.note_progress();
+
+    // A player in the line of fire gets shot at, whatever the objective.
+    // Skipped while wedged so a blocked tank still falls through to routing.
+    const prey = this._react_to(wedged || !this.shoot_on_sight
+      ? null
+      : this._find_aligned_target(this.map.visible_user_tanks()));
+    if (prey) {
+      this.turn(this._direction_toward(prey));
+      if (this.map_unit.can_fire()) {
+        this.fire();
+      }
+      this.start_move();
+      return (this.last_area = this.map_unit.area);
+    }
+
+    // Mid-blunder: sitting idle, or rolling off the wrong way.
+    if (this.blunder_frames_left > 0) {
+      this.blunder_frames_left -= 1;
+      return this.act_out_blunder();
+    }
+
+    // move towards home
+    if (this.path.length === 0) {
+      if (this.may_plan_route() && Math.random() < this.blunder_rate) {
+        return this.start_blunder();
+      }
+      if (this.may_plan_route()) {
+        this.plan_route(this.goal_vertex());
+        this.arm_repath_timer(2000 + Math.random() * 2000);
+      }
+      if (this.path.length === 0) {
+        this.wander();
+      }
+    } else {
+      this.advance_along_route();
+    }
+
+    // more chance to fire if can't move
+    if (
+      this.map_unit.can_fire() &&
+      this.last_area &&
+      this.last_area.equals(this.map_unit.area)
+    ) {
+      if (Math.random() < 0.08) {
+        this.fire();
+      }
+    } else {
+      if (Math.random() < 0.01) {
+        this.fire();
+      }
+    }
+
+    return (this.last_area = this.map_unit.area);
+  }
+
+  // Only hands back a player that has been in sight for the reaction time.
+  _react_to(sighted) {
+    if (!sighted) {
+      this.sighted_since = null;
+      return null;
+    }
+    this.sighted_since ??= this.now();
+    return this.now() - this.sighted_since >= this.constructor.sight_reaction_ms ? sighted : null;
+  }
+
+  now() {
+    return performance.now();
+  }
+
+  // Instead of planning, lose the plot for a while: stop dead, or pick a
+  // direction at random and roll off that way. Easier levels do this more.
+  start_blunder() {
+    this.blunder_kind = Math.random() < 0.5 ? "idle" : "wrong_way";
+    // This frame is the blunder's first.
+    this.blunder_frames_left = this.constructor.blunder_frames - 1;
+    this.wander_action = null;
+    return this.act_out_blunder();
+  }
+
+  act_out_blunder() {
+    if (this.blunder_kind === "idle") {
+      this.stop_move();
+    } else {
+      this.wander();
+    }
+    return (this.last_area = this.map_unit.area);
+  }
+
+  goal_vertex() {
+    if (this.objective === "attack_base") {
+      return this.map.home_vertex;
+    }
+    if (this.objective === "get_power_up") {
+      const power_up = this.map.gifts.find(gift => !gift.destroyed);
+      if (power_up) {
+        return this.map.vertexes_at(power_up.area);
+      }
+    }
+    // A power-up someone else got first leaves the players as the next target.
+    if (this.objective === "hunt_player" || this.objective === "get_power_up") {
+      const prey = this._nearest_user_tank();
+      if (prey) {
+        return this.map.vertexes_at(prey.area);
+      }
+    }
+    if (this.objective === "roam") {
+      return this.map.random_vertex(this.map_unit);
+    }
+    return Math.random() * 100 <= this.map_unit.iq
+      ? this.map.home_vertex
+      : this.map.random_vertex(this.map_unit);
+  }
+
+  _nearest_user_tank() {
+    const my = this.map_unit.area;
+    const distance = tank => Math.abs(my.x1 - tank.area.x1) + Math.abs(my.y1 - tank.area.y1);
+    // Only the players it can see - one hiding in grass can't be hunted.
+    return this.map
+      .visible_user_tanks()
+      .reduce((nearest, tank) => (!nearest || distance(tank) < distance(nearest) ? tank : nearest), null);
+  }
+
+  in_attack_range(area) {
+    return (
+      this.map_unit.area.x1 === area.x1 || this.map_unit.area.y1 === area.y1
+    );
+  }
+}
+
+export class DemoAICommander extends PathfindingCommander {
+  // Power-ups that freeze or destroy every enemy at once - worth more than any
+  // single kill, so they are rushed without stopping to trade shots.
+  static game_changers = ["clock", "land_mine"];
+
+  // Where the demo tank stands to guard the base: P1's spawn point, right
+  // beside it and always reachable.
+  static guard_post = { area: new MapArea2D(160, 480, 200, 520) };
+
+  next() {
+    const enemies = this.map.enemy_tanks().filter(t => !t.destroyed && !t.initializing);
+    if (enemies.length === 0) {
+      return;
+    }
+
+    const wedged = this.note_progress();
+    const power_up = this.map.gifts.find(gift => !gift.destroyed);
+    const rushing = power_up && this.constructor.game_changers.includes(power_up.type());
+
+    // Priority 1: if aligned with an enemy AND we have a clear shot, face it
+    // and fire. Skipped while wedged so we always fall through to pathfinding,
+    // and while rushing a game-changing power-up.
+    const aligned = wedged || rushing ? null : this._find_aligned_target(enemies);
+    if (aligned) {
+      this.turn(this._direction_toward(aligned));
+      if (this.map_unit.can_fire()) {
+        this.fire();
+      }
+      this.start_move();
+      this.last_area = this.map_unit.area;
+      return;
+    }
+
+    // Priority 2: head where Jev says; without guidance, pick up a power-up
+    // or else pathfind toward the nearest enemy. A power-up that appears
+    // mid-chase takes over from the enemy, unless Jev has other plans.
+    const wants_power_up = rushing || !this.objective || this.objective === "get_power_up";
+    if (power_up && wants_power_up && this.route_target !== power_up) {
+      this.reset_path();
+    }
+    if (this.path.length === 0) {
+      const target = this._route_target(enemies, wants_power_up ? power_up : null);
+      if (target && this.may_plan_route()) {
+        this.route_target = target;
+        this.plan_route(this.map.vertexes_at(target.area));
+        this.arm_repath_timer(1000 + Math.random() * 1000);
+      }
+      if (this.path.length === 0) {
+        this.wander();
+      }
+    } else {
+      this.advance_along_route();
+    }
+
+    // Fire if stuck
+    if (
+      this.map_unit.can_fire() &&
+      this.last_area &&
+      this.last_area.equals(this.map_unit.area)
+    ) {
+      if (Math.random() < 0.08) {
+        this.fire();
+      }
+    }
+
+    this.last_area = this.map_unit.area;
+  }
+
+  _route_target(enemies, power_up) {
+    if (this.objective === "defend_base") {
+      return DemoAICommander.guard_post;
+    }
+    return power_up ?? this._find_nearest_enemy(enemies);
   }
 
   _find_nearest_enemy(enemies) {

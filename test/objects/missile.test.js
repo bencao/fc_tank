@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { UserTank, EnemyTank } from '../../src/objects/tanks.js';
 import { Missile } from '../../src/objects/missile.js';
 import { Direction } from '../../src/constants.js';
 import { MapArea2D } from '../../src/map/map_area_2d.js';
@@ -6,6 +7,13 @@ import { MapArea2D } from '../../src/map/map_area_2d.js';
 describe('Missile', () => {
   it('speed is 0.4', () => {
     expect(Missile.speed).toBe(0.4);
+  });
+
+  it('flies 1.2x as fast when a player tank fired it', () => {
+    const fired_by = parent => Object.assign(Object.create(Missile.prototype), { parent });
+
+    expect(fired_by(Object.create(UserTank.prototype)).speed).toBeCloseTo(0.48);
+    expect(fired_by(Object.create(EnemyTank.prototype)).speed).toBe(0.4);
   });
 
   it('type is missile', () => {
