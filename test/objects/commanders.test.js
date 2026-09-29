@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Commander, UserCommander, MissileCommander, EnemyAICommander } from '../../src/objects/commanders.js';
+import { Commander, UserCommander, MissileCommander, EnemyAICommander, DemoAICommander } from '../../src/objects/commanders.js';
 import { Direction } from '../../src/constants.js';
 import { MapArea2D } from '../../src/map/map_area_2d.js';
 
@@ -335,5 +335,68 @@ describe('EnemyAICommander attacking players', () => {
     } finally {
       Math.random = orig;
     }
+  });
+});
+
+describe('DemoAICommander going for power-ups', () => {
+  function makeDemo({ gift_type = 'star', enemy_at = new MapArea2D(0, 0, 40, 40) } = {}) {
+    const here = Object.assign(new MapArea2D(200, 400, 240, 440), { vx: 20, vy: 40 });
+    const gift_spot = Object.assign(new MapArea2D(400, 400, 440, 440), { vx: 40, vy: 40 });
+    const enemy_spot = Object.assign(new MapArea2D(0, 0, 40, 40), { vx: 0, vy: 0 });
+    const gift = { type: () => gift_type, area: new MapArea2D(400, 400, 440, 440), destroyed: false };
+    const enemy = { area: enemy_at, destroyed: false, initializing: false };
+    const map = {
+      gifts: gift_type ? [gift] : [],
+      enemy_tanks: () => [enemy],
+      units_at: () => [],
+      vertexes_at: area => (area.x1 === 400 ? gift_spot : area.x1 === 200 ? here : enemy_spot),
+      goals: [],
+      routes: [],
+      shortest_path(tank, start, end) { map.goals.push(end); return map.routes.shift() ?? []; }
+    };
+    const tank = {
+      map, area: new MapArea2D(200, 400, 240, 440), direction: Direction.UP, power: 1,
+      delayed_commands: [], can_fire: () => true
+    };
+    return { commander: new DemoAICommander(tank), map, gift, gift_spot, enemy_spot };
+  }
+
+  it('heads for a power-up before chasing enemies', () => {
+    const { commander, map, gift_spot } = makeDemo();
+
+    commander.next_commands();
+
+    expect(map.goals).toEqual([gift_spot]);
+  });
+
+  it('drops its route to an enemy as soon as a power-up appears', () => {
+    const { commander, map, gift, gift_spot, enemy_spot } = makeDemo({ gift_type: null });
+    map.routes.push([
+      Object.assign(new MapArea2D(200, 360, 240, 400), { vx: 20, vy: 36 }),
+      Object.assign(new MapArea2D(200, 320, 240, 360), { vx: 20, vy: 32 }),
+      Object.assign(new MapArea2D(200, 280, 240, 320), { vx: 20, vy: 28 })
+    ]);
+    commander.next_commands();
+    expect(map.goals).toEqual([enemy_spot]);
+
+    map.gifts.push(gift);
+    // Long enough for a route search to be allowed, too short to count as wedged.
+    for (let i = 0; i <= DemoAICommander.repath_cooldown; i++) commander.next_commands();
+
+    expect(map.goals.at(-1)).toEqual(gift_spot);
+  });
+
+  it('rushes a clock or land mine rather than stopping to shoot', () => {
+    const lined_up = new MapArea2D(200, 0, 240, 40);
+    for (const gift_type of ['clock', 'land_mine']) {
+      const { commander, map, gift_spot } = makeDemo({ gift_type, enemy_at: lined_up });
+      commander.next_commands();
+      expect(map.goals).toEqual([gift_spot]);
+    }
+
+    // Anything less can wait for the shot.
+    const { commander, map } = makeDemo({ gift_type: 'star', enemy_at: lined_up });
+    expect(commander.next_commands()).toContainEqual({ type: 'fire' });
+    expect(map.goals).toEqual([]);
   });
 });

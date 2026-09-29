@@ -461,6 +461,10 @@ export class EnemyAICommander extends PathfindingCommander {
 }
 
 export class DemoAICommander extends PathfindingCommander {
+  // Power-ups that freeze or destroy every enemy at once - worth more than any
+  // single kill, so they are rushed without stopping to trade shots.
+  static game_changers = ["clock", "land_mine"];
+
   next() {
     const enemies = this.map.enemy_tanks().filter(t => !t.destroyed && !t.initializing);
     if (enemies.length === 0) {
@@ -468,10 +472,13 @@ export class DemoAICommander extends PathfindingCommander {
     }
 
     const wedged = this.note_progress();
+    const power_up = this.map.gifts.find(gift => !gift.destroyed);
+    const rushing = power_up && this.constructor.game_changers.includes(power_up.type());
 
     // Priority 1: if aligned with an enemy AND we have a clear shot, face it
-    // and fire. Skipped while wedged so we always fall through to pathfinding.
-    const aligned = wedged ? null : this._find_aligned_target(enemies);
+    // and fire. Skipped while wedged so we always fall through to pathfinding,
+    // and while rushing a game-changing power-up.
+    const aligned = wedged || rushing ? null : this._find_aligned_target(enemies);
     if (aligned) {
       this.turn(this._direction_toward(aligned));
       if (this.map_unit.can_fire()) {
@@ -482,11 +489,16 @@ export class DemoAICommander extends PathfindingCommander {
       return;
     }
 
-    // Priority 2: pathfind toward nearest enemy
+    // Priority 2: pick up a power-up; otherwise pathfind toward nearest enemy.
+    // A power-up that appears mid-chase takes over from the enemy.
+    if (power_up && this.route_target !== power_up) {
+      this.reset_path();
+    }
     if (this.path.length === 0) {
-      const nearest = this._find_nearest_enemy(enemies);
-      if (nearest && this.may_plan_route()) {
-        this.plan_route(this.map.vertexes_at(nearest.area));
+      const target = power_up ?? this._find_nearest_enemy(enemies);
+      if (target && this.may_plan_route()) {
+        this.route_target = target;
+        this.plan_route(this.map.vertexes_at(target.area));
         this.arm_repath_timer(1000 + Math.random() * 1000);
       }
       if (this.path.length === 0) {
