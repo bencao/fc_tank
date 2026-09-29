@@ -95,6 +95,20 @@ describe('Tank (base)', () => {
     expect(t.can_fire()).toBe(false);
   });
 
+  it('has to reload before firing again, even once its missile is gone', () => {
+    const t = makeTank();
+    t.map = { add_missile: () => ({}) };
+
+    t.fire();
+    t.missiles = []; // e.g. cancelled by an enemy missile straight away
+    expect(t.can_fire()).toBe(false);
+
+    t.reload(Tank.reload_time - 1);
+    expect(t.can_fire()).toBe(false);
+    t.reload(1);
+    expect(t.can_fire()).toBe(true);
+  });
+
   it('delete_missile removes from list', () => {
     const t = makeTank();
     const m1 = { id: 1 };
@@ -106,6 +120,10 @@ describe('Tank (base)', () => {
 });
 
 describe('Tank speeds', () => {
+  it('player tanks reload 1.2x as fast as enemies', () => {
+    expect(UserTank.reload_time).toBeCloseTo(StupidTank.reload_time / 1.2);
+  });
+
   it('player tanks move 1.2x as fast as the fastest enemy, whatever the difficulty', () => {
     expect(UserTank.speed).toBeCloseTo(1.2 * FishTank.speed);
   });

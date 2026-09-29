@@ -25,7 +25,8 @@ SPACE picks 1P / 2P):
   and Jev picks each enemy's objective - grab a power-up, hunt a player,
   attack the base, or roam
 
-At every level, player tanks and their missiles get a 1.2x speed edge. The
+At every level, player tanks move, shoot and reload 1.2x faster than the
+enemies - enough to win a one-on-one, not to take on several at once. The
 levels live in `src/difficulty.js`.
 
 Leave the start screen idle and a demo plays, with Jev steering the AI player

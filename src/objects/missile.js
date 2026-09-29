@@ -86,7 +86,14 @@ export class Missile extends MovableMapUnit2D {
       this.bom_on_destroy = true;
       this.energy -= this.max_defend_point;
     } else {
-      const hit_map_units = this.map.units_at(destroy_area);
+      let hit_map_units = this.map.units_at(destroy_area);
+      // Missiles meeting head-on cancel each other out and go no further -
+      // otherwise whichever went off first would also blow up the tank
+      // standing behind the other one.
+      const met = hit_map_units.filter(unit => unit instanceof Missile && unit !== this && !unit.accept(this));
+      if (met.length > 0) {
+        hit_map_units = met;
+      }
       hit_map_units.forEach(unit => {
         const defend_point = unit.defend(this, destroy_area);
         this.bom_on_destroy = defend_point === this.max_defend_point;
