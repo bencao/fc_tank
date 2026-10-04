@@ -118,3 +118,24 @@ describe('BattleFieldScene borrowing lives', () => {
     expect(scene.born_p1_tank).not.toHaveBeenCalled();
   });
 });
+
+describe('BattleFieldScene friends play borrowing', () => {
+  it("lets the friend's fire key borrow a life for P2, and the host's for P1", () => {
+    const scene = Object.create(BattleFieldScene.prototype);
+    scene.borrow_life = vi.fn();
+    scene.map = { p1_tank: () => null, p2_tank: () => null };
+    const make_keyboard = () => {
+      const down = {};
+      return { down, on_key_down: (k, cb) => { down[k] = cb; }, on_key_up: () => {} };
+    };
+    scene.keyboard = make_keyboard();
+    scene.remote_keyboard = make_keyboard();
+
+    scene.enable_user_control();
+    scene.remote_keyboard.down.J();
+    scene.keyboard.down.Z();
+
+    expect(scene.borrow_life).toHaveBeenNthCalledWith(1, 'p2');
+    expect(scene.borrow_life).toHaveBeenNthCalledWith(2, 'p1');
+  });
+});
