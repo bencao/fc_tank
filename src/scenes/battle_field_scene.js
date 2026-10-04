@@ -242,18 +242,22 @@ export class BattleFieldScene extends Scene {
     const p2_tank = () => this.map.p2_tank();
     if (this.remote_keyboard) {
       const either = { ...P1_CONTROLS, ...P2_CONTROLS };
-      this.bind_controls(this.keyboard, either, p1_tank);
-      return this.bind_controls(this.remote_keyboard, either, p2_tank);
+      this.bind_controls(this.keyboard, either, p1_tank, "p1");
+      return this.bind_controls(this.remote_keyboard, either, p2_tank, "p2");
     }
-    this.bind_controls(this.keyboard, P1_CONTROLS, p1_tank);
-    return this.bind_controls(this.keyboard, P2_CONTROLS, p2_tank);
+    this.bind_controls(this.keyboard, P1_CONTROLS, p1_tank, "p1");
+    return this.bind_controls(this.keyboard, P2_CONTROLS, p2_tank, "p2");
   }
 
-  bind_controls(keyboard, mappings, tank) {
+  bind_controls(keyboard, mappings, tank, player) {
     Object.entries(mappings).forEach(([physical_key, virtual_command]) => {
       keyboard.on_key_down(physical_key, event => {
         if (tank()) {
           return tank().commander.on_command_start(virtual_command);
+        }
+        // Out of tanks: fire asks the partner for one of theirs.
+        if (virtual_command === "fire") {
+          return this.borrow_life(player);
         }
       });
       keyboard.on_key_up(physical_key, event => {
@@ -395,6 +399,24 @@ export class BattleFieldScene extends Scene {
       this.remain_user_p2_lives += 1;
       return this.view.update_p2_lives(this.remain_user_p2_lives);
     }
+  }
+
+  // A player with no tank left takes a reserve life from the other player,
+  // if the other has one to spare.
+  borrow_life(player) {
+    if (this.winner !== null || this.game.single_player_mode()) {
+      return;
+    }
+    const other = player === "p1" ? "p2" : "p1";
+    const key = p => `remain_user_${p}_lives`;
+    if (this[key(other)] < 1) {
+      return;
+    }
+    this[key(other)] -= 1;
+    this[key(player)] += 1;
+    this.view[`update_${other}_lives`](this[key(other)]);
+    this.view[`update_${player}_lives`](this[key(player)]);
+    return player === "p1" ? this.born_p1_tank() : this.born_p2_tank();
   }
 
   born_user_tanks(tank, killed_by_tank) {

@@ -69,3 +69,73 @@ describe('BattleFieldScene leaving a finished battle', () => {
     vi.useRealTimers();
   });
 });
+
+describe('BattleFieldScene borrowing lives', () => {
+  const scene_with = (p1, p2, single = false) => {
+    const scene = Object.create(BattleFieldScene.prototype);
+    scene.winner = null;
+    scene.game = { single_player_mode: () => single };
+    scene.view = { update_p1_lives: vi.fn(), update_p2_lives: vi.fn() };
+    scene.remain_user_p1_lives = p1;
+    scene.remain_user_p2_lives = p2;
+    scene.born_p1_tank = vi.fn();
+    scene.born_p2_tank = vi.fn();
+    return scene;
+  };
+
+  it('moves a life from the partner and brings the tank back', () => {
+    const scene = scene_with(0, 2);
+
+    scene.borrow_life('p1');
+
+    expect(scene.remain_user_p1_lives).toBe(1);
+    expect(scene.remain_user_p2_lives).toBe(1);
+    expect(scene.born_p1_tank).toHaveBeenCalled();
+  });
+
+  it('works the other way round too', () => {
+    const scene = scene_with(3, 0);
+
+    scene.borrow_life('p2');
+
+    expect(scene.remain_user_p1_lives).toBe(2);
+    expect(scene.born_p2_tank).toHaveBeenCalled();
+  });
+
+  it('does nothing when the partner has none to spare', () => {
+    const scene = scene_with(0, 0);
+
+    scene.borrow_life('p1');
+
+    expect(scene.born_p1_tank).not.toHaveBeenCalled();
+  });
+
+  it('does nothing in a single-player game', () => {
+    const scene = scene_with(0, 2, true);
+
+    scene.borrow_life('p1');
+
+    expect(scene.born_p1_tank).not.toHaveBeenCalled();
+  });
+});
+
+describe('BattleFieldScene friends play borrowing', () => {
+  it("lets the friend's fire key borrow a life for P2, and the host's for P1", () => {
+    const scene = Object.create(BattleFieldScene.prototype);
+    scene.borrow_life = vi.fn();
+    scene.map = { p1_tank: () => null, p2_tank: () => null };
+    const make_keyboard = () => {
+      const down = {};
+      return { down, on_key_down: (k, cb) => { down[k] = cb; }, on_key_up: () => {} };
+    };
+    scene.keyboard = make_keyboard();
+    scene.remote_keyboard = make_keyboard();
+
+    scene.enable_user_control();
+    scene.remote_keyboard.down.J();
+    scene.keyboard.down.Z();
+
+    expect(scene.borrow_life).toHaveBeenNthCalledWith(1, 'p2');
+    expect(scene.borrow_life).toHaveBeenNthCalledWith(2, 'p1');
+  });
+});
