@@ -1,10 +1,22 @@
 import { View } from "../engine/view.js";
 import { Animations } from "../constants.js";
 import { MapArea2D } from "../map/map_area_2d.js";
+import { DIFFICULTIES } from "../difficulty.js";
 
 // The menu rows - players, difficulty dial, copyright - from the top down.
 const MENU_TOP = 320;
 const MENU_STEP = 36;
+
+// The difficulty row lists every level at once, the chosen one lit and
+// underlined. Courier advances 0.6em a character, so the row lays out by count.
+const DIAL_FONT_SIZE = 16;
+const DIAL_CHAR_WIDTH = DIAL_FONT_SIZE * 0.6;
+const DIAL_GAP = 2 * DIAL_CHAR_WIDTH;
+const DIAL_LEFT = 300 - (DIFFICULTIES.reduce((width, { name }) => width + name.length * DIAL_CHAR_WIDTH, 0) +
+  (DIFFICULTIES.length - 1) * DIAL_GAP) / 2;
+const DIAL_DIM = "#555";
+const DIAL_LIT = { NIGHTMARE: "#f33" };
+const DIAL_LIT_DEFAULT = "#fc6";
 
 export class WelcomeView extends View {
   init_view() {
@@ -28,7 +40,16 @@ export class WelcomeView extends View {
   }
 
   update_difficulty(name) {
-    return this.difficulty_label.setText(`< ${name} >`);
+    const ink = DIAL_LIT[name] ?? DIAL_LIT_DEFAULT;
+    this.difficulty_labels.forEach((label, level) => {
+      const chosen = DIFFICULTIES[level].name === name;
+      label.setFill(chosen ? ink : DIAL_DIM);
+      if (chosen) {
+        this.difficulty_marker.setX(this.difficulty_spans[level].x);
+        this.difficulty_marker.setWidth(this.difficulty_spans[level].width);
+      }
+    });
+    return this.difficulty_marker.setFill(ink);
   }
 
   play_start_animation(callback) {
@@ -176,16 +197,34 @@ export class WelcomeView extends View {
   }
 
   init_difficulty_dial() {
-    this.difficulty_label = new Kinetic.Text({
-      x         : 210,
-      y         : MENU_TOP + 3 * MENU_STEP,
-      fontSize  : 22,
-      fontStyle : "bold",
-      fontFamily: "Courier",
-      text      : "",
-      fill      : "#fc6"
+    const y = MENU_TOP + 3 * MENU_STEP + 4;
+    let x = DIAL_LEFT;
+    // Where each label sits along the row, for the underline.
+    this.difficulty_spans = [];
+    this.difficulty_labels = DIFFICULTIES.map(({ name }) => {
+      const width = name.length * DIAL_CHAR_WIDTH;
+      this.difficulty_spans.push({ x, width });
+      const label = new Kinetic.Text({
+        x,
+        y,
+        fontSize  : DIAL_FONT_SIZE,
+        fontStyle : "bold",
+        fontFamily: "Courier",
+        text      : name,
+        fill      : DIAL_DIM
+      });
+      x += width + DIAL_GAP;
+      this.static_group.add(label);
+      return label;
     });
-    return this.static_group.add(this.difficulty_label);
+    this.difficulty_marker = new Kinetic.Rect({
+      x     : DIAL_LEFT,
+      y     : y + DIAL_FONT_SIZE + 3,
+      width : 0,
+      height: 2,
+      fill  : DIAL_LIT_DEFAULT
+    });
+    return this.static_group.add(this.difficulty_marker);
   }
 
   init_copy_right_text() {
