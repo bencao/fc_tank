@@ -26,8 +26,7 @@ export class WelcomeView extends View {
     this.init_tank_90_logo();
     this.init_player_mode_selection_text();
     this.init_player_mode_selection_tank();
-    this.init_difficulty_dial();
-    return this.init_copy_right_text();
+    return this.init_difficulty_dial();
   }
 
   update_scores(p1_score, p2_score, hi_score) {
@@ -225,18 +224,6 @@ export class WelcomeView extends View {
       fill  : DIAL_LIT_DEFAULT
     });
     return this.static_group.add(this.difficulty_marker);
-  }
-
-  init_copy_right_text() {
-    return this.static_group.add(new Kinetic.Text({
-      x         : 210,
-      y         : MENU_TOP + 4 * MENU_STEP,
-      fontSize  : 22,
-      fontStyle : "bold",
-      fontFamily: "Courier",
-      text      : "© BEN♥FENG",
-      fill      : "#fff"
-    }));
   }
 
   init_player_mode_selection_tank() {
