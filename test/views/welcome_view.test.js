@@ -39,3 +39,12 @@ describe('WelcomeView difficulty row', () => {
     expect(nightmare_x).toBeGreaterThan(easy_x);
   });
 });
+
+describe('WelcomeView credits', () => {
+  it('leaves the copyright credit to the page footer', () => {
+    stubKinetic();
+    new WelcomeView(new Kinetic.Stage());
+    const texts = Kinetic.Text.mock.calls.map(([config]) => config.text);
+    expect(texts.some(text => /BEN|FENG|©/.test(text))).toBe(false);
+  });
+});
