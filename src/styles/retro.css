@@ -589,6 +589,7 @@ body::after {
   color: var(--steel);
   text-decoration: none;
   border-bottom: 1px solid #3d3b44;
+  white-space: nowrap;
 }
 
 .credits a:hover,
