@@ -3,7 +3,8 @@ import { Initials } from "./initials.js";
 
 // After a game over, each player who scored enters their initials for the
 // global leaderboard, P1 then P2; the run is posted and the high scores shown.
-// Either player's keys work - it's one player's turn at a time.
+// Either player's keys work - it's one player's turn at a time. SPACE opts
+// the player out: nothing of theirs goes on the board.
 //
 // Friends play is one run for the team: each friend enters their initials in
 // their own browser at the same time, and the host posts "ABC&XYZ" on the
@@ -32,8 +33,12 @@ export class NameEntryScene extends Scene {
   join_team() {
     const score = this.game.get_status("p1_score") + this.game.get_status("p2_score");
     const team = { turn: { label: "TEAM 1P", score }, mine: null, mate: null, gone: false, posted: false };
+    // A null name is the friend opting out: the run goes on without them.
     team.off = this.game.friends.on("initials", ({ name }) => {
-      if (typeof name === "string" && INITIALS.test(name)) {
+      if (name === null) {
+        team.gone = true;
+        this.post_team();
+      } else if (typeof name === "string" && INITIALS.test(name)) {
         team.mate = name;
         this.post_team();
       }
@@ -95,6 +100,7 @@ export class NameEntryScene extends Scene {
       this.show_initials();
     });
     this.keyboard.on_key_down("ENTER", () => this.save());
+    this.keyboard.on_key_down("SPACE", () => this.skip());
   }
 
   show_initials() {
@@ -118,11 +124,24 @@ export class NameEntryScene extends Scene {
     return this.post(this.initials.text());
   }
 
-  // Posts the team's run once both sets of initials are in - or the host's
-  // alone, once the friend is gone or has kept it waiting too long.
+  // A player who would rather stay off the board.
+  skip() {
+    if (this.saving) { return; }
+    this.saving = true;
+    clearTimeout(this.idle_timer);
+    if (this.team) {
+      this.team.skipped = true;
+      return this.post_team();
+    }
+    return this.next_turn();
+  }
+
+  // Posts the team's run once both sets of initials are in - or one alone,
+  // once the friend is gone or has kept it waiting too long, or the other
+  // opted out.
   post_team() {
     const team = this.team;
-    if (!team || !team.mine || team.posted) { return; }
+    if (!team || !(team.mine || team.skipped) || team.posted) { return; }
     if (team.mate == null && !team.gone) {
       clearTimeout(this.idle_timer);
       this.idle_timer = setTimeout(() => {
@@ -133,7 +152,8 @@ export class NameEntryScene extends Scene {
     }
     team.posted = true;
     clearTimeout(this.idle_timer);
-    return this.post(team.mate ? `${team.mine}&${team.mate}` : team.mine);
+    const names = [team.skipped ? null : team.mine, team.mate].filter(Boolean);
+    return names.length > 0 ? this.post(names.join("&")) : this.next_turn();
   }
 
   async post(name) {

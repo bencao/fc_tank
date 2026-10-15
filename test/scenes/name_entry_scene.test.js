@@ -125,6 +125,17 @@ describe('NameEntryScene', () => {
     expect(scene.game.switch_scene).toHaveBeenCalledWith('high_scores');
   });
 
+  it('skips the board when the player opts out, going on to the high scores', async () => {
+    const { scene, press, statuses } = makeScene();
+    scene.start();
+    press('SPACE');
+    await settle();
+
+    expect(scene.game.leaderboard.submit).not.toHaveBeenCalled();
+    expect(statuses.high_score_ranks).toEqual([]);
+    expect(scene.game.switch_scene).toHaveBeenCalledWith('high_scores');
+  });
+
   // Like the arcade, a walk-away still gets their initials on the board.
   it('enters the initials as they stand after a long wait', async () => {
     vi.useFakeTimers();
@@ -210,6 +221,42 @@ describe('NameEntryScene in friends play', () => {
     await settle();
 
     expect(scene.game.leaderboard.submit).toHaveBeenCalledWith(expect.objectContaining({ name: 'AAA', score: 2000 }));
+  });
+
+  it("posts the friend's initials alone when the host opts out", async () => {
+    const { scene, press, friend_enters } = friends();
+    scene.start();
+    press('SPACE');
+    await settle();
+    expect(scene.game.leaderboard.submit).not.toHaveBeenCalled();
+
+    friend_enters('XYZ');
+    await settle();
+
+    expect(scene.game.leaderboard.submit).toHaveBeenCalledWith(expect.objectContaining({ name: 'XYZ', score: 2000 }));
+  });
+
+  it("posts the host's initials alone, without waiting, when the friend opts out", async () => {
+    const { scene, press, friend_enters } = friends();
+    scene.start();
+    friend_enters(null);
+
+    press('ENTER');
+    await settle();
+
+    expect(scene.view.show_waiting).not.toHaveBeenCalled();
+    expect(scene.game.leaderboard.submit).toHaveBeenCalledWith(expect.objectContaining({ name: 'AAA', score: 2000 }));
+  });
+
+  it('posts nothing when both opt out', async () => {
+    const { scene, press, friend_enters } = friends();
+    scene.start();
+    friend_enters(null);
+    press('SPACE');
+    await settle();
+
+    expect(scene.game.leaderboard.submit).not.toHaveBeenCalled();
+    expect(scene.game.switch_scene).toHaveBeenCalledWith('high_scores');
   });
 
   it('stops waiting on a friend who never answers', async () => {

@@ -9,7 +9,7 @@ import { map_key } from "../engine/keyboard.js";
 //
 // Messages are JSON objects { t: type, ...payload }:
 //   guest -> host   key        { key, down }       a key the friend pressed
-//                   initials   { name }            the friend's leaderboard initials
+//                   initials   { name }            the friend's leaderboard initials (null: opted out)
 //   host -> guest   scene      { name }            the host changed scene
 //                   view       { view, method, args }   see view_mirror.js
 //                   frame      { units, terrain, booms } see frame_recorder.js
