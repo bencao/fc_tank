@@ -6,6 +6,15 @@
     <meta name="theme-color" content="#08080b" />
     <title>FC Tank - Classic Battle City built with web technologies</title>
     <link rel="stylesheet" href="./src/styles/retro.css" />
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+      window.va("beforeSend", function (event) {
+        var url = new URL(event.url);
+        url.search = "";
+        url.hash = "";
+        return Object.assign({}, event, { url: url.href });
+      });
+    </script>
     <script defer src="/_vercel/insights/script.js"></script>
   </head>
   <body>
