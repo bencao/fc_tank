@@ -160,6 +160,20 @@ describe('handle_guide_request', () => {
     expect(response.status).toBe(503);
   });
 
+  // The blog's levels embed is a sandboxed page (an opaque origin) that calls
+  // this endpoint; it is public and anonymous already, so any origin may read it.
+  it('lets a page on any origin read every answer, including when to retry', async () => {
+    const spent = { spend: async () => ({ allowed: false, retry_after_seconds: 60 }) };
+    for (const response of [
+      await handle_guide_request(post(snapshot), client, open_budget),
+      await handle_guide_request(post('not json'), client, open_budget),
+      await handle_guide_request(post(snapshot), client, spent)
+    ]) {
+      expect(response.headers.get('access-control-allow-origin')).toBe('*');
+      expect(response.headers.get('access-control-expose-headers')).toBe('retry-after');
+    }
+  });
+
   it('charges nothing when there is nobody to guide', async () => {
     let charged = 0;
     const counting = { spend: async () => { charged += 1; return { allowed: true }; } };
