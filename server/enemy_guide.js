@@ -172,12 +172,15 @@ export function parse_snapshot(body) {
 }
 
 // budget: a JevBudget (server/jev_budget.js) - every Jev call is charged to it.
-// Any origin may read the answer: the endpoint is public and anonymous anyway,
-// and the blog's levels embed calls it from a sandboxed page with no origin.
-// A plain-text POST needs no preflight, so there is no OPTIONS handler.
+// Besides the game itself, only the blog may read the answer: its FC Tank post
+// asks Jev for the levels mini game embedded there. The post page makes the
+// call (the embed has no network of its own), as a plain-text POST, which
+// needs no preflight, so there is no OPTIONS handler.
+export const READER_ORIGIN = "https://blog.bencao.it";
+
 export async function handle_guide_request(request, client, budget) {
   const response = await answer_guide_request(request, client, budget);
-  response.headers.set("access-control-allow-origin", "*");
+  response.headers.set("access-control-allow-origin", READER_ORIGIN);
   response.headers.set("access-control-expose-headers", "retry-after");
   return response;
 }
