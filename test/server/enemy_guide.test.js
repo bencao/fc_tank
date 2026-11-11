@@ -160,6 +160,21 @@ describe('handle_guide_request', () => {
     expect(response.status).toBe(503);
   });
 
+  // The blog's FC Tank post calls this for its levels mini game (the embed asks
+  // the post page, which calls from https://blog.bencao.it). No other site's
+  // pages may read the answers.
+  it('lets only the blog read every answer, including when to retry', async () => {
+    const spent = { spend: async () => ({ allowed: false, retry_after_seconds: 60 }) };
+    for (const response of [
+      await handle_guide_request(post(snapshot), client, open_budget),
+      await handle_guide_request(post('not json'), client, open_budget),
+      await handle_guide_request(post(snapshot), client, spent)
+    ]) {
+      expect(response.headers.get('access-control-allow-origin')).toBe('https://blog.bencao.it');
+      expect(response.headers.get('access-control-expose-headers')).toBe('retry-after');
+    }
+  });
+
   it('charges nothing when there is nobody to guide', async () => {
     let charged = 0;
     const counting = { spend: async () => { charged += 1; return { allowed: true }; } };

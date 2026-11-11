@@ -172,7 +172,20 @@ export function parse_snapshot(body) {
 }
 
 // budget: a JevBudget (server/jev_budget.js) - every Jev call is charged to it.
+// Besides the game itself, only the blog may read the answer: its FC Tank post
+// asks Jev for the levels mini game embedded there. The post page makes the
+// call (the embed has no network of its own), as a plain-text POST, which
+// needs no preflight, so there is no OPTIONS handler.
+export const READER_ORIGIN = "https://blog.bencao.it";
+
 export async function handle_guide_request(request, client, budget) {
+  const response = await answer_guide_request(request, client, budget);
+  response.headers.set("access-control-allow-origin", READER_ORIGIN);
+  response.headers.set("access-control-expose-headers", "retry-after");
+  return response;
+}
+
+async function answer_guide_request(request, client, budget) {
   let snapshot;
   try {
     snapshot = parse_snapshot(await request.json());
