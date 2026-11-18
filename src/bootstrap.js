@@ -26,7 +26,8 @@ function safe_local_storage() {
   window.battle_field_scene = game.scenes["battle_field"];
   window.report_scene = game.scenes["report"];
   install_virtual_gamepad(document.documentElement, document.getElementById("gamepad"));
-  install_zoom_guard(document);
+  // Pinch zooms the page, except from the on-screen pad; double tap never does.
+  install_zoom_guard(document, { controls: ".gamepad" });
   install_screen_scaling(document.documentElement, document.getElementById("screen"));
   reflect_current_scene(document.documentElement, game);
   reflect_difficulty(document.documentElement, game);
