@@ -109,3 +109,17 @@ describe('install_zoom_guard: double tap', () => {
     expect(tap(fire, text_field)).toBe(false);
   });
 });
+
+describe('install_zoom_guard: uninstall', () => {
+  it('returns a function that removes every listener', () => {
+    const doc = new EventTarget();
+    const remove = install_zoom_guard(doc, { controls: CONTROLS, now: () => 1000 });
+    remove();
+    const event = new Event('gesturestart', { cancelable: true });
+    const pinch = new Event('touchstart', { cancelable: true });
+    Object.assign(pinch, { changedTouches: [touch(1, pad)], touches: [] });
+    doc.dispatchEvent(pinch);
+    doc.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+});

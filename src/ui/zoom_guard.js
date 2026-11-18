@@ -19,20 +19,25 @@ function wants_its_taps(target) {
   return Boolean(target?.closest?.("input, textarea, select, [contenteditable]"));
 }
 
+// Returns a function that removes the guard again.
 export function install_zoom_guard(doc = document, { controls = "", now = () => Date.now() } = {}) {
+  const listeners = [];
+  const listen = (type, handler) => {
+    doc.addEventListener(type, handler, { passive: false });
+    listeners.push([type, handler]);
+  };
   const block = event => {
     if (event.cancelable !== false) { event.preventDefault(); }
   };
-  const active = { passive: false };
   const on_controls = target => Boolean(controls && target?.closest?.(controls));
 
   // Fingers that came down on the controls, by touch identifier.
   const on_pad = new Set();
-  doc.addEventListener("touchstart", event => {
+  listen("touchstart", event => {
     for (const touch of event.changedTouches ?? []) {
       if (on_controls(touch.target ?? event.target)) { on_pad.add(touch.identifier); }
     }
-  }, active);
+  });
   const lift = event => {
     for (const touch of event.changedTouches ?? []) { on_pad.delete(touch.identifier); }
     if ((event.touches?.length ?? 0) === 0) { on_pad.clear(); }
@@ -40,16 +45,16 @@ export function install_zoom_guard(doc = document, { controls = "", now = () => 
 
   // Safari's own pinch events, and two fingers moving at once.
   for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
-    doc.addEventListener(type, event => { if (on_pad.size > 0) { block(event); } }, active);
+    listen(type, event => { if (on_pad.size > 0) { block(event); } });
   }
-  doc.addEventListener("touchmove", event => {
+  listen("touchmove", event => {
     const pinching = (event.touches?.length ?? 0) > 1 || (event.scale ?? 1) !== 1;
     if (pinching && on_pad.size > 0) { block(event); }
-  }, active);
+  });
 
   // The second of two quick taps would zoom; let it press the button only.
   let last_tap = -Infinity;
-  doc.addEventListener("touchend", event => {
+  listen("touchend", event => {
     const at = now();
     const target = event.target;
     if (at - last_tap < DOUBLE_TAP_MS && !wants_its_taps(target)) {
@@ -58,6 +63,10 @@ export function install_zoom_guard(doc = document, { controls = "", now = () => 
     }
     last_tap = at;
     lift(event);
-  }, active);
-  doc.addEventListener("touchcancel", lift, active);
+  });
+  listen("touchcancel", lift);
+
+  return () => {
+    for (const [type, handler] of listeners) { doc.removeEventListener(type, handler, { passive: false }); }
+  };
 }
