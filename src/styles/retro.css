@@ -587,15 +587,15 @@ body::after {
 
 .credits a {
   color: var(--steel);
-  text-decoration: none;
-  border-bottom: 1px solid #3d3b44;
+  text-decoration: underline 1px #3d3b44;
+  text-underline-offset: 0.3em;
   white-space: nowrap;
 }
 
 .credits a:hover,
 .credits a:focus-visible {
   color: var(--amber);
-  border-bottom-color: var(--amber);
+  text-decoration-color: var(--amber);
 }
 
 /* ------------------------------- gamepad -------------------------------- */
