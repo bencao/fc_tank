@@ -135,6 +135,21 @@ describe('A friends play guest', () => {
     expect(initials).toHaveBeenCalledWith({ name: 'BAA' });
   });
 
+  it('opts out of the board on SPACE, telling the host', async () => {
+    const { game, host, page } = await joining();
+    const initials = vi.fn();
+    host.on('initials', initials);
+    host.send('scene', { name: 'name_entry' });
+    host.send('name_entry', { score: 2000 });
+    await flush();
+
+    page.dispatchEvent(key_event('keydown', ' '));
+    await flush();
+
+    expect(initials).toHaveBeenCalledWith({ name: null });
+    expect(game.scenes.name_entry.sent).toBe(true);
+  });
+
   it('says so when the host leaves, wherever it was', async () => {
     const { game, host, host_link } = await joining();
     host.send('scene', { name: 'battle_field' });
